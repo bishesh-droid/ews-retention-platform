@@ -1,0 +1,22 @@
+# Node dependencies
+node_modules/
+**/node_modules/
+
+# Caches
+.cache/
+**/.cache/
+
+# Build outputs
+dist/
+build/
+out/
+.next/
+
+# Logs
+npm-debug.log*
+yarn-debug.log*
+pnpm-debug.log*
+
+# OS
+.DS_Store
+
