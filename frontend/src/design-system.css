@@ -1,0 +1,960 @@
+/* ========================================
+   PREMIUM EWS DESIGN SYSTEM
+   Enterprise-Grade Typography & Visual System
+   ======================================== */
+
+/* Import Inter Font Family */
+@import url('https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800&display=swap');
+
+/* ========================================
+   1. DESIGN TOKENS
+   ======================================== */
+
+:root {
+  /* Typography Scale */
+  --font-family-primary: 'Inter', -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
+  --font-family-mono: 'SF Mono', 'Monaco', 'Cascadia Code', 'Courier New', monospace;
+  
+  /* Font Sizes - Calibrated Scale */
+  --font-size-display: 48px;     /* 3rem - Hero numbers, major KPIs */
+  --font-size-h1: 32px;          /* 2rem - Page headers */
+  --font-size-h2: 24px;          /* 1.5rem - Section headers */
+  --font-size-h3: 20px;          /* 1.25rem - Card titles */
+  --font-size-body: 16px;        /* 1rem - Standard text */
+  --font-size-small: 14px;       /* 0.875rem - Metadata, labels */
+  --font-size-caption: 12px;     /* 0.75rem - Tooltips, footnotes */
+  
+  /* Font Weights */
+  --font-weight-regular: 400;
+  --font-weight-medium: 500;
+  --font-weight-semibold: 600;
+  --font-weight-bold: 700;
+  --font-weight-extrabold: 800;
+  
+  /* Line Heights */
+  --line-height-tight: 1.2;
+  --line-height-normal: 1.5;
+  --line-height-relaxed: 1.7;
+  
+  /* Letter Spacing */
+  --letter-spacing-tight: -0.02em;
+  --letter-spacing-normal: 0;
+  --letter-spacing-wide: 0.02em;
+  --letter-spacing-wider: 0.05em;
+  
+  /* ========================================
+     COLOR SYSTEM BY USER TYPE
+     ======================================== */
+  
+  /* BITS Pilani Brand Colors */
+  --bits-cobalt: #2B2B88;             /* Cosmic Cobalt - Primary */
+  --bits-sky-blue: #5CCAE8;           /* Crayola's Sky Blue */
+  --bits-gold: #B78A2D;               /* University of California Gold */
+  --bits-gold-light: #FFE275;         /* Shandy - Light Gold */
+  --bits-red: #CF2027;                /* Fire Engine Red */
+
+  /* Student-Facing Colors (Calm, Encouraging) */
+  --student-primary: #5CCAE8;         /* BITS Sky Blue */
+  --student-success: #10B981;         /* Encouraging green */
+  --student-warning: #B78A2D;         /* BITS Gold (not alarming) */
+  --student-neutral: #6B7280;         /* Soft gray */
+  --student-bg: #F9FAFB;              /* Light background */
+
+  /* Faculty Colors (Analytical, Clear) */
+  --faculty-primary: #2B2B88;         /* BITS Cosmic Cobalt */
+  --faculty-secondary: #475569;       /* Professional gray */
+  --faculty-accent: #B78A2D;          /* BITS Gold accent */
+  --faculty-bg: #F8FAFC;              /* Clean background */
+
+  /* Business Colors (Professional, Financial) */
+  --business-primary: #2B2B88;        /* BITS Cosmic Cobalt */
+  --business-revenue: #CF2027;        /* BITS Red */
+  --business-growth: #059669;         /* Growth green */
+  --business-warning: #B78A2D;        /* BITS Gold */
+  --business-bg: #FFFFFF;             /* Pure white */
+
+  /* Institutional Colors (Authority, Trust) */
+  --institutional-primary: #1E1E5F;   /* Deep BITS Cobalt */
+  --institutional-accent: #5CCAE8;    /* BITS Sky Blue */
+  --institutional-bg: #F1F5F9;        /* Subtle background */
+
+  /* Universal Semantic Colors */
+  --color-success: #10B981;
+  --color-warning: #B78A2D;
+  --color-error: #CF2027;
+  --color-info: #5CCAE8;
+  
+  /* Neutral Palette */
+  --gray-50: #F9FAFB;
+  --gray-100: #F3F4F6;
+  --gray-200: #E5E7EB;
+  --gray-300: #D1D5DB;
+  --gray-400: #9CA3AF;
+  --gray-500: #6B7280;
+  --gray-600: #4B5563;
+  --gray-700: #374151;
+  --gray-800: #1F2937;
+  --gray-900: #111827;
+  
+  /* ========================================
+     SPACING SYSTEM
+     ======================================== */
+  
+  --space-xs: 4px;
+  --space-sm: 8px;
+  --space-md: 16px;
+  --space-lg: 24px;
+  --space-xl: 32px;
+  --space-2xl: 48px;
+  --space-3xl: 64px;
+  
+  /* ========================================
+     BORDER & RADIUS
+     ======================================== */
+  
+  --border-width-thin: 1px;
+  --border-width-medium: 2px;
+  --border-width-thick: 3px;
+  
+  --radius-sm: 6px;
+  --radius-md: 8px;
+  --radius-lg: 12px;
+  --radius-xl: 16px;
+  --radius-2xl: 24px;
+  --radius-full: 9999px;
+  
+  /* ========================================
+     SHADOWS (Subtle, Professional)
+     ======================================== */
+  
+  --shadow-xs: 0 1px 2px 0 rgba(0, 0, 0, 0.05);
+  --shadow-sm: 0 1px 3px 0 rgba(0, 0, 0, 0.1);
+  --shadow-md: 0 4px 6px -1px rgba(0, 0, 0, 0.1);
+  --shadow-lg: 0 10px 15px -3px rgba(0, 0, 0, 0.1);
+  --shadow-xl: 0 20px 25px -5px rgba(0, 0, 0, 0.1);
+  
+  /* ========================================
+     TRANSITIONS
+     ======================================== */
+  
+  --transition-fast: 150ms cubic-bezier(0.4, 0, 0.2, 1);
+  --transition-normal: 250ms cubic-bezier(0.4, 0, 0.2, 1);
+  --transition-slow: 350ms cubic-bezier(0.4, 0, 0.2, 1);
+}
+
+/* ========================================
+   2. TYPOGRAPHY CLASSES
+   ======================================== */
+
+.text-display {
+  font-size: var(--font-size-display);
+  font-weight: var(--font-weight-bold);
+  line-height: var(--line-height-tight);
+  letter-spacing: var(--letter-spacing-tight);
+}
+
+.text-h1 {
+  font-size: var(--font-size-h1);
+  font-weight: var(--font-weight-semibold);
+  line-height: var(--line-height-tight);
+  letter-spacing: var(--letter-spacing-tight);
+}
+
+.text-h2 {
+  font-size: var(--font-size-h2);
+  font-weight: var(--font-weight-semibold);
+  line-height: var(--line-height-normal);
+}
+
+.text-h3 {
+  font-size: var(--font-size-h3);
+  font-weight: var(--font-weight-semibold);
+  line-height: var(--line-height-normal);
+}
+
+.text-body {
+  font-size: var(--font-size-body);
+  font-weight: var(--font-weight-regular);
+  line-height: var(--line-height-relaxed);
+}
+
+.text-small {
+  font-size: var(--font-size-small);
+  font-weight: var(--font-weight-regular);
+  line-height: var(--line-height-normal);
+}
+
+.text-caption {
+  font-size: var(--font-size-caption);
+  font-weight: var(--font-weight-regular);
+  line-height: var(--line-height-normal);
+  color: var(--gray-600);
+}
+
+/* Monospace for numbers */
+.text-mono {
+  font-family: var(--font-family-mono);
+  font-variant-numeric: tabular-nums;
+}
+
+/* ========================================
+   3. KPI NUMBER STYLES
+   ======================================== */
+
+.kpi-number {
+  font-family: var(--font-family-mono);
+  font-size: var(--font-size-display);
+  font-weight: var(--font-weight-bold);
+  line-height: 1;
+  font-variant-numeric: tabular-nums;
+}
+
+.kpi-label {
+  font-size: var(--font-size-small);
+  font-weight: var(--font-weight-semibold);
+  text-transform: uppercase;
+  letter-spacing: var(--letter-spacing-wider);
+  color: var(--gray-600);
+}
+
+.kpi-delta {
+  font-size: var(--font-size-small);
+  font-weight: var(--font-weight-semibold);
+  font-family: var(--font-family-mono);
+}
+
+.kpi-delta.positive {
+  color: var(--color-success);
+}
+
+.kpi-delta.negative {
+  color: var(--color-error);
+}
+
+/* ========================================
+   4. CONTEXT-SPECIFIC STYLES
+   ======================================== */
+
+/* Student-Facing Typography */
+.student-context {
+  color: var(--gray-800);
+}
+
+.student-context .score-number {
+  font-size: var(--font-size-display);
+  font-weight: var(--font-weight-bold);
+  color: var(--student-primary);
+}
+
+.student-context .encouraging-text {
+  color: var(--student-success);
+  font-weight: var(--font-weight-medium);
+}
+
+/* Faculty Analytical Typography */
+.faculty-context {
+  color: var(--gray-900);
+}
+
+.faculty-context .section-header {
+  font-size: var(--font-size-h2);
+  font-weight: var(--font-weight-semibold);
+  color: var(--faculty-primary);
+  margin-bottom: var(--space-md);
+}
+
+.faculty-context .data-label {
+  font-size: var(--font-size-small);
+  font-weight: var(--font-weight-medium);
+  color: var(--gray-600);
+  text-transform: uppercase;
+  letter-spacing: var(--letter-spacing-wide);
+}
+
+/* Business Intelligence Typography */
+.business-context {
+  color: var(--gray-900);
+}
+
+.business-context .revenue-number {
+  font-size: var(--font-size-display);
+  font-weight: var(--font-weight-extrabold);
+  font-family: var(--font-family-mono);
+}
+
+.business-context .metric-label {
+  font-size: var(--font-size-caption);
+  font-weight: var(--font-weight-semibold);
+  text-transform: uppercase;
+  letter-spacing: var(--letter-spacing-wider);
+  color: var(--gray-500);
+}
+
+/* Institutional Typography */
+.institutional-context .authority-header {
+  font-size: var(--font-size-h1);
+  font-weight: var(--font-weight-bold);
+  color: var(--institutional-primary);
+  border-top: 3px solid var(--institutional-accent);
+  padding-top: var(--space-lg);
+  margin-top: var(--space-xl);
+}
+
+/* ========================================
+   5. DATA DISPLAY STYLES
+   ======================================== */
+
+/* Tables */
+.data-table {
+  width: 100%;
+  border-collapse: separate;
+  border-spacing: 0 var(--space-xs);
+}
+
+.data-table thead th {
+  font-size: var(--font-size-caption);
+  font-weight: var(--font-weight-semibold);
+  text-transform: uppercase;
+  letter-spacing: var(--letter-spacing-wider);
+  color: var(--gray-600);
+  text-align: left;
+  padding: var(--space-sm) var(--space-md);
+  border-bottom: var(--border-width-thin) solid var(--gray-200);
+}
+
+.data-table tbody td {
+  font-size: var(--font-size-small);
+  padding: var(--space-md);
+  background: white;
+  border-bottom: var(--border-width-thin) solid var(--gray-100);
+}
+
+.data-table tbody tr:hover td {
+  background: var(--gray-50);
+}
+
+/* Dense Data Layout */
+.dense-data {
+  font-size: var(--font-size-small);
+  line-height: var(--line-height-normal);
+  color: var(--gray-700);
+}
+
+.dense-data .data-value {
+  font-weight: var(--font-weight-semibold);
+  font-family: var(--font-family-mono);
+}
+
+/* ========================================
+   6. EMPHASIS & ALERTS (Calm, Not Alarming)
+   ======================================== */
+
+.emphasis-subtle {
+  font-weight: var(--font-weight-medium);
+  letter-spacing: var(--letter-spacing-wide);
+}
+
+.emphasis-strong {
+  font-weight: var(--font-weight-semibold);
+}
+
+/* Calm Alerts (No Alarming Red) */
+.alert-calm {
+  padding: var(--space-md);
+  border-radius: var(--radius-md);
+  border-left: 3px solid;
+  background: var(--gray-50);
+  font-size: var(--font-size-small);
+  line-height: var(--line-height-relaxed);
+}
+
+.alert-calm.info {
+  border-left-color: var(--color-info);
+  background: rgba(59, 130, 246, 0.05);
+}
+
+.alert-calm.warning {
+  border-left-color: var(--student-warning);
+  background: rgba(245, 158, 11, 0.05);
+  color: var(--gray-800);
+}
+
+.alert-calm.success {
+  border-left-color: var(--color-success);
+  background: rgba(16, 185, 129, 0.05);
+}
+
+/* ========================================
+   7. DISCLAIMERS & EXPLANATIONS
+   ======================================== */
+
+.disclaimer {
+  font-size: var(--font-size-caption);
+  color: var(--gray-500);
+  line-height: var(--line-height-relaxed);
+  max-width: 65ch; /* Readable line length */
+  font-weight: var(--font-weight-regular);
+}
+
+.explanation {
+  font-size: var(--font-size-small);
+  color: var(--gray-600);
+  line-height: var(--line-height-relaxed);
+  padding: var(--space-md);
+  background: var(--gray-50);
+  border-radius: var(--radius-md);
+  max-width: 75ch;
+}
+
+/* ========================================
+   8. ANNOTATIONS & AI INSIGHTS
+   ======================================== */
+
+.annotation-user {
+  font-style: italic;
+  font-weight: var(--font-weight-medium);
+  border-left: 3px solid var(--faculty-accent);
+  padding-left: var(--space-md);
+  color: var(--gray-700);
+}
+
+.annotation-ai {
+  font-style: normal;
+  font-weight: var(--font-weight-regular);
+  border-left: 3px solid var(--gray-300);
+  padding-left: var(--space-md);
+  color: var(--gray-600);
+}
+
+/* ========================================
+   9. CARDS & PANELS
+   ======================================== */
+
+.premium-card {
+  background: white;
+  border-radius: var(--radius-lg);
+  padding: var(--space-lg);
+  box-shadow: var(--shadow-sm);
+  border: var(--border-width-thin) solid var(--gray-200);
+  transition: box-shadow var(--transition-normal);
+}
+
+.premium-card:hover {
+  box-shadow: var(--shadow-md);
+}
+
+.card-header {
+  font-size: var(--font-size-h3);
+  font-weight: var(--font-weight-semibold);
+  margin-bottom: var(--space-md);
+  color: var(--gray-900);
+}
+
+.card-subheader {
+  font-size: var(--font-size-small);
+  font-weight: var(--font-weight-medium);
+  color: var(--gray-600);
+  margin-bottom: var(--space-sm);
+}
+
+/* ========================================
+   10. INTERACTIVE ELEMENTS
+   ======================================== */
+
+.btn-premium {
+  font-family: var(--font-family-primary);
+  font-size: var(--font-size-small);
+  font-weight: var(--font-weight-semibold);
+  padding: var(--space-sm) var(--space-lg);
+  border-radius: var(--radius-md);
+  border: none;
+  cursor: pointer;
+  transition: all var(--transition-fast);
+  letter-spacing: var(--letter-spacing-wide);
+}
+
+.btn-premium.primary {
+  background: var(--business-primary);
+  color: white;
+}
+
+.btn-premium.primary:hover {
+  background: var(--gray-700);
+  transform: translateY(-1px);
+  box-shadow: var(--shadow-md);
+}
+
+/* ========================================
+   11. UTILITY CLASSES
+   ======================================== */
+
+/* White Space Emphasis */
+.spacious {
+  padding: var(--space-xl);
+}
+
+.generous-spacing {
+  margin-bottom: var(--space-lg);
+}
+
+/* Hierarchy without Color */
+.visual-hierarchy-1 {
+  font-size: var(--font-size-h1);
+  font-weight: var(--font-weight-bold);
+}
+
+.visual-hierarchy-2 {
+  font-size: var(--font-size-h2);
+  font-weight: var(--font-weight-semibold);
+}
+
+.visual-hierarchy-3 {
+  font-size: var(--font-size-body);
+  font-weight: var(--font-weight-medium);
+}
+
+/* Consistency Classes */
+.consistent-spacing {
+  margin-bottom: var(--space-md);
+}
+
+.consistent-border {
+  border-bottom: var(--border-width-thin) solid var(--gray-200);
+  padding-bottom: var(--space-md);
+}
+
+/* ========================================
+   12. RESPONSIVE TYPOGRAPHY
+   ======================================== */
+
+@media (max-width: 768px) {
+  :root {
+    --font-size-display: 36px;
+    --font-size-h1: 28px;
+    --font-size-h2: 20px;
+    --font-size-h3: 18px;
+  }
+  
+  .premium-card {
+    padding: var(--space-md);
+  }
+}
+
+/* ========================================
+   13. ACCESSIBILITY
+   ======================================== */
+
+/* Focus States */
+*:focus-visible {
+  outline: 2px solid var(--color-info);
+  outline-offset: 2px;
+}
+
+/* High Contrast Mode Support */
+@media (prefers-contrast: high) {
+  :root {
+    --gray-600: #3B3B3B;
+    --gray-500: #575757;
+  }
+}
+
+/* Reduced Motion */
+@media (prefers-reduced-motion: reduce) {
+  * {
+    animation-duration: 0.01ms !important;
+    animation-iteration-count: 1 !important;
+    transition-duration: 0.01ms !important;
+  }
+}
+
+/* ========================================
+   14. AI-SPECIFIC TYPOGRAPHY SYSTEM
+   ======================================== */
+
+/* AI-Generated Content Base Styles */
+.ai-text {
+  font-family: var(--font-family-primary);
+  font-size: 0.95rem;
+  line-height: 1.6;
+  color: var(--gray-700);
+  font-weight: var(--font-weight-regular);
+}
+
+.ai-heading {
+  font-family: var(--font-family-primary);
+  font-size: 1.1rem;
+  font-weight: var(--font-weight-semibold);
+  color: var(--gray-900);
+  margin-bottom: 0.5rem;
+}
+
+/* Distinguish AI text with subtle styling */
+.ai-summary-card {
+  border-left: 3px solid #B78A2D;
+  background: linear-gradient(to right, rgba(183, 138, 45, 0.02), transparent);
+}
+
+.ai-badge {
+  background: linear-gradient(135deg, #B78A2D, #8B6914) !important;
+  font-size: 0.7rem;
+  padding: 0.25rem 0.5rem;
+  font-weight: var(--font-weight-semibold);
+  letter-spacing: 0.025em;
+}
+
+/* System Metrics (Data) - Clear visual distinction from AI */
+.data-metric {
+  font-family: var(--font-family-mono);
+  font-size: 1.2rem;
+  font-weight: var(--font-weight-bold);
+  color: var(--gray-900);
+}
+
+/* ========================================
+   15. AI CONFIDENCE INDICATORS
+   ======================================== */
+
+/* Confidence Badges */
+.confidence-high {
+  background: #10B981;
+  color: white;
+  padding: 0.25rem 0.5rem;
+  border-radius: var(--radius-sm);
+  font-size: 0.7rem;
+  font-weight: var(--font-weight-semibold);
+  text-transform: uppercase;
+  letter-spacing: 0.05em;
+}
+
+.confidence-medium {
+  background: #F59E0B;
+  color: white;
+  padding: 0.25rem 0.5rem;
+  border-radius: var(--radius-sm);
+  font-size: 0.7rem;
+  font-weight: var(--font-weight-semibold);
+  text-transform: uppercase;
+  letter-spacing: 0.05em;
+}
+
+.confidence-low {
+  background: #6B7280;
+  color: white;
+  padding: 0.25rem 0.5rem;
+  border-radius: var(--radius-sm);
+  font-size: 0.7rem;
+  font-weight: var(--font-weight-semibold);
+  text-transform: uppercase;
+  letter-spacing: 0.05em;
+}
+
+/* ========================================
+   16. SOURCE ATTRIBUTION UI
+   ======================================== */
+
+.source-badge {
+  font-size: 0.75rem;
+  font-style: italic;
+  color: var(--gray-600);
+  border-left: 2px solid #B78A2D;
+  padding-left: 8px;
+  margin-top: 0.5rem;
+  display: block;
+}
+
+.source-attribution-section {
+  background: var(--gray-50);
+  border-radius: var(--radius-md);
+  padding: var(--space-md);
+  margin-top: var(--space-md);
+}
+
+.source-list {
+  list-style: none;
+  padding-left: 0;
+  margin-bottom: 0;
+}
+
+.source-list li {
+  font-size: 0.85rem;
+  color: var(--gray-600);
+  margin-bottom: 0.25rem;
+  padding-left: 1.25rem;
+  position: relative;
+}
+
+.source-list li:before {
+  content: "→";
+  position: absolute;
+  left: 0;
+  color: #B78A2D;
+  font-weight: bold;
+}
+
+/* ========================================
+   17. COLLAPSIBLE REASONING COMPONENTS
+   ======================================== */
+
+.expandable-reasoning {
+  margin-top: var(--space-md);
+  border-top: var(--border-width-thin) solid var(--gray-200);
+  padding-top: var(--space-md);
+}
+
+.expand-reasoning-trigger {
+  font-size: 0.85rem;
+  color: #B78A2D;
+  font-weight: var(--font-weight-medium);
+  cursor: pointer;
+  display: inline-flex;
+  align-items: center;
+  gap: 0.5rem;
+  transition: color var(--transition-fast);
+  user-select: none;
+}
+
+.expand-reasoning-trigger:hover {
+  color: #8B6914;
+  text-decoration: underline;
+}
+
+.reasoning-content {
+  margin-top: var(--space-sm);
+  padding: var(--space-md);
+  background: var(--gray-50);
+  border-radius: var(--radius-md);
+  font-size: 0.85rem;
+  color: var(--gray-700);
+  line-height: 1.6;
+}
+
+/* ========================================
+   18. AI VS HUMAN DECISION SEPARATION
+   ======================================== */
+
+.ai-suggestion-label {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.5rem;
+  font-size: 0.75rem;
+  color: #B78A2D;
+  font-weight: var(--font-weight-semibold);
+  text-transform: uppercase;
+  letter-spacing: 0.05em;
+  padding: 0.25rem 0.5rem;
+  background: rgba(183, 138, 45, 0.1);
+  border-radius: var(--radius-sm);
+}
+
+.human-decision-label {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.5rem;
+  font-size: 0.75rem;
+  color: #3B82F6;
+  font-weight: var(--font-weight-semibold);
+  text-transform: uppercase;
+  letter-spacing: 0.05em;
+  padding: 0.25rem 0.5rem;
+  background: rgba(59, 130, 246, 0.1);
+  border-radius: var(--radius-sm);
+}
+
+/* ========================================
+   19. CALM, EDITORIAL TONE STYLING
+   ======================================== */
+
+/* Trust-building visual elements */
+.ai-insights-card {
+  background: white;
+  border: var(--border-width-thin) solid rgba(183, 138, 45, 0.2);
+  border-radius: var(--radius-lg);
+  padding: var(--space-lg);
+  box-shadow: 0 4px 6px rgba(183, 138, 45, 0.05);
+}
+
+.ai-insights-card:hover {
+  box-shadow: 0 8px 12px rgba(183, 138, 45, 0.1);
+  transition: box-shadow var(--transition-normal);
+}
+
+/* Authority markers for institutional insights */
+.authority-marker {
+  border-top: 3px solid #B78A2D;
+  padding-top: var(--space-md);
+  margin-top: var(--space-lg);
+}
+
+.authority-seal {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.5rem;
+  font-size: 0.75rem;
+  color: var(--gray-600);
+  font-weight: var(--font-weight-medium);
+  text-transform: uppercase;
+  letter-spacing: 0.075em;
+}
+
+/* ========================================
+   20. AI FINDINGS & INSIGHTS LISTS
+   ======================================== */
+
+.ai-findings-list {
+  list-style: none;
+  padding-left: 0;
+}
+
+.ai-findings-list li {
+  padding: var(--space-sm);
+  margin-bottom: var(--space-sm);
+  background: rgba(183, 138, 45, 0.03);
+  border-left: 3px solid #B78A2D;
+  border-radius: var(--radius-sm);
+}
+
+.finding-highlight {
+  font-weight: var(--font-weight-semibold);
+  color: #8B6914;
+}
+
+.ai-actions-list {
+  padding-left: 1.5rem;
+  margin-bottom: 0;
+}
+
+.ai-actions-list li {
+  margin-bottom: var(--space-sm);
+  color: var(--gray-700);
+}
+
+/* ========================================
+   21. ANOMALIES & WARNINGS (CALM TONE)
+   ======================================== */
+
+.anomalies-container {
+  margin-top: var(--space-sm);
+}
+
+.ai-anomaly-card {
+  background: rgba(245, 158, 11, 0.05);
+  border-left: 3px solid #F59E0B;
+  padding: var(--space-md);
+  border-radius: var(--radius-sm);
+  margin-bottom: var(--space-sm);
+}
+
+.ai-anomaly-card .anomaly-title {
+  font-weight: var(--font-weight-semibold);
+  color: #D97706;
+  margin-bottom: 0.25rem;
+}
+
+/* ========================================
+   22. CHART EXPLAINER TOOLTIPS
+   ======================================== */
+
+.ai-tooltip {
+  background: rgba(183, 138, 45, 0.95) !important;
+  color: white !important;
+  border-radius: var(--radius-md) !important;
+  padding: var(--space-sm) var(--space-md) !important;
+  font-size: 0.85rem !important;
+  box-shadow: var(--shadow-lg) !important;
+  max-width: 300px !important;
+}
+
+.ai-tooltip-content {
+  line-height: 1.5;
+}
+
+.chart-explainer-wrapper {
+  position: relative;
+  display: inline-flex;
+  align-items: center;
+}
+
+.chart-explainer-icon {
+  color: #B78A2D;
+  opacity: 0.6;
+  transition: opacity var(--transition-fast);
+}
+
+.chart-explainer-wrapper:hover .chart-explainer-icon {
+  opacity: 1;
+}
+
+/* ========================================
+   23. "WHY AM I SEEING THIS?" COMPONENTS
+   ======================================== */
+
+.why-seeing-this {
+  background: var(--gray-50);
+  border: var(--border-width-thin) dashed var(--gray-300);
+  border-radius: var(--radius-md);
+  padding: var(--space-md);
+  margin-top: var(--space-md);
+}
+
+.why-seeing-this-header {
+  font-size: 0.85rem;
+  font-weight: var(--font-weight-semibold);
+  color: var(--gray-700);
+  margin-bottom: 0.5rem;
+  display: flex;
+  align-items: center;
+  gap: 0.5rem;
+}
+
+.why-seeing-this-content {
+  font-size: 0.85rem;
+  color: var(--gray-600);
+  line-height: 1.6;
+}
+
+/* ========================================
+   24. PROGRESSIVE DISCLOSURE
+   ======================================== */
+
+.summary-view {
+  cursor: pointer;
+  transition: background var(--transition-fast);
+}
+
+.summary-view:hover {
+  background: var(--gray-50);
+}
+
+.detail-view {
+  max-height: 0;
+  overflow: hidden;
+  transition: max-height var(--transition-slow);
+}
+
+.detail-view.expanded {
+  max-height: 1000px;
+}
+
+/* ========================================
+   25. COLOR CODING FOR AI VS DATA
+   ======================================== */
+
+/* AI-generated content - Purple tint */
+.content-ai {
+  color: var(--gray-700);
+  border-left: 2px solid #B78A2D;
+  padding-left: var(--space-md);
+}
+
+/* System data - Neutral */
+.content-data {
+  color: var(--gray-900);
+  font-family: var(--font-family-mono);
+}
+
+/* Mixed content indicator */
+.content-mixed {
+  border-left: 2px solid;
+  border-image: linear-gradient(to bottom, #B78A2D, #3B82F6) 1;
+  padding-left: var(--space-md);
+}

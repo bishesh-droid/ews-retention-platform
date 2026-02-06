@@ -1,40 +1,38 @@
 import React from 'react';
-import { Route, Routes } from 'react-router-dom';
-import { Navbar, Nav, Container } from 'react-bootstrap';
+import { Route, Routes, useLocation } from 'react-router-dom';
+import Layout from './components/common/Layout';
 import Dashboard from './pages/Dashboard';
 import Students from './pages/Students';
-import Insights from './pages/Insights';
 import StudentProfile from './pages/StudentProfile';
+import RiskFactors from './pages/RiskFactors';
+import Interventions from './pages/Interventions';
+import Analytics from './pages/Analytics';
+import Reports from './pages/Reports';
+import Settings from './pages/Settings';
+import StudentPortal from './pages/StudentPortal';
+import FacultyTools from './pages/FacultyTools';
+import BusinessAnalytics from './pages/BusinessAnalytics';
 import './App.css';
 
 function App() {
-  return (
-    
-      <div className="App">
-        <Navbar bg="dark" variant="dark" expand="lg">
-          <Container>
-            <Navbar.Brand href="/">EWS Dashboard</Navbar.Brand>
-            <Navbar.Toggle aria-controls="basic-navbar-nav" />
-            <Navbar.Collapse id="basic-navbar-nav">
-              <Nav className="me-auto">
-                <Nav.Link href="/">Dashboard</Nav.Link>
-                <Nav.Link href="/students">Students</Nav.Link>
-                <Nav.Link href="/insights">Insights</Nav.Link>
-              </Nav>
-            </Navbar.Collapse>
-          </Container>
-        </Navbar>
+  const location = useLocation();
 
-        <Container className="mt-4">
-          <Routes>
-            <Route path="/" element={<Dashboard />} />
-            <Route path="/students" element={<Students />} />
-            <Route path="/students/:id" element={<StudentProfile />} />
-            <Route path="/insights" element={<Insights />} />
-          </Routes>
-        </Container>
-      </div>
-    
+  return (
+    <Layout>
+      <Routes location={location} key={location.pathname}>
+        <Route path="/" element={<Dashboard />} />
+        <Route path="/students" element={<Students />} />
+        <Route path="/students/:id" element={<StudentProfile />} />
+        <Route path="/student-portal" element={<StudentPortal />} />
+        <Route path="/faculty-tools" element={<FacultyTools />} />
+        <Route path="/risk-factors" element={<RiskFactors />} />
+        <Route path="/interventions" element={<Interventions />} />
+        <Route path="/insights" element={<Analytics />} />
+        <Route path="/business-analytics" element={<BusinessAnalytics />} />
+        <Route path="/reports" element={<Reports />} />
+        <Route path="/settings" element={<Settings />} />
+      </Routes>
+    </Layout>
   );
 }
 

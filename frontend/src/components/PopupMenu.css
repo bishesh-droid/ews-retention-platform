@@ -1,0 +1,130 @@
+.popup-menu-overlay {
+  position: fixed;
+  top: 0;
+  left: 0;
+  width: 100%;
+  height: 100%;
+  background-color: rgba(0, 0, 0, 0.4);
+  /* Subtle overlay */
+  display: flex;
+  justify-content: center;
+  align-items: center;
+  z-index: 1050;
+  /* Above Bootstrap modals */
+}
+
+.popup-menu {
+  background-color: var(--surface-color);
+  border-radius: 12px;
+  box-shadow: 0 10px 20px rgba(0, 0, 0, 0.19), 0 6px 6px rgba(0, 0, 0, 0.23);
+  padding: 20px;
+  width: 90%;
+  max-width: 400px;
+  position: relative;
+  overflow: hidden;
+  display: flex;
+  flex-direction: column;
+}
+
+.popup-menu-header {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  margin-bottom: 20px;
+  padding-bottom: 10px;
+  border-bottom: 1px solid var(--border-color);
+}
+
+.popup-menu-header h3 {
+  margin: 0;
+  color: var(--text-primary);
+  font-size: var(--font-size-h4);
+}
+
+.popup-menu .close-btn {
+  background: none;
+  border: none;
+  font-size: 1.5rem;
+  color: var(--text-muted);
+  cursor: pointer;
+  padding: 0;
+  line-height: 1;
+}
+
+.popup-menu .close-btn:hover {
+  color: var(--primary-color);
+}
+
+.popup-menu-nav {
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+}
+
+.popup-menu-item {
+  display: flex;
+  align-items: center;
+  gap: 15px;
+  padding: 12px 15px;
+  border-radius: 8px;
+  color: var(--text-primary);
+  text-decoration: none;
+  font-size: var(--font-size-lg);
+  font-weight: 500;
+  transition: background-color 0.2s ease, color 0.2s ease, transform 0.2s ease;
+}
+
+.popup-menu-item:hover {
+  background-color: rgba(var(--primary-color-rgb), 0.1);
+  color: var(--primary-color);
+  transform: translateX(5px);
+}
+
+.popup-menu-item.active {
+  background-color: var(--primary-color);
+  color: white;
+  box-shadow: 0 4px 8px rgba(var(--primary-color-rgb), 0.2);
+}
+
+.popup-menu-item.active .menu-icon {
+  color: white;
+  /* Ensure icon color matches active state */
+}
+
+.menu-icon {
+  font-size: 1.2rem;
+  color: var(--text-muted);
+  /* Default icon color */
+  transition: color 0.2s ease;
+}
+
+/* Responsive adjustments for mobile (slide-in from left) */
+@media (max-width: 768px) {
+  .popup-menu {
+    position: fixed;
+    top: 0;
+    left: 0;
+    height: 100%;
+    width: 280px;
+    /* Adjust as needed */
+    max-width: 80%;
+    border-radius: 0 12px 12px 0;
+    transform: translateX(-100%);
+    /* Start off-screen */
+  }
+
+  .popup-menu-overlay {
+    justify-content: flex-start;
+    /* Align to the left for slide-in */
+  }
+
+  .popup-menu-overlay[data-framer-inserted-exit] {
+    opacity: 0;
+    pointer-events: none;
+    /* Disable interaction on overlay during exit */
+  }
+
+  .popup-menu[data-framer-inserted-exit] {
+    transform: translateX(-100%);
+  }
+}

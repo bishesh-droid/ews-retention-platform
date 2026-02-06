@@ -1,0 +1,16 @@
+SQLAlchemy
+pandas
+fastapi
+uvicorn
+scikit-learn
+seaborn
+matplotlib
+imbalanced-learn
+google-generativeai
+xgboost
+python-multipart
+python-dotenv
+pydantic
+joblib
+schedule
+numpy

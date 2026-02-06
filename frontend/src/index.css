@@ -1,73 +1,343 @@
+/* Import Premium Design System */
+@import './design-system.css';
+
 :root {
-  --primary-color: #4080FF;
-  --high-risk-color: #F53F3F;
-  --medium-risk-color: #FF7D00;
-  --low-risk-color: #00B42A;
-  --very-low-risk-color: #C9CDD4;
+  /* Core Brand Colors - BITS Pilani Inspired */
+  --primary-color: #2B2B88;
+  /* Cosmic Cobalt - BITS Pilani Primary */
+  --primary-hover: #1E1E5F;
+  /* Darker Cobalt */
+  --primary-light: #5CCAE8;
+  /* Crayola's Sky Blue */
 
-  --text-heading-color: #1D2129;
-  --text-body-color: #4E5969;
-  --text-muted-color: #86909C;
+  /* BITS Pilani Accent Colors */
+  --accent-gold: #B78A2D;
+  /* University of California Gold */
+  --accent-gold-light: #FFE275;
+  /* Shandy - Light Gold */
+  --accent-red: #CF2027;
+  /* Fire Engine Red */
 
-  --bg-color: #F8F9FC;
+  /* Semantic Risk Colors */
+  --high-risk-color: #DC3545;
+  /* Red */
+  --medium-risk-color: #FFA500;
+  /* Orange */
+  --low-risk-color: #28A745;
+  /* Green */
+  --neutral-risk-color: #6C757D;
+  /* Gray */
+  
+  /* AI & Ethics Colors - BITS Pilani Theme */
+  --ai-primary: #B78A2D; /* BITS Gold for AI distinction */
+  --ai-light: #FFE275;
+  --ai-bg-glass: rgba(183, 138, 45, 0.05);
+  --ai-border: rgba(183, 138, 45, 0.2);
+  --confidence-high: #10B981;
+  --confidence-medium: #B78A2D;
+  --confidence-low: #CF2027;
+
+  /* Gradients */
+  --gradient-primary: linear-gradient(135deg, var(--primary-color) 0%, var(--primary-light) 100%);
+  --gradient-gold: linear-gradient(135deg, var(--accent-gold) 0%, var(--accent-gold-light) 100%);
+  --gradient-glow: radial-gradient(circle at 50% -20%, rgba(43, 43, 136, 0.15), transparent 70%);
+  --gradient-glass: linear-gradient(180deg, rgba(255, 255, 255, 0.95) 0%, rgba(255, 255, 255, 0.7) 100%);
+
+  /* Backgrounds & Surfaces (Light Theme) */
+  --bg-color: #F5F7FA;
+  /* Light Gray Background */
   --surface-color: #FFFFFF;
-  --border-color: #E5E6EB;
+  /* White Surface */
+  --surface-hover: #F8F9FA;
+  /* Slightly Gray on Hover */
+  --glass-bg: rgba(255, 255, 255, 0.95);
+  /* Light Glass */
+  --glass-border: rgba(0, 0, 0, 0.1);
 
-  /* Typographic Scale */
-  --font-size-base: 1rem; /* 16px */
-  --font-size-sm: 0.875rem; /* 14px */
-  --font-size-lg: 1.25rem; /* 20px */
+  /* Typography */
+  --font-sans: 'Outfit', -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
+  --text-primary: #212529;
+  /* Dark Text */
+  --text-secondary: #495057;
+  /* Medium Gray Text */
+  --text-muted: #6C757D;
+  /* Light Gray Text */
 
-  --font-size-h1: 2.5rem;
-  --font-size-h2: 2rem;
-  --font-size-h3: 1.75rem;
-  --font-size-h4: 1.5rem;
-  --font-size-h5: 1.25rem;
-  --font-size-h6: 1rem;
+  /* Borders & Shadows */
+  --border-color: #DEE2E6;
+  --border-width: 1px;
+  --shadow-sm: 0 1px 2px 0 rgba(0, 0, 0, 0.05);
+  --shadow-md: 0 4px 6px -1px rgba(0, 0, 0, 0.1);
+  --shadow-lg: 0 20px 25px -5px rgba(0, 0, 0, 0.15);
+  --shadow-glow: 0 0 20px rgba(43, 43, 136, 0.25);
+  --shadow-gold: 0 0 15px rgba(183, 138, 45, 0.3);
+
+  /* Spacing */
+  --header-height: 72px;
+  --sidebar-width: 260px;
+  --border-radius-sm: 6px;
+  --border-radius-md: 8px;
+  --border-radius-lg: 12px;
+  --border-radius-xl: 16px;
 }
 
+/* Global Reset & Base */
 html {
-  font-size: 16px; /* Set base font size for rem units */
+  font-size: 16px;
+  scroll-behavior: smooth;
 }
 
 body {
   margin: 0;
-  font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', 'Roboto', 'Oxygen',
-    'Ubuntu', 'Cantarell', 'Fira Sans', 'Droid Sans', 'Helvetica Neue',
-    sans-serif;
+  font-family: var(--font-family-primary);
   -webkit-font-smoothing: antialiased;
   -moz-osx-font-smoothing: grayscale;
   background-color: var(--bg-color);
-  color: var(--text-body-color);
-  font-size: var(--font-size-base);
+  color: var(--text-primary);
+  transition: background-color var(--transition-normal), color var(--transition-normal);
 }
 
-h1, .h1 { font-size: var(--font-size-h1); }
-h2, .h2 { font-size: var(--font-size-h2); }
-h3, .h3 { font-size: var(--font-size-h3); }
-h4, .h4 { font-size: var(--font-size-h4); }
-h5, .h5 { font-size: var(--font-size-h5); }
-h6, .h6 { font-size: var(--font-size-h6); }
-
-h1, h2, h3, h4, h5, h6 {
-  color: var(--text-heading-color);
-  font-weight: 600; /* Add a bit more weight to headings */
+/* Typography */
+h1,
+h2,
+h3,
+h4,
+h5,
+h6,
+.h1,
+.h2,
+.h3,
+.h4,
+.h5,
+.h6 {
+  color: var(--text-primary);
+  font-weight: 600;
+  letter-spacing: -0.02em;
+  margin-bottom: 0.5em;
 }
 
+a {
+  color: var(--primary-color);
+  text-decoration: none;
+  transition: color var(--transition-fast);
+}
+
+a:hover {
+  color: var(--primary-hover);
+}
+
+/* Utilities */
+.glass-panel {
+  background: var(--glass-bg);
+  backdrop-filter: blur(12px);
+  -webkit-backdrop-filter: blur(12px);
+  border: 1px solid var(--glass-border);
+  border-radius: var(--border-radius-lg);
+  box-shadow: var(--shadow-lg);
+}
+
+.text-gradient {
+  color: var(--primary-color);
+  background: none;
+  -webkit-text-fill-color: initial;
+}
+
+.page-container {
+  padding: 2rem;
+  max-width: 1400px;
+  margin: 0 auto;
+}
+
+/* Custom Scrollbar */
+::-webkit-scrollbar {
+  width: 8px;
+  height: 8px;
+}
+
+::-webkit-scrollbar-track {
+  background: transparent;
+}
+
+::-webkit-scrollbar-thumb {
+  background: var(--text-muted);
+  border-radius: 4px;
+}
+
+::-webkit-scrollbar-thumb:hover {
+  background: var(--text-secondary);
+}
+
+/* Bootstrap Overrides managed here for global consistency */
 .card {
   background-color: var(--surface-color) !important;
+  border: 1px solid var(--border-color) !important;
+  border-radius: var(--border-radius-lg) !important;
+  box-shadow: var(--shadow-md);
+  transition: transform var(--transition-fast), box-shadow var(--transition-fast);
+}
+
+.card:hover {
+  box-shadow: var(--shadow-lg);
+}
+
+.btn-primary {
+  background: var(--primary-color);
+  border: none;
+  box-shadow: 0 4px 6px rgba(0, 0, 0, 0.2);
+  transition: background-color var(--transition-fast), transform var(--transition-fast);
+}
+
+.btn-primary:hover {
+  background-color: var(--primary-hover);
+  transform: translateY(-1px);
+  box-shadow: 0 6px 10px rgba(0, 0, 0, 0.3);
+}
+
+/* Bootstrap Modal & Dropdown Overrides */
+.modal-content,
+.dropdown-menu {
+  background-color: var(--surface-color) !important;
+  color: var(--text-primary) !important;
+  border: 1px solid var(--border-color) !important;
+}
+
+.modal-header,
+.modal-footer {
   border-color: var(--border-color) !important;
 }
 
-.recharts-wrapper {
-  font-size: var(--font-size-sm);
+.dropdown-item:hover,
+.dropdown-item:focus {
+  background-color: var(--surface-hover) !important;
 }
 
-.table {
-  font-size: var(--font-size-base);
+.list-group-item {
+  background-color: var(--surface-color) !important;
+  color: var(--text-primary) !important;
+  border-color: var(--border-color) !important;
 }
 
-code {
-  font-family: source-code-pro, Menlo, Monaco, Consolas, 'Courier New',
-    monospace;
+/* Table Enhancements */
+.modern-table {
+  width: 100%;
+  border-collapse: separate;
+  border-spacing: 0 4px;
+  /* Subtle spacing */
+}
+
+.modern-table thead th {
+  color: var(--text-muted);
+  /* Darker gray for labels */
+  font-weight: 600;
+  text-transform: uppercase;
+  font-size: 0.75rem;
+  letter-spacing: 0.05em;
+  padding: 1rem;
+  border: none;
+}
+
+.modern-table tbody tr {
+  background-color: var(--surface-color);
+  transition: background-color 0.2s ease;
+}
+
+/* Alternating row shades */
+.modern-table tbody tr:nth-child(even) {
+  background-color: rgba(255, 255, 255, 0.02);
+  /* Slightly lighter */
+}
+
+.modern-table tbody tr:hover {
+  background-color: rgba(43, 43, 136, 0.08);
+  /* Faint BITS Pilani cobalt overlay */
+}
+
+.modern-table td {
+  padding: 1rem;
+  vertical-align: middle;
+  border: none;
+  /* Removed borders for cleaner look */
+  border-bottom: 1px solid rgba(255, 255, 255, 0.05);
+  /* Very subtle separator */
+}
+
+.modern-table td:first-child {
+  border-top-left-radius: var(--border-radius-sm);
+  border-bottom-left-radius: var(--border-radius-sm);
+}
+
+.modern-table td:last-child {
+  border-top-right-radius: var(--border-radius-sm);
+  border-bottom-right-radius: var(--border-radius-sm);
+}
+
+/* Risk Badges */
+.risk-badge {
+  padding: 0.35em 0.8em;
+  border-radius: 20px;
+  font-weight: 600;
+  font-size: 0.75rem;
+  letter-spacing: 0.02em;
+  text-transform: uppercase;
+  border: 1px solid transparent;
+  /* default */
+}
+
+.risk-badge.high {
+  background-color: rgba(233, 102, 102, 0.15);
+  /* Muted Red alpha */
+  color: var(--high-risk-color);
+  border-color: rgba(233, 102, 102, 0.3);
+}
+
+.risk-badge.medium {
+  background-color: rgba(235, 168, 75, 0.15);
+  /* Muted Orange alpha */
+  color: var(--medium-risk-color);
+  border-color: rgba(235, 168, 75, 0.3);
+}
+
+.risk-badge.low {
+  background-color: rgba(85, 191, 149, 0.15);
+  /* Muted Green alpha */
+  color: var(--low-risk-color);
+  border-color: rgba(85, 191, 149, 0.3);
+}
+
+/* AI Components */
+.ai-panel {
+  background: linear-gradient(135deg, var(--surface-color) 0%, #FFFEF5 100%);
+  border: 1px solid var(--ai-border);
+  box-shadow: 0 4px 15px rgba(183, 138, 45, 0.08);
+  position: relative;
+  overflow: hidden;
+}
+
+.ai-panel::before {
+  content: '';
+  position: absolute;
+  top: 0;
+  left: 0;
+  width: 100%;
+  height: 3px;
+  background: linear-gradient(90deg, var(--ai-primary), var(--ai-light));
+}
+
+.ai-icon-glow {
+  filter: drop-shadow(0 0 5px rgba(183, 138, 45, 0.4));
+}
+
+.ai-text {
+  font-family: 'Merriweather', serif; /* Optional: distinctive serif for AI narrative */
+  color: #334155;
+  line-height: 1.6;
+}
+
+/* Tooltip Customization */
+.custom-tooltip {
+  font-size: 0.85rem;
+  background: rgba(30, 41, 59, 0.95);
+  backdrop-filter: blur(4px);
+  border: 1px solid rgba(255, 255, 255, 0.1);
+  box-shadow: 0 10px 15px -3px rgba(0, 0, 0, 0.1);
 }

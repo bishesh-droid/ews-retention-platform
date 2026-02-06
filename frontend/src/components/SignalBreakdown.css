@@ -1,0 +1,142 @@
+.signal-breakdown {
+  padding: 1.5rem;
+  background: #ffffff;
+  border-radius: 8px;
+  box-shadow: 0 2px 8px rgba(0, 0, 0, 0.1);
+}
+
+.signal-breakdown-title {
+  font-size: 1.25rem;
+  font-weight: 600;
+  margin-bottom: 1.5rem;
+  color: #1f2937;
+}
+
+.signal-breakdown-empty {
+  padding: 2rem;
+  text-align: center;
+  color: #6b7280;
+  font-style: italic;
+}
+
+.signal-bars {
+  display: flex;
+  flex-direction: column;
+  gap: 1.25rem;
+  margin-bottom: 1.5rem;
+}
+
+.signal-item {
+  display: flex;
+  flex-direction: column;
+  gap: 0.5rem;
+}
+
+.signal-header {
+  display: flex;
+  align-items: center;
+  gap: 0.75rem;
+  font-size: 0.875rem;
+}
+
+.signal-icon {
+  font-size: 1.25rem;
+}
+
+.signal-label {
+  flex: 1;
+  font-weight: 500;
+  color: #374151;
+}
+
+.signal-score {
+  font-weight: 700;
+  font-size: 0.875rem;
+  padding: 0.25rem 0.5rem;
+  border-radius: 4px;
+}
+
+.signal-score-low {
+  background: #d1fae5;
+  color: #065f46;
+}
+
+.signal-score-medium {
+  background: #fef3c7;
+  color: #92400e;
+}
+
+.signal-score-high {
+  background: #fee2e2;
+  color: #991b1b;
+}
+
+.signal-bar-container {
+  height: 8px;
+  background: #e5e7eb;
+  border-radius: 4px;
+  overflow: hidden;
+}
+
+.signal-bar {
+  height: 100%;
+  border-radius: 4px;
+  transition: width 0.3s ease;
+}
+
+.signal-bar-low {
+  opacity: 0.7;
+}
+
+.signal-bar-medium {
+  opacity: 0.85;
+}
+
+.signal-bar-high {
+  opacity: 1;
+}
+
+.signal-legend {
+  display: flex;
+  gap: 1.5rem;
+  padding-top: 1rem;
+  border-top: 1px solid #e5e7eb;
+  font-size: 0.75rem;
+  color: #6b7280;
+}
+
+.legend-item {
+  display: flex;
+  align-items: center;
+  gap: 0.5rem;
+}
+
+.legend-dot {
+  width: 12px;
+  height: 12px;
+  border-radius: 2px;
+}
+
+.legend-low {
+  background: #d1fae5;
+}
+
+.legend-medium {
+  background: #fef3c7;
+}
+
+.legend-high {
+  background: #fee2e2;
+}
+
+/* Responsive design */
+@media (max-width: 640px) {
+  .signal-breakdown {
+    padding: 1rem;
+  }
+
+  .signal-legend {
+    flex-direction: column;
+    gap: 0.5rem;
+  }
+}

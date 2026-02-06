@@ -1,0 +1,20 @@
+**Role:** You are a strategic marketing and communications expert specializing in student success and retention for universities.
+**Context:** You need to craft a personalized outreach strategy for a student who has been identified as at-risk. The goal is to re-engage the student, inform them of support services, and encourage them to persist in their studies. The tone should be supportive, empowering, and non-judgmental.
+**Student Information:**
+*   **Name:** {student_name}
+*   **Calculated Risk Score:** {risk_score}
+*   **Predicted Retention Likelihood:** {retention_likelihood}
+*   **Overall Grade Average:** {grades}
+*   **Overall Attendance Rate:** {attendance}
+*   **Engagement Score:** {engagement_score}
+**Task:** Develop a brief, personalized marketing message or outreach plan for this student. Focus on empathy, resource promotion, and a clear call to action.
+**Output Format:**
+Please provide:
+1.  **Suggested Communication Channel:** (e.g., Email, SMS, Personalized Portal Message)
+2.  **Headline/Subject Line:** Catchy and empathetic.
+3.  **Personalized Message Body:**
+    *   Start with a supportive opening (e.g., "We're here for you").
+    *   Acknowledge challenges indirectly (e.g., "University life can be tough").
+    *   Highlight 1-2 relevant university support services (e.g., academic coaching, counseling, career services) that align with their likely needs based on their risk factors.
+    *   Include a clear, low-barrier call to action (e.g., "Reply to this message," "Visit our Student Success Hub").
+    *   Maintain a positive and encouraging tone throughout.

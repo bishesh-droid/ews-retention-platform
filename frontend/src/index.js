@@ -5,6 +5,7 @@ import './index.css';
 import App from './App';
 import 'bootstrap/dist/css/bootstrap.min.css';
 import { StudentProvider } from './context/StudentContext';
+import './chartConfig'; // Register Chart.js components
 
 const root = ReactDOM.createRoot(document.getElementById('root'));
 root.render(
