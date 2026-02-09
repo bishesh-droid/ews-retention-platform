@@ -389,7 +389,7 @@ LOG_LEVEL=INFO
 
 ## Future Enhancements
 
-1. **Multi-LLM Support**: Allow switching between Gemini, GPT-4, Claude
+1. **Multi-LLM Support**: Allow switching between Gemini and GPT-4
 2. **Fine-Tuning**: Train custom model on institutional data
 3. **Real-Time Updates**: WebSocket for live LLM streaming
 4. **Mobile App**: Extend to iOS/Android with push notifications

@@ -21,7 +21,7 @@ Student Data (CSV, 5000 students) --> SQLite Database
         FastAPI Backend (35+ endpoints) <--> React Frontend (13 pages, 50+ components)
                                         |
                                         v
-                Google Gemini LLM --> RAG-grounded AI Recommendations
+                Google Gemini --> RAG-grounded AI Recommendations
 ```
 
 This creates a closed-loop **predict -> act -> improve** retention system.
@@ -87,24 +87,22 @@ Automated intervention triggers based on risk thresholds:
 ews-retention-platform/
 ├── backend/
 │   ├── main.py                          # FastAPI app entry point
-│   ├── database.py                      # SQLAlchemy models (Student, Prediction, Intervention, LLM tables)
+│   ├── database.py                      # Database initialization and session management.
 │   ├── config.py                        # Environment configuration
-│   ├── schemas.py                       # Legacy Pydantic schemas
-│   ├── constants.py                     # Application constants
 │   ├── app/
 │   │   ├── api/
 │   │   │   ├── deps.py                  # FastAPI dependencies (DB session, RBAC)
 │   │   │   └── routes/
-│   │   │       ├── students.py          # Student CRUD + analytics
-│   │   │       ├── predictions.py       # Single & batch predictions
-│   │   │       ├── llm.py              # 15+ LLM endpoints (explain, advise, simulate)
-│   │   │       ├── decisions.py         # Intervention recommendations & execution
-│   │   │       ├── advisor.py           # Study plans, faculty summaries, motivational messages
-│   │   │       ├── business.py          # Revenue, retention, ROI, executive summary
-│   │   │       ├── events.py            # 5-source event ingestion
-│   │   │       ├── features.py          # Feature computation & signal summaries
-│   │   │       ├── feedback.py          # Intervention response tracking
-│   │   │       └── recommendations.py   # Intervention suggestions
+│   │   │       ├── advisor.py           # AI academic advisor related endpoints
+│   │   │       ├── business.py          # Business intelligence related endpoints
+│   │   │       ├── decisions.py         # Intervention recommendation & execution endpoints
+│   │   │       ├── events.py            # Event ingestion endpoints
+│   │   │       ├── features.py          # Feature computation & signal summaries endpoints
+│   │   │       ├── feedback.py          # Intervention response tracking endpoints
+│   │   │       ├── llm.py               # LLM related endpoints (explain, advise, simulate)
+│   │   │       ├── predictions.py       # Single & batch predictions endpoints
+│   │   │       ├── recommendations.py   # Intervention suggestions endpoints
+│   │   │       └── students.py          # Student CRUD + analytics endpoints
 │   │   ├── database/
 │   │   │   ├── connection.py            # DB connection setup
 │   │   │   ├── session.py               # Session management
@@ -148,14 +146,13 @@ ews-retention-platform/
 │   │   │   ├── predictor.py             # Multi-layer validated prediction
 │   │   │   └── risk_formula.py          # Risk explanation & what-if simulation
 │   │   ├── models/
-│   │   │   ├── model_registry.py        # Model loading & caching
-│   │   │   └── saved/                   # Serialized model files (.joblib)
+│   │   │   └── model_registry.py        # Model loading & caching
 │   │   └── training/
 │   │       ├── train.py                 # XGBoost training with SMOTE
 │   │       └── evaluate.py              # Model evaluation
 │   ├── data/
-│   │   ├── simulated_data.csv           # 5000 student records (7-year metrics)
-│   │   └── labels.csv
+│   │   ├── Engagement_Analysis.xlsx     # Raw engagement analysis data
+│   │   └── labels.csv                   # Data labels for ML models
 │   └── tests/
 │       ├── test_llm_services.py
 │       ├── test_risk_scoring.py
@@ -191,6 +188,7 @@ ews-retention-platform/
 │   ├── marketing_advice.txt             # Marketing outreach prompt
 │   ├── sales_advice.txt                 # Sales conversation prompt
 │   └── student_specific_advice.txt      # Student coaching prompt
+
 ├── docs/
 │   ├── LLM_ARCHITECTURE.md             # LLM integration design
 │   ├── FACULTY_AI_GUIDE.md             # Faculty user guide
