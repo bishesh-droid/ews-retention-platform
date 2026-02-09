@@ -1,303 +1,331 @@
 """
 Feature Engineering Service for EWS Retention Platform.
 
-This module contains all feature engineering functions that derive metrics
-from the raw CSV columns. Every calculation is traceable back to specific
-CSV columns in simulated_data.csv.
+Derives engagement metrics from the Engagement_Analysis.xlsx data.
+All features are calculated from Enrollment records per student.
 
-CSV Column Reference:
-- absrate1-7: Absence rates for years 1-7
-- nsusp1-7: Number of suspensions for years 1-7
-- mobility1-7: School mobility/transfer rates for years 1-7
-- q1mpa1-q4mpa7: Quarterly MPA scores (28 scores total across 7 years)
-- nograd: Binary outcome (0=graduated, 1=did not graduate)
+Feature Categories:
+- Content Engagement: content completion rate across courses
+- Quiz Engagement: quiz completion and attempt patterns
+- Discussion Engagement: posts created, replies, reads
+- Login Consistency: login frequency and recency
+- Time Investment: total time spent in content
 """
 
-import numpy as np
-from typing import Dict, List, Optional, Tuple
+from typing import Dict, List, Optional
+from datetime import datetime
 
 
 class FeatureEngineer:
     """
-    Handles all feature engineering calculations from CSV columns.
-    All methods are pure functions with clear CSV column dependencies.
+    Calculates engagement features from enrollment data.
+    All methods work with lists of enrollment dictionaries.
     """
-    
+
     @staticmethod
-    def normalize_to_scale(value: float, min_val: float, max_val: float, 
-                          target_min: float = 0, target_max: float = 100) -> float:
-        """
-        Min-max normalize a value to target scale.
-        
-        Args:
-            value: Value to normalize
-            min_val: Minimum value in original range
-            max_val: Maximum value in original range
-            target_min: Target minimum (default 0)
-            target_max: Target maximum (default 100)
-            
-        Returns:
-            Normalized value clamped to [target_min, target_max]
-        """
-        if max_val == min_val:
-            # Avoid division by zero
-            return (target_min + target_max) / 2
-        
-        normalized = ((value - min_val) / (max_val - min_val)) * (target_max - target_min) + target_min
-        return max(target_min, min(target_max, normalized))
-    
+    def _parse_timestamp(ts: Optional[str]) -> Optional[datetime]:
+        """Parse ISO timestamp string to datetime."""
+        if not ts:
+            return None
+        try:
+            # Handle the format: 2025-12-28T06:42:30.8300000Z
+            ts_clean = ts.replace('Z', '+00:00')
+            return datetime.fromisoformat(ts_clean)
+        except (ValueError, TypeError):
+            return None
+
     @staticmethod
-    def calculate_attendance_score(student_data: Dict) -> float:
+    def calculate_content_completion_score(enrollments: List[Dict]) -> float:
         """
-        Calculate attendance score from absence rates.
-        
-        CSV Columns Used: absrate1, absrate2, ..., absrate7
-        
-        Logic:
-        1. Collect all non-null absence rates across 7 years
-        2. Calculate mean absence rate
-        3. Convert to attendance score (higher absence = lower attendance)
-        4. Normalize to 0-100 scale
-        
+        Calculate overall content completion rate across all courses.
+
+        Data Used: content_completed, content_required per enrollment
+
         Returns:
-            Attendance score [0-100], where 100 = perfect attendance
+            Score [0-100], where 100 = all content completed in all courses
         """
-        absence_rates = []
-        for year in range(1, 8):
-            absrate = student_data.get(f'absrate{year}')
-            if absrate is not None:
-                absence_rates.append(float(absrate))
-        
-        if not absence_rates:
-            # No data available, return neutral score
-            return 50.0
-        
-        # Calculate mean absence rate
-        mean_absence = np.mean(absence_rates)
-        
-        # Find global min/max for normalization (from data observation)
-        # CSV shows range from approx -22 to +37
-        global_min = -25.0
-        global_max = 40.0
-        
-        # Normalize absence rate
-        normalized_absence = FeatureEngineer.normalize_to_scale(
-            mean_absence, global_min, global_max, 0, 100
-        )
-        
-        # Invert: high absence = low attendance score
-        attendance_score = 100 - normalized_absence
-        
-        return round(attendance_score, 2)
-    
+        total_completed = 0
+        total_required = 0
+
+        for e in enrollments:
+            completed = e.get('content_completed', 0) or 0
+            required = e.get('content_required', 0) or 0
+            total_completed += completed
+            total_required += required
+
+        if total_required == 0:
+            return 0.0
+
+        score = (total_completed / total_required) * 100
+        return round(min(100.0, score), 2)
+
     @staticmethod
-    def calculate_academic_score(student_data: Dict) -> float:
+    def calculate_w1w2_completion_score(enrollments: List[Dict]) -> float:
         """
-        Calculate academic performance score from quarterly MPA scores.
-        
-        CSV Columns Used: q1mpa1-q4mpa7 (28 quarterly scores across 7 years)
-        
-        Logic:
-        1. Collect all non-null quarterly MPA scores
-        2. Calculate mean MPA
-        3. Normalize to 0-100 scale (assuming MPA is on 0-5 scale)
-        
+        Calculate content completion rate for weeks 1 & 2 specifically.
+
+        Data Used: content_completed, content_required_w1w2 per enrollment
+
         Returns:
-            Academic score [0-100], where 100 = perfect grades
+            Score [0-100] for W1&2 content progress
         """
-        mpa_scores = []
-        for year in range(1, 8):
-            for quarter in range(1, 5):
-                mpa = student_data.get(f'q{quarter}mpa{year}')
-                if mpa is not None:
-                    mpa_scores.append(float(mpa))
-        
-        if not mpa_scores:
-            return 50.0
-        
-        # Calculate mean MPA
-        mean_mpa = np.mean(mpa_scores)
-        
-        # MPA typically ranges from -1 to 6 (observed from CSV)
-        global_min = -1.0
-        global_max = 6.0
-        
-        # Normalize to 0-100
-        academic_score = FeatureEngineer.normalize_to_scale(
-            mean_mpa, global_min, global_max, 0, 100
-        )
-        
-        return round(academic_score, 2)
-    
+        total_completed = 0
+        total_required = 0
+
+        for e in enrollments:
+            completed = e.get('content_completed', 0) or 0
+            required_w1w2 = e.get('content_required_w1w2', 0) or 0
+            # Completed capped at w1w2 required
+            capped = min(completed, required_w1w2)
+            total_completed += capped
+            total_required += required_w1w2
+
+        if total_required == 0:
+            return 0.0
+
+        score = (total_completed / total_required) * 100
+        return round(min(100.0, score), 2)
+
     @staticmethod
-    def calculate_behavioral_score(student_data: Dict) -> float:
+    def calculate_quiz_engagement_score(enrollments: List[Dict]) -> float:
         """
-        Calculate behavioral score from suspension counts.
-        
-        CSV Columns Used: nsusp1, nsusp2, ..., nsusp7
-        
-        Logic:
-        1. Collect all non-null suspension counts
-        2. Calculate mean suspensions
-        3. Invert and normalize (fewer suspensions = higher behavioral score)
-        
+        Calculate quiz engagement from completion and attempts.
+
+        Data Used: quiz_completed, total_quiz_attempts per enrollment
+
         Returns:
-            Behavioral score [0-100], where 100 = no behavioral issues
+            Score [0-100] based on quiz activity
         """
-        suspension_counts = []
-        for year in range(1, 8):
-            nsusp = student_data.get(f'nsusp{year}')
-            if nsusp is not None:
-                suspension_counts.append(float(nsusp))
-        
-        if not suspension_counts:
-            return 50.0
-        
-        # Calculate mean suspensions
-        mean_suspensions = np.mean(suspension_counts)
-        
-        # Suspension counts range from approx -1 to 1.5 (observed from CSV)
-        global_min = -1.0
-        global_max = 1.5
-        
-        # Normalize suspensions
-        normalized_suspensions = FeatureEngineer.normalize_to_scale(
-            mean_suspensions, global_min, global_max, 0, 100
-        )
-        
-        # Invert: high suspensions = low behavioral score
-        behavioral_score = 100 - normalized_suspensions
-        
-        return round(behavioral_score, 2)
-    
+        total_quizzes = sum(e.get('quiz_completed', 0) or 0 for e in enrollments)
+        total_attempts = sum(e.get('total_quiz_attempts', 0) or 0 for e in enrollments)
+
+        if not enrollments:
+            return 0.0
+
+        # Average quizzes per course
+        avg_quizzes = total_quizzes / len(enrollments)
+
+        # Normalize: assume ~20 quizzes per course is excellent
+        quiz_score = min(100.0, (avg_quizzes / 20.0) * 100)
+
+        # Bonus for attempt-to-completion ratio (shows persistence)
+        if total_quizzes > 0 and total_attempts > total_quizzes:
+            persistence_bonus = min(10.0, ((total_attempts / total_quizzes) - 1) * 5)
+            quiz_score = min(100.0, quiz_score + persistence_bonus)
+
+        return round(quiz_score, 2)
+
     @staticmethod
-    def calculate_stability_score(student_data: Dict) -> float:
+    def calculate_discussion_engagement_score(enrollments: List[Dict]) -> float:
         """
-        Calculate stability score from mobility rates.
-        
-        CSV Columns Used: mobility1, mobility2, ..., mobility7
-        
-        Logic:
-        1. Collect all non-null mobility rates
-        2. Calculate mean absolute mobility (direction doesn't matter)
-        3. Invert and normalize (less mobility = higher stability)
-        
+        Calculate discussion participation score.
+
+        Data Used: discussion_posts_created, discussion_post_replies,
+                   discussion_posts_read per enrollment
+
         Returns:
-            Stability score [0-100], where 100 = very stable enrollment
+            Score [0-100] based on discussion activity
         """
-        mobility_rates = []
-        for year in range(1, 8):
-            mobility = student_data.get(f'mobility{year}')
-            if mobility is not None:
-                mobility_rates.append(abs(float(mobility)))
-        
-        if not mobility_rates:
-            return 50.0
-        
-        # Calculate mean absolute mobility
-        mean_mobility = np.mean(mobility_rates)
-        
-        # Mobility ranges from 0 to ~3.5 (observed from CSV)
-        global_min = 0.0
-        global_max = 4.0
-        
-        # Normalize mobility
-        normalized_mobility = FeatureEngineer.normalize_to_scale(
-            mean_mobility, global_min, global_max, 0, 100
-        )
-        
-        # Invert: high mobility = low stability
-        stability_score = 100 - normalized_mobility
-        
-        return round(stability_score, 2)
-    
+        total_created = sum(e.get('discussion_posts_created', 0) or 0 for e in enrollments)
+        total_replies = sum(e.get('discussion_post_replies', 0) or 0 for e in enrollments)
+        total_read = sum(e.get('discussion_posts_read', 0) or 0 for e in enrollments)
+
+        if not enrollments:
+            return 0.0
+
+        # Weighted: creating > replying > reading
+        weighted_activity = (total_created * 3) + (total_replies * 2) + (total_read * 0.5)
+
+        # Normalize per course: assume 30 weighted activity points per course is good
+        avg_per_course = weighted_activity / len(enrollments)
+        score = min(100.0, (avg_per_course / 30.0) * 100)
+
+        return round(score, 2)
+
     @staticmethod
-    def calculate_trend(student_data: Dict) -> str:
+    def calculate_login_consistency_score(enrollments: List[Dict]) -> float:
         """
-        Calculate academic trend by comparing recent vs. early performance.
-        
-        CSV Columns Used: q1mpa1-q4mpa2 (early), q1mpa6-q4mpa7 (recent)
-        
-        Logic:
-        Compare average MPA from years 1-2 vs years 6-7
-        
+        Calculate login consistency from login counts.
+
+        Data Used: num_logins, last_system_login per enrollment
+
         Returns:
-            "improving", "declining", or "stable"
+            Score [0-100] based on login frequency
         """
-        # Early years (1-2)
-        early_scores = []
-        for year in [1, 2]:
-            for quarter in range(1, 5):
-                mpa = student_data.get(f'q{quarter}mpa{year}')
-                if mpa is not None:
-                    early_scores.append(float(mpa))
-        
-        # Recent years (6-7)
-        recent_scores = []
-        for year in [6, 7]:
-            for quarter in range(1, 5):
-                mpa = student_data.get(f'q{quarter}mpa{year}')
-                if mpa is not None:
-                    recent_scores.append(float(mpa))
-        
-        if not early_scores or not recent_scores:
-            return "stable"
-        
-        early_avg = np.mean(early_scores)
-        recent_avg = np.mean(recent_scores)
-        
-        # Threshold for meaningful change (0.5 on MPA scale)
-        if recent_avg > early_avg + 0.5:
-            return "improving"
-        elif recent_avg < early_avg - 0.5:
+        total_logins = sum(e.get('num_logins', 0) or 0 for e in enrollments)
+
+        if not enrollments:
+            return 0.0
+
+        # Average logins per course
+        avg_logins = total_logins / len(enrollments)
+
+        # Normalize: assume 100 logins per course is very active
+        score = min(100.0, (avg_logins / 100.0) * 100)
+
+        return round(score, 2)
+
+    @staticmethod
+    def calculate_time_investment_score(enrollments: List[Dict]) -> float:
+        """
+        Calculate time investment score from content time.
+
+        Data Used: total_time_spent_seconds per enrollment
+
+        Returns:
+            Score [0-100] based on time spent in content
+        """
+        total_seconds = sum(e.get('total_time_spent_seconds', 0) or 0 for e in enrollments)
+
+        if not enrollments:
+            return 0.0
+
+        # Average hours per course
+        avg_hours = (total_seconds / 3600) / len(enrollments)
+
+        # Normalize: assume 20 hours per course is good engagement
+        score = min(100.0, (avg_hours / 20.0) * 100)
+
+        return round(score, 2)
+
+    @staticmethod
+    def calculate_assignment_score(enrollments: List[Dict]) -> float:
+        """
+        Calculate assignment submission activity.
+
+        Data Used: num_assignment_submissions per enrollment
+
+        Returns:
+            Score [0-100] based on assignment activity
+        """
+        total_submissions = sum(e.get('num_assignment_submissions', 0) or 0 for e in enrollments)
+
+        if not enrollments:
+            return 0.0
+
+        avg_submissions = total_submissions / len(enrollments)
+
+        # Normalize: assume 5 submissions per course is good
+        score = min(100.0, (avg_submissions / 5.0) * 100)
+
+        return round(score, 2)
+
+    @staticmethod
+    def calculate_zero_progress_ratio(enrollments: List[Dict]) -> float:
+        """
+        Calculate what fraction of courses have zero content completion.
+
+        Returns:
+            Ratio [0-1], where 0 = all courses have some progress, 1 = all zero
+        """
+        if not enrollments:
+            return 1.0
+
+        zero_count = sum(1 for e in enrollments if (e.get('content_completed', 0) or 0) == 0)
+        return round(zero_count / len(enrollments), 4)
+
+    @staticmethod
+    def get_progress_category(enrollments: List[Dict]) -> str:
+        """
+        Classify student into progress bucket based on W1&2 content.
+
+        Returns:
+            "0%", "0-10%", or ">10%"
+        """
+        total_completed = 0
+        total_required_w1w2 = 0
+
+        for e in enrollments:
+            completed = e.get('content_completed', 0) or 0
+            required = e.get('content_required_w1w2', 0) or 0
+            total_completed += min(completed, required)
+            total_required_w1w2 += required
+
+        if total_required_w1w2 == 0:
+            return "0%"
+
+        pct = (total_completed / total_required_w1w2) * 100
+
+        if pct == 0:
+            return "0%"
+        elif pct <= 10:
+            return "0-10%"
+        else:
+            return ">10%"
+
+    @staticmethod
+    def get_engagement_trend(enrollments: List[Dict]) -> str:
+        """
+        Determine engagement trend by comparing login recency.
+
+        Returns:
+            "active", "declining", or "inactive"
+        """
+        if not enrollments:
+            return "inactive"
+
+        total_logins = sum(e.get('num_logins', 0) or 0 for e in enrollments)
+        total_completed = sum(e.get('content_completed', 0) or 0 for e in enrollments)
+
+        if total_logins == 0 and total_completed == 0:
+            return "inactive"
+        elif total_logins < 10 or total_completed < 5:
             return "declining"
         else:
-            return "stable"
-    
+            return "active"
+
     @staticmethod
-    def get_year_by_year_data(student_data: Dict) -> List[Dict]:
+    def get_per_course_breakdown(enrollments: List[Dict]) -> List[Dict]:
         """
-        Extract year-by-year breakdown of student data.
-        
+        Get per-course engagement breakdown.
+
         Returns:
-            List of yearly data dictionaries with all metrics
+            List of per-course engagement summaries
         """
-        yearly_data = []
-        
-        for year in range(1, 8):
-            year_dict = {
-                "year": year,
-                "absence_rate": student_data.get(f'absrate{year}'),
-                "suspensions": student_data.get(f'nsusp{year}'),
-                "mobility": student_data.get(f'mobility{year}'),
-                "quarterly_scores": [
-                    student_data.get(f'q1mpa{year}'),
-                    student_data.get(f'q2mpa{year}'),
-                    student_data.get(f'q3mpa{year}'),
-                    student_data.get(f'q4mpa{year}')
-                ]
-            }
-            yearly_data.append(year_dict)
-        
-        return yearly_data
-    
+        breakdown = []
+        for e in enrollments:
+            content_req = e.get('content_required', 0) or 0
+            content_done = e.get('content_completed', 0) or 0
+            pct = round((content_done / content_req * 100), 2) if content_req > 0 else 0.0
+
+            breakdown.append({
+                "course_id": e.get('course_id'),
+                "course_name": e.get('course_name', ''),
+                "content_completed": content_done,
+                "content_required": content_req,
+                "completion_pct": pct,
+                "quiz_completed": e.get('quiz_completed', 0) or 0,
+                "total_quiz_attempts": e.get('total_quiz_attempts', 0) or 0,
+                "discussion_posts": e.get('discussion_posts_created', 0) or 0,
+                "time_spent_hours": round((e.get('total_time_spent_seconds', 0) or 0) / 3600, 2),
+                "logins": e.get('num_logins', 0) or 0,
+                "assignments_submitted": e.get('num_assignment_submissions', 0) or 0,
+            })
+
+        return breakdown
+
     @staticmethod
-    def calculate_all_features(student_data: Dict) -> Dict:
+    def calculate_all_features(enrollments: List[Dict]) -> Dict:
         """
-        Calculate all features for a student in one pass.
-        
+        Calculate all engagement features for a student.
+
         Args:
-            student_data: Dictionary containing all CSV columns for one student
-            
+            enrollments: List of enrollment dictionaries for one student
+
         Returns:
             Dictionary with all calculated features
         """
         return {
-            "attendance_score": FeatureEngineer.calculate_attendance_score(student_data),
-            "academic_score": FeatureEngineer.calculate_academic_score(student_data),
-            "behavioral_score": FeatureEngineer.calculate_behavioral_score(student_data),
-            "stability_score": FeatureEngineer.calculate_stability_score(student_data),
-            "trend": FeatureEngineer.calculate_trend(student_data),
-            "year_by_year": FeatureEngineer.get_year_by_year_data(student_data),
-            "graduated": student_data.get('nograd', 0) == 0
+            "content_completion_score": FeatureEngineer.calculate_content_completion_score(enrollments),
+            "w1w2_completion_score": FeatureEngineer.calculate_w1w2_completion_score(enrollments),
+            "quiz_engagement_score": FeatureEngineer.calculate_quiz_engagement_score(enrollments),
+            "discussion_engagement_score": FeatureEngineer.calculate_discussion_engagement_score(enrollments),
+            "login_consistency_score": FeatureEngineer.calculate_login_consistency_score(enrollments),
+            "time_investment_score": FeatureEngineer.calculate_time_investment_score(enrollments),
+            "assignment_score": FeatureEngineer.calculate_assignment_score(enrollments),
+            "zero_progress_ratio": FeatureEngineer.calculate_zero_progress_ratio(enrollments),
+            "progress_category": FeatureEngineer.get_progress_category(enrollments),
+            "engagement_trend": FeatureEngineer.get_engagement_trend(enrollments),
+            "per_course_breakdown": FeatureEngineer.get_per_course_breakdown(enrollments),
+            "total_courses": len(enrollments),
         }

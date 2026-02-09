@@ -86,7 +86,7 @@ if additional_origins:
     CORS_ORIGINS.extend([origin.strip() for origin in additional_origins.split(",")])
 
 # ========== Data Ingestion ==========
-SAMPLE_DATA_PATH = DATA_DIR / "simulated_data.csv"
+ENGAGEMENT_DATA_PATH = DATA_DIR / "Engagement_Analysis.xlsx"
 LABELS_DATA_PATH = DATA_DIR / "labels.csv"
 
 # ========== Logging ==========
@@ -95,7 +95,7 @@ LOG_FILE = BACKEND_DIR / "backend.log"
 
 # ========== Feature Engineering ==========
 FEATURE_COLUMNS_REQUIRED = [
-    'absrate7', 'q4mpa7', 'nsusp7', 'mobility7'
+    'content_completed', 'content_required', 'quiz_completed', 'num_logins'
 ]
 
 # ========== Scheduler ==========
