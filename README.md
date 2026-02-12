@@ -117,27 +117,28 @@ ews-retention-platform/
 │   │   ├── schemas/                     # Pydantic validation schemas
 │   │   │   ├── student.py, prediction.py, intervention.py
 │   │   │   ├── event.py, llm.py, common.py
-│   │   └── services/
-│   │       ├── ai/
-│   │       │   ├── llm_orchestrator.py  # Central LLM coordination
-│   │       │   ├── rag_engine.py        # Retrieval-augmented generation
-│   │       │   ├── hallucination_guard.py # Response validation
-│   │       │   ├── advisor.py           # AI academic advisor
-│   │       │   ├── study_plan_generator.py
-│   │       │   ├── faculty_summary.py
-│   │       │   └── advisor_context.py
-│   │       ├── analytics/
-│   │       │   ├── pattern_discovery.py # Systemic issue detection
-│   │       │   └── intervention_intel.py # Evidence-based recommendations
-│   │       ├── core/
-│   │       │   ├── ews_engine.py        # Risk calculation orchestration
-│   │       │   ├── decision_engine.py   # Intervention threshold logic
-│   │       │   ├── feature_service.py   # 5-category signal computation
-│   │       │   └── data_ingestion.py    # CSV data loading
-│   │       └── infrastructure/
-│   │           ├── scheduler.py         # Background job scheduling
-│   │           ├── audit_logger.py      # RBAC audit trails
-│   │           └── recommender.py       # Basic recommendations
+│   │   ├── services/
+│   │   │   ├── ai/
+│   │   │   │   ├── llm_orchestrator.py  # Central LLM coordination
+│   │   │   │   ├── rag_engine.py        # Retrieval-augmented generation
+│   │   │   │   ├── hallucination_guard.py # Response validation
+│   │   │   │   ├── advisor.py           # AI academic advisor
+│   │   │   │   ├── study_plan_generator.py
+│   │   │   │   ├── faculty_summary.py
+│   │   │   │   └── advisor_context.py
+│   │   │   ├── analytics/
+│   │   │   │   ├── pattern_discovery.py # Systemic issue detection
+│   │   │   │   └── intervention_intel.py # Evidence-based recommendations
+│   │   │   ├── core/
+│   │   │   │   ├── ews_engine.py        # Risk calculation orchestration
+│   │   │   │   ├── decision_engine.py   # Intervention threshold logic
+│   │   │   │   ├── feature_service.py   # 5-category signal computation
+│   │   │   │   └── data_ingestion.py    # CSV data loading
+│   │   │   └── infrastructure/
+│   │   │       ├── scheduler.py         # Background job scheduling
+│   │   │       ├── audit_logger.py      # RBAC audit trails
+│   │   │       └── recommender.py       # Basic recommendations
+│   │   └── utils/                       # (Currently empty)
 │   ├── ml/
 │   │   ├── config.py                    # ML configuration
 │   │   ├── features/
@@ -160,7 +161,8 @@ ews-retention-platform/
 ├── frontend/
 │   ├── package.json
 │   ├── public/
-│   │   └── data/student_data_test.csv   # Frontend fallback data
+│   │   └── data/
+│   │       └── student_data_test.csv   # Frontend fallback data
 │   └── src/
 │       ├── App.js                       # Route definitions (13 pages)
 │       ├── api.js                       # API client with CSV fallback
@@ -188,7 +190,6 @@ ews-retention-platform/
 │   ├── marketing_advice.txt             # Marketing outreach prompt
 │   ├── sales_advice.txt                 # Sales conversation prompt
 │   └── student_specific_advice.txt      # Student coaching prompt
-
 ├── docs/
 │   ├── LLM_ARCHITECTURE.md             # LLM integration design
 │   ├── FACULTY_AI_GUIDE.md             # Faculty user guide
@@ -197,10 +198,9 @@ ews-retention-platform/
 ├── docker/
 │   └── docker-compose.yml              # 3 services: backend, scheduler, frontend
 ├── scripts/
-│   └── generate_sample_data.py         # Synthetic data generator
+│   └── generate_data_catalog.py         # Script for generating data catalog
 ├── .env.example                         # Environment variable template
 ├── requirements.txt                     # Python dependencies
-├── requirements_no_ml.txt              # Lightweight deps (no ML libraries)
 ├── seed_db.py                          # Database seeding script
 ├── SETUP.md                            # Setup & deployment guide
 ├── TESTING.md                          # Testing guide
@@ -212,38 +212,64 @@ ews-retention-platform/
 ### Prerequisites
 - Python 3.8+
 - Node.js (LTS version)
+- Docker (for containerized deployment)
 
 ### Backend Setup
 ```bash
+# Navigate to project root
 cd ews-retention-platform
+
+# Create and activate a virtual environment
 python3 -m venv backend/venv
 source backend/venv/bin/activate
+
+# Install dependencies
 pip install -r requirements.txt
-cp .env.example .env   # Edit with your GEMINI_API_KEY
+
+# Create a .env file from the example
+cp .env.example .env
+
+# IMPORTANT: Edit .env and add your Google Gemini API Key
+# GEMINI_API_KEY=your_api_key_here
+
+# Run the backend server
 uvicorn backend.main:app --reload
 ```
-Backend runs at `http://localhost:8000`. API docs at `http://localhost:8000/docs`.
-Database initialization and data ingestion happen automatically on startup.
+The backend will be available at `http://localhost:8000`. API documentation can be accessed at `http://localhost:8000/docs`. Database initialization and data ingestion happen automatically on startup.
 
 ### Frontend Setup
 ```bash
+# Navigate to the frontend directory
 cd frontend
+
+# Install dependencies
 npm install
+
+# Start the development server
 npm start
 ```
-Frontend runs at `http://localhost:3000`.
+The frontend will be available at `http://localhost:3000`.
 
 ### ML Model Training
+To retrain the machine learning model:
 ```bash
+# Ensure your virtual environment is active
 source backend/venv/bin/activate
+
+# Run the training script
 python -m backend.ml.training.train
 ```
 
 ### Running Tests
 ```bash
-pytest backend/tests/ -v                    # Backend tests
-pytest backend/tests/ --cov=backend         # With coverage
-cd frontend && npm test -- --coverage       # Frontend tests
+# Run backend tests with verbose output
+pytest backend/tests/ -v
+
+# Run backend tests with coverage report
+pytest backend/tests/ --cov=backend
+
+# Run frontend tests with coverage
+cd frontend && npm test -- --coverage
 ```
 
 ## API Endpoints
@@ -280,34 +306,66 @@ cd frontend && npm test -- --coverage       # Frontend tests
 
 ## Environment Variables
 
-Key variables (see `.env.example` for full list):
+This system is configured via environment variables. See `.env.example` for the complete list.
 
-```bash
-GEMINI_API_KEY=your_key_here          # Required for LLM features
-DATABASE_URL=sqlite:///./backend/data/sql_app.db
-RISK_THRESHOLD_HIGH=0.7
-RISK_THRESHOLD_MEDIUM=0.4
-WEIGHT_ACADEMIC=0.30
-WEIGHT_ENGAGEMENT=0.25
-WEIGHT_CONSISTENCY=0.20
-AVERAGE_STUDENT_LTV=12500.0
-```
+### Key Variables
+| Variable | Description | Default |
+|---|---|---|
+| **`GEMINI_API_KEY`** | **Required for all AI features.** | `your_api_key_here` |
+| `DATABASE_URL` | Connection string for the database. | `sqlite:///./backend/data/sql_app.db` |
+| `MODEL_TYPE` | Specifies the ML model to use. | `xgboost` |
+| `SCHEDULER_ENABLED` | Toggles the background job scheduler. | `true` |
+| `PREDICTION_UPDATE_INTERVAL`| Frequency of prediction updates in seconds. | `3600` |
+| `LOG_LEVEL` | Logging level for the application. | `INFO` |
+
+### Risk & Intervention Thresholds
+| Variable | Description | Default |
+|---|---|---|
+| `RISK_THRESHOLD_HIGH` | Risk score above which a student is "High Risk". | `0.7` |
+| `RISK_THRESHOLD_MEDIUM` | Risk score above which a student is "Medium Risk".| `0.4` |
+| `THRESHOLD_GENTLE` | Risk score to trigger a gentle intervention. | `0.60` |
+| `THRESHOLD_MENTOR` | Risk score to trigger a mentor outreach. | `0.80` |
+
+### Signal Weights
+These weights control the contribution of each signal category to the final risk score. **They must sum to 1.0.**
+| Variable | Description | Default |
+|---|---|---|
+| `WEIGHT_ACADEMIC` | Weight for academic performance signals. | `0.30` |
+| `WEIGHT_ENGAGEMENT` | Weight for student engagement signals. | `0.25` |
+| `WEIGHT_CONSISTENCY`| Weight for behavioral consistency signals. | `0.20` |
+| `WEIGHT_INTENT` | Weight for signals indicating student intent. | `0.15` |
+| `WEIGHT_RESPONSIVENESS`| Weight for signals on responsiveness to outreach. | `0.10` |
+
+### Business Metrics
+| Variable | Description | Default |
+|---|---|---|
+| `AVERAGE_STUDENT_LTV` | Average Lifetime Value of a student. | `12500.0` |
+| `INTERVENTION_COST` | Average cost of one intervention cycle. | `350.0` |
 
 ## RBAC (Role-Based Access Control)
 
-Access controlled via `X-User-Role` header:
-- **student**: Own data only, student portal features
-- **faculty**: Assigned students, AI summaries, intervention tools
-- **admin**: Full access including institutional insights, executive summary
-- **sales**: Business metrics, revenue analysis
+Access is controlled via the `X-User-Role` HTTP header on API requests.
+- **`student`**: Access to their own data and the student portal features.
+- **`faculty`**: Access to their assigned students, AI summaries, and intervention tools.
+- **`admin`**: Full access, including institutional insights and executive summaries.
+- **`sales`**: Access to business metrics and revenue analysis.
 
 ## Docker Deployment
 
+The `docker-compose.yml` file in the `docker/` directory defines three services for a containerized deployment:
+
+- **`backend`**: The FastAPI application. Builds from the project root and runs on port `8000`.
+- **`scheduler`**: A separate container that runs the background job scheduler (`python -m backend.services.scheduler`).
+- **`frontend`**: The React application. Builds from the `frontend/` directory and is served on port `3000`.
+
+To build and run the entire application with Docker:
 ```bash
+# Navigate to the docker directory
 cd docker
+
+# Build and start the services
 docker-compose up --build
 ```
-Runs 3 services: backend (port 8000), scheduler, frontend (port 3000).
 
 ## Use Cases
 - Detect early signs of student disengagement

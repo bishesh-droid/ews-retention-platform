@@ -395,6 +395,13 @@ class FactIntentResponsiveness(Base):
     support_emails_read = Column(Integer)
     response_time_hours = Column(Float)
     
+    # Advanced Communication Tracking (New)
+    message_sent_date = Column(DateTime)
+    response_received_date = Column(DateTime)
+    response_received = Column(Boolean)
+    message_priority = Column(String(50))  # normal, escalated, urgent
+    message_type = Column(String(50))      # email, sms, whatsapp
+    
     # Early warning
     no_login_days = Column(Integer)
     zero_participation_weeks = Column(Integer)
