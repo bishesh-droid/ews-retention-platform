@@ -109,7 +109,7 @@ graph TB
                      │
                      v
 ┌─────────────────────────────────────────────────────────────┐
-│              FASTAPI BACKEND (35+ Endpoints)                 │
+│              FASTAPI BACKEND (40+ Endpoints)                 │
 │  /students | /business | /decisions | /recommendations     │
 └────────────────────┬────────────────────────────────────────┘
                      │
@@ -117,8 +117,8 @@ graph TB
                      v                  v
 ┌──────────────────────────┐    ┌─────────────────────────────┐
 │   REACT FRONTEND         │    │   GOOGLE GEMINI (LLM)       │
-│  - 13 Pages              │    │  - RAG-Grounded Advice      │
-│  - 50+ Components        │    │  - Intervention Suggestions │
+│  - 14 Pages              │    │  - RAG-Grounded Advice      │
+│  - 54+ Components        │    │  - Intervention Suggestions │
 │  - Real-time Dashboards  │    │  - Personalized Insights    │
 └──────────────────────────┘    └─────────────────────────────┘
 ```
@@ -213,6 +213,11 @@ graph TB
 | Data Processing | pandas | 2.1+ | Data manipulation |
 | Validation | Pydantic | 2.0+ | API schema validation |
 | LLM | google-generativeai | latest | Gemini API client |
+| Model Serialization | joblib | latest | ML model persistence |
+| Scheduling | schedule | latest | Automated task scheduling |
+| File Upload | python-multipart | latest | Multipart form data handling |
+| Environment | python-dotenv | latest | .env file management |
+| Numerical | numpy | latest | Numerical computations |
 
 ### Frontend
 
@@ -689,6 +694,171 @@ Get Gemini-powered personalized recommendations.
 }
 ```
 
+#### Advanced Features APIs
+
+##### GET `/features/advanced/{student_id}`
+
+Compute all 36+ advanced retention features for a student.
+
+**Query Parameters**:
+- `include_cohort` (bool, default=false): Include cohort-normalized features (faculty-only)
+- `cohort_id` (str, optional): Cohort identifier for normalization
+
+**Response** (200 OK):
+```json
+{
+  "student_id": "student@example.com",
+  "computation_timestamp": "2026-02-12T13:20:00",
+  "temporal_features": {
+    "engagement_decay_rate": {"value": 0.15, "risk_level": "medium"},
+    "academic_grade_trend_slope": {"value": -0.05, "risk_level": "high"}
+  },
+  "consistency_features": {
+    "login_regularity_score": {"value": 0.72, "risk_level": "low"}
+  },
+  "composite_indices": {
+    "retention_risk_index": {"score": 68.5, "category": "high"},
+    "disengagement_velocity_index": {"score": 45.2, "category": "medium"}
+  },
+  "summary": {
+    "total_features_computed": 33,
+    "high_risk_signals": 5,
+    "medium_risk_signals": 12,
+    "overall_risk_assessment": "medium"
+  }
+}
+```
+
+##### GET `/features/risk-summary/{student_id}`
+
+Get high-level risk summary only (faster, for dashboard display).
+
+**Response** (200 OK):
+```json
+{
+  "retention_risk_index": {...},
+  "key_risk_factors": ["Rapid engagement decline", "Irregular study routine"],
+  "timestamp": "2026-02-12T13:20:00"
+}
+```
+
+#### AI Academic Advisor APIs
+
+##### POST `/advisor/study-plan/{student_id}`
+
+Generate personalized 4-week study plan (stubbed implementation).
+
+**Request Body** (optional):
+```json
+{
+  "preferences": {
+    "focus_area": "content_completion",
+    "available_hours_per_week": 15
+  }
+}
+```
+
+**Response** (200 OK):
+```json
+{
+  "success": true,
+  "student_id": "student@example.com",
+  "plan_duration_weeks": 4,
+  "plan": {
+    "weeks": [
+      {
+        "week": 1,
+        "focus": "content completion",
+        "goals": ["Complete 6 content modules", "Attempt 1 practice quiz"],
+        "estimated_hours": 10
+      }
+    ]
+  }
+}
+```
+
+##### POST `/advisor/faculty-summary/{student_id}`
+
+Generate faculty-appropriate student summary with talking points.
+
+**Query Parameters**:
+- `include_talking_points` (bool, default=true)
+
+**Response** (200 OK):
+```json
+{
+  "success": true,
+  "summary": {
+    "overview": "Student is enrolled in 4 courses...",
+    "engagement_level": "declining",
+    "key_concern": "Low content completion",
+    "talking_points": [
+      "Content completion is low - ask about study schedule challenges"
+    ]
+  }
+}
+```
+
+##### GET `/advisor/context/{student_id}`
+
+Retrieve advisor context including risk assessment and academic history.
+
+##### POST `/advisor/motivational-message/{student_id}`
+
+Generate motivational message based on student's risk level.
+
+**Query Parameters**:
+- `tone` (str, default="encouraging"): Message tone (encouraging, celebratory)
+
+#### LLM-Powered APIs
+
+##### POST `/llm/explain-risk-change`
+
+Explain why a student's risk score changed (stubbed LLM integration).
+
+**Request Body**:
+```json
+{
+  "student_id": "student@example.com",
+  "time_period": "recent"
+}
+```
+
+##### POST `/llm/student-advice`
+
+Get personalized advice for a student.
+
+##### POST `/llm/intervention-suggestions`
+
+Get AI-powered intervention recommendations.
+
+##### GET `/llm/prioritize-students`
+
+Get priority queue of students needing intervention.
+
+**Query Parameters**:
+- `limit` (int, default=20, max=100): Number of students to return
+
+##### GET `/llm/similar-students/{student_id}`
+
+Find students with similar risk profiles (for peer mentoring).
+
+##### POST `/llm/what-if-simulation`
+
+Run what-if scenarios to estimate impact of interventions.
+
+##### GET `/llm/weekly-brief/{student_id}`
+
+Generate weekly academic progress brief.
+
+#### Event Tracking APIs
+
+Endpoints available at `/events/*` for tracking student engagement events and behavioral data.
+
+#### Feedback APIs
+
+Endpoints available at `/feedback/*` for collecting and managing intervention feedback.
+
 ### OpenAPI Documentation
 
 Access interactive API docs: `http://localhost:8000/docs`
@@ -697,23 +867,23 @@ Access interactive API docs: `http://localhost:8000/docs`
 
 ## Frontend Architecture
 
-### Page Structure (13 pages)
+### Page Structure (14 pages)
 
 | Page | Route | Purpose |
 |------|-------|---------|
 | Dashboard | `/` | Executive overview, KPIs, at-risk alerts |
 | Students | `/students` | Filterable student list with risk scores |
-| Student Profile | `/student/:id` | Individual student detail page |
+| Student Profile | `/students/:id` | Individual student detail page |
 | Student Portal | `/student-portal` | Student-facing self-service dashboard |
-| Faculty | `/faculty` | Faculty-specific interventions, rosters |
-| Business Intelligence | `/business` | Revenue metrics, cohort analysis |
-| Analytics | `/analytics` | Deep-dive charts, trend analysis |
+| Faculty Tools | `/faculty-tools` | Faculty-specific interventions, rosters |
+| Insights | `/insights` | Analytics and deep-dive charts |
+| Business Analytics | `/business-analytics` | Revenue metrics, cohort analysis |
+| Business Intelligence | (Component) | Business intelligence components |
+| Institutional Insights | (Component) | System-wide insights |
 | Interventions | `/interventions` | Intervention tracking, effectiveness |
 | Reports | `/reports` | Export options, scheduled reports |
-| RiskFactors | `/risk-factors` | Signal breakdown explanations |
+| Risk Factors | `/risk-factors` | Signal breakdown explanations |
 | Settings | `/settings` | Configuration, user preferences |
-| AI Advisor | `/ai-advisor` | Gemini chatbot interface |
-| Help | `/help` | Documentation, tutorials |
 
 ### Component Hierarchy
 
@@ -844,6 +1014,109 @@ Dropout    |  95  |  405
 ```
 
 ---
+
+## Advanced Features
+
+The platform includes an **Advanced Feature Orchestrator** that computes 36+ sophisticated retention prediction features across 7 categories, providing deep insights beyond the standard ML model.
+
+### Feature Orchestrator
+
+**Module**: `backend/features/advanced_orchestrator.py`
+
+The Advanced Feature Orchestrator aggregates signals from multiple dimensions to create a comprehensive student risk profile. These features are designed to capture subtle disengagement patterns and provide explainable insights for interventions.
+
+#### Feature Categories
+
+**1. Temporal & Trend Features** (6 features)
+- **Engagement decay rate**: Velocity of engagement decline over time
+- **Academic grade trend slope**: Trajectory of academic performance
+- **Longest inactivity period**: Detection of concerning gaps in activity
+- Session frequency patterns, content progression velocity
+
+**2. Consistency & Habits** (5 features)
+- **Login regularity score**: Predictability of study routine
+- **Study streak tracking**: Consecutive days of active engagement
+- **Behavioral stability metrics**: Variance in daily/weekly patterns
+- Attendance consistency, assignment completion rhythm
+
+**3. Effort-Outcome Mismatch** (4 features)
+- **Time investment vs. performance correlation**: Efficiency indicators
+- Hours logged vs. grade outcomes
+- Content consumption vs. comprehension scores
+- Practice attempts vs. exam performance gap
+
+**4. Engagement Depth** (4 features)
+- **Content interaction quality**: Beyond login counts
+- **Passive vs. active engagement ratio**: Viewing vs. participating
+- Discussion contribution depth
+- Resource utilization patterns
+
+**5. Intent & Commitment** (3 features)
+- **Goal-setting behavior**: Forward-looking indicators
+- **Course progression patterns**: Completion trajectory
+- Voluntary engagement signals (office hours, extra resources)
+
+**6. Responsiveness** (3 features)
+- **Communication response times**: Faculty/mentor message replies
+- **Ignored escalation tracking**: Unresponded urgent messages
+- Support ticket engagement
+
+**7. Cohort Normalization** (4 features)
+- **Peer-relative performance** (faculty-only, privacy-protected)
+- Comparative engagement metrics within same cohort/trimester
+- Standardized z-scores for fair comparison
+- Note: Not shown to students to prevent social comparison anxiety
+
+**8. Composite Indices** (4 strategic indices)
+
+High-level aggregations for dashboard display:
+
+- **Retention Risk Index (RRI)**: Overall dropout probability (0-100)
+- **Disengagement Velocity Index (DVI)**: Rate of engagement decline
+- **Academic Instability Index (AII)**: Grade volatility and trend severity
+- **Routine Strength Index (RSI)**: Study habit consistency score
+
+### Usage Example
+
+```python
+from backend.features.advanced_orchestrator import compute_advanced_features
+
+# Compute all features for a student
+features = compute_advanced_features(db, 'student@example.com', cohort_id='T2_2026')
+
+# Access specific categories
+temporal = features['temporal_features']
+grade_trend = temporal['academic_grade_trend_slope']
+
+# Access composite indices
+rri = features['composite_indices']['retention_risk_index']
+dvi = features['composite_indices']['disengagement_velocity_index']
+
+# Get risk summary for dashboard
+from backend.features.advanced_orchestrator import AdvancedFeatureOrchestrator
+orchestrator = AdvancedFeatureOrchestrator()
+summary = orchestrator.compute_risk_summary(db, 'student@example.com')
+
+# Output:
+# {
+#   'retention_risk_index': {...},
+#   'key_risk_factors': ['Rapid engagement decline', 'Irregular study routine'],
+#   'timestamp': '2026-02-12T...'
+# }
+```
+
+### Privacy & Ethics
+
+> [!WARNING]
+> **Cohort normalization features** are faculty-only and not shown to students. This prevents:
+> - Social comparison anxiety
+> - Competitive gaming of the system
+> - Privacy violations (indirect peer identification)
+
+**Testing**: Comprehensive test suite available in `backend/tests/test_advanced_features.py`
+
+---
+
 
 ## Risk Scoring Logic
 
