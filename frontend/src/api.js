@@ -11,23 +11,17 @@ export const getStudents = async (limit = 2000) => {
   if (!response.ok) throw new Error('Failed to fetch students');
   const data = await response.json();
 
-  // Enrich with display fields
+  // ✅ CRITICAL: Use backend data AS-IS, no transformations
+  // Backend returns risk_score as 0-100 percentage
+  // Backend returns signal_breakdown as probabilities 0-1
   cachedStudents = data.students.map(s => ({
-    ...s,
+    ...s,  // Keep all backend fields unchanged
     name: `${s.first_name || ''} ${s.last_name || ''}`.trim() || s.id,
     email: s.id,
     program: s.department || '',
-    risk_level: s.risk_category === 'high' ? 'critical' : s.risk_category === 'medium' ? 'high' : 'low',
-    engagement_score: Math.round(100 - (s.risk_score || 50)),
-    prediction_available: true,
-    prediction_error: false,
-    signal_breakdown: {
-      academic_signal_score: (s.graded_quiz_score || 0) / 100,
-      engagement_signal_score: (s.content_completion_score || 0) / 100,
-      consistency_signal_score: (s.exam_attendance_rate || 0) / 100,
-      intent_signal_score: (s.graded_assignment_score || 0) / 100,
-      responsiveness_signal_score: (s.exam_score || 0) / 100,
-    },
+    // Display fields only - no computation
+    prediction_available: s.risk_score != null,
+    prediction_error: s.risk_score == null,
   }));
 
   return cachedStudents.slice(0, limit);
@@ -44,37 +38,32 @@ export const getStudent = async (id) => {
   const response = await fetch(`${API_BASE}/students/students/${encodeURIComponent(id)}`);
   if (!response.ok) throw new Error(`Student ${id} not found`);
   const s = await response.json();
+
+  // ✅ Use backend data AS-IS
   return {
-    ...s,
+    ...s,  // Keep all backend fields unchanged
     name: `${s.first_name || ''} ${s.last_name || ''}`.trim() || s.id,
     email: s.id,
     program: s.department || '',
-    risk_level: s.risk_category === 'high' ? 'critical' : s.risk_category === 'medium' ? 'high' : 'low',
-    engagement_score: Math.round(100 - (s.risk_score || 50)),
-    prediction_available: true,
-    signal_breakdown: {
-      academic_signal_score: (s.graded_quiz_score || 0) / 100,
-      engagement_signal_score: (s.content_completion_score || 0) / 100,
-      consistency_signal_score: (s.exam_attendance_rate || 0) / 100,
-      intent_signal_score: (s.graded_assignment_score || 0) / 100,
-      responsiveness_signal_score: (s.exam_score || 0) / 100,
-    },
+    prediction_available: s.risk_score != null,
   };
 };
 
 export const getStudentPrediction = async (id) => {
   const student = await getStudent(id);
+
+  // Backend now returns risk_score as 0-100 percentage
   return {
     student_id: student.id,
-    risk_score: student.risk_score,
-    risk_level: student.risk_level,
+    risk_score: student.risk_score,  // Already 0-100 from backend
+    risk_level: student.risk_level || student.risk_category,  // Use backend value
     retention_prediction: student.risk_score < 50 ? 'Likely to Stay' : 'At Risk',
-    retention_likelihood: Math.round(100 - student.risk_score),
-    engagement_score: student.engagement_score,
-    prediction_available: true,
-    prediction_error: false,
-    signal_breakdown: student.signal_breakdown,
-    confidence: 0.85,
+    retention_likelihood: Math.round(100 - student.risk_score),  // Inverse of risk
+    engagement_score: student.engagement_score,  // Already 0-100 from backend
+    prediction_available: student.prediction_available,
+    prediction_error: student.prediction_error || false,
+    signal_breakdown: student.signal_breakdown,  // Already present from backend (0-1 scale)
+    confidence: student.confidence || 0.85,
     predicted_at: new Date().toISOString(),
   };
 };

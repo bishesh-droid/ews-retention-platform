@@ -3,10 +3,15 @@ Validation Utilities for Risk Score Pipeline
 =============================================
 
 Centralized validation functions to ensure:
-- Risk scores are always in valid range [0, 1]
+- Risk scores are always in valid range [0, 100] (percentage scale)
+- Signal scores are in valid range [0, 1] (probability scale)
 - No NaN, Inf, or None values propagate through the system
 - All validation failures are logged for debugging
 - Safe defaults are provided when validation fails
+
+IMPORTANT SCALE CONVENTION:
+- risk_score: 0-100 (percentage, for end-user display)
+- signal scores: 0-1 (probabilities, internal use)
 """
 
 import numpy as np
@@ -26,10 +31,13 @@ def validate_and_clamp_probability(
     """
     Validate and clamp a value to ensure it's a valid probability in [0, 1].
     
+    **Use this for SIGNAL SCORES only** (internal probabilities).
+    For risk scores, use validate_and_clamp_risk_score() instead.
+    
     Args:
         value: The value to validate (expected to be a probability)
         default: Default value to return if validation fails (default: 0.5 for neutral)
-        context: Context string for logging (e.g., "risk_score", "confidence")
+        context: Context string for logging (e.g., "academic_signal", "confidence")
     
     Returns:
         float: A valid probability in [0.0, 1.0]
@@ -76,6 +84,70 @@ def validate_and_clamp_probability(
         return 1.0
     
     return value_float
+
+
+def validate_and_clamp_risk_score(
+    value: Union[float, int, None],
+    default: float = 50.0,
+    context: str = "risk_score"
+) -> float:
+    """
+    Validate and clamp a value to ensure it's a valid risk score in [0, 100].
+    
+    **Use this for RISK SCORES** (percentage scale for end-user display).
+    For signal scores, use validate_and_clamp_probability() instead.
+    
+    Args:
+        value: The value to validate (expected to be a percentage 0-100)
+        default: Default value to return if validation fails (default: 50.0 for neutral)
+        context: Context string for logging (e.g., "risk_score", "engagement_score")
+    
+    Returns:
+        float: A valid risk score in [0.0, 100.0]
+    
+    Examples:
+        >>> validate_and_clamp_risk_score(75.5)
+        75.5
+        >>> validate_and_clamp_risk_score(-10)  # Logs warning, returns 0.0
+        0.0
+        >>> validate_and_clamp_risk_score(150)  # Logs warning, returns 100.0
+        100.0
+        >>> validate_and_clamp_risk_score(None)  # Logs warning, returns 50.0
+        50.0
+    """
+    # Handle None
+    if value is None:
+        logger.warning(f"Invalid {context}: None value detected, using default: {default}")
+        return max(0.0, min(100.0, float(default)))
+    
+    # Convert to float
+    try:
+        value_float = float(value)
+    except (TypeError, ValueError) as e:
+        logger.warning(f"Invalid {context}: Cannot convert to float: {value}, error: {e}, using default: {default}")
+        return max(0.0, min(100.0, float(default)))
+    
+    # Check for NaN
+    if np.isnan(value_float):
+        logger.warning(f"Invalid {context}: NaN detected, using default: {default}")
+        return max(0.0, min(100.0, float(default)))
+    
+    # Check for Infinity
+    if np.isinf(value_float):
+        logger.warning(f"Invalid {context}: Infinity detected ({value_float}), using default: {default}")
+        return max(0.0, min(100.0, float(default)))
+    
+    # Clamp to [0, 100] range
+    if value_float < 0.0:
+        logger.warning(f"Invalid {context}: negative value {value_float} detected, clamping to 0.0")
+        return 0.0
+    
+    if value_float > 100.0:
+        logger.warning(f"Invalid {context}: value {value_float} > 100.0 detected, clamping to 100.0")
+        return 100.0
+    
+    return value_float
+
 
 
 def validate_student_features(features_df: pd.DataFrame) -> bool:
@@ -156,9 +228,9 @@ def validate_risk_score_dict(result: Dict[str, Any]) -> bool:
         bool: True if all required fields are valid, False otherwise
     
     Expected keys:
-        - risk_score: float in [0, 1]
+        - risk_score: float in [0, 100]  # PERCENTAGE SCALE
         - prediction: int (0 or 1)
-        - signal_breakdown: dict with scores in [0, 1]
+        - signal_breakdown: dict with scores in [0, 1]  # PROBABILITY SCALE
     """
     if result is None:
         logger.error("Risk score validation failed: result is None")
@@ -168,7 +240,7 @@ def validate_risk_score_dict(result: Dict[str, Any]) -> bool:
         logger.error(f"Risk score validation failed: result is not a dict, got {type(result)}")
         return False
     
-    # Validate risk_score
+    # Validate risk_score (0-100 scale)
     if 'risk_score' not in result:
         logger.error("Risk score validation failed: 'risk_score' key missing")
         return False
@@ -182,11 +254,11 @@ def validate_risk_score_dict(result: Dict[str, Any]) -> bool:
         logger.error(f"Risk score validation failed: risk_score is NaN or Inf: {risk_score}")
         return False
     
-    if risk_score < 0.0 or risk_score > 1.0:
-        logger.error(f"Risk score validation failed: risk_score out of range [0, 1]: {risk_score}")
+    if risk_score < 0.0 or risk_score > 100.0:
+        logger.error(f"Risk score validation failed: risk_score out of range [0, 100]: {risk_score}")
         return False
     
-    # Validate signal_breakdown if present
+    # Validate signal_breakdown if present (0-1 scale)
     if 'signal_breakdown' in result:
         signals = result['signal_breakdown']
         if signals and isinstance(signals, dict):
@@ -222,18 +294,18 @@ def sanitize_risk_score_dict(result: Dict[str, Any]) -> Dict[str, Any]:
     
     sanitized = result.copy()
     
-    # Sanitize risk_score
+    # Sanitize risk_score (0-100 scale)
     if 'risk_score' in sanitized:
-        sanitized['risk_score'] = validate_and_clamp_probability(
+        sanitized['risk_score'] = validate_and_clamp_risk_score(
             sanitized['risk_score'], 
-            default=0.5, 
+            default=50.0, 
             context="risk_score"
         )
     else:
         logger.warning("risk_score missing from result, adding default")
-        sanitized['risk_score'] = 0.5
+        sanitized['risk_score'] = 50.0
     
-    # Sanitize signal_breakdown
+    # Sanitize signal_breakdown (0-1 scale)
     if 'signal_breakdown' in sanitized and isinstance(sanitized['signal_breakdown'], dict):
         for signal_name in sanitized['signal_breakdown']:
             sanitized['signal_breakdown'][signal_name] = validate_and_clamp_probability(
@@ -253,7 +325,7 @@ def get_safe_default_prediction() -> Dict[str, Any]:
         Dict[str, Any]: Safe default prediction with neutral risk score
     """
     return {
-        'risk_score': 0.5,  # Neutral risk
+        'risk_score': 50.0,  # Neutral risk (PERCENTAGE SCALE 0-100)
         'prediction': 0,     # Assume retained
         'model_version': 'fallback_default_v1.0',
         'signal_breakdown': {

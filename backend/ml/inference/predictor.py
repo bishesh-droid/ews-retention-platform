@@ -8,6 +8,7 @@ from backend.ml.models.model_registry import ModelRegistry
 from backend.ml.config import DEFAULT_MODEL_NAME
 from backend.ml.utils.validation_utils import (
     validate_and_clamp_probability,
+    validate_and_clamp_risk_score,
     validate_student_features,
     sanitize_student_features,
     validate_risk_score_dict,
@@ -215,18 +216,29 @@ def predict_risk(student_data_df):
             logger.error(f"Model prediction failed: {model_error}. Returning safe default.")
             return get_safe_default_prediction()
         
-        # Validate and clamp risk probability
-        risk_score = validate_and_clamp_probability(
+        # Validate and convert risk probability to percentage scale (0-100)
+        # Model returns probability (0-1), we convert to percentage for end-users
+        risk_probability_validated = validate_and_clamp_probability(
             risk_probability, 
             default=0.5, 
-            context="risk_score from model.predict_proba"
+            context="risk_probability from model.predict_proba"
         )
         
-        # Compute signal breakdowns
+        # Convert to percentage scale (0-100)
+        risk_score = risk_probability_validated * 100.0
+        
+        # Additional validation and clamping in percentage scale
+        risk_score = validate_and_clamp_risk_score(
+            risk_score,
+            default=50.0,
+            context="risk_score (percentage)"
+        )
+        
+        # Compute signal breakdowns (these remain in 0-1 probability scale)
         try:
             signal_scores = compute_signal_scores(X)
             
-            # Validate each signal score
+            # Validate each signal score (0-1 scale)
             for signal_name, signal_value in signal_scores.items():
                 signal_scores[signal_name] = validate_and_clamp_probability(
                     signal_value,
@@ -255,17 +267,18 @@ def predict_risk(student_data_df):
             prediction_int = int(binary_prediction)
             if prediction_int not in [0, 1]:
                 logger.warning(f"Invalid binary prediction {prediction_int}, using threshold-based fallback")
-                prediction_int = 1 if risk_score >= 0.5 else 0
+                # Use 50.0 as threshold for percentage scale
+                prediction_int = 1 if risk_score >= 50.0 else 0
         except (TypeError, ValueError) as pred_error:
             logger.warning(f"Binary prediction conversion failed: {pred_error}. Using threshold-based fallback.")
-            prediction_int = 1 if risk_score >= 0.5 else 0
+            prediction_int = 1 if risk_score >= 50.0 else 0
         
         # Construct result
         result = {
-            'risk_score': risk_score,
+            'risk_score': risk_score,  # Now in 0-100 percentage scale
             'prediction': prediction_int,
             'model_version': f"{model_type}_v1.0" if model_type else "unknown_v1.0",
-            'signal_breakdown': signal_scores,
+            'signal_breakdown': signal_scores,  # Remain in 0-1 probability scale
             'top_risk_factors': top_factors,
             'prediction_error': False
         }
@@ -275,7 +288,7 @@ def predict_risk(student_data_df):
             logger.error("Final validation failed. Sanitizing result...")
             result = sanitize_risk_score_dict(result)
         
-        logger.info(f"Prediction successful. Risk score: {result['risk_score']:.3f}")
+        logger.info(f"Prediction successful. Risk score: {result['risk_score']:.2f}%")
         return result
         
     except Exception as e:

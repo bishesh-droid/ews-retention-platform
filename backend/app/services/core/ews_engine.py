@@ -5,6 +5,7 @@ import logging
 from backend.ml.inference.predictor import predict_risk
 from backend.ml.utils.validation_utils import (
     validate_and_clamp_probability,
+    validate_and_clamp_risk_score,
     get_safe_default_prediction
 )
 from backend.app.services.core.decision_engine import (
@@ -29,7 +30,7 @@ def calculate_student_risk(student_data, include_decisions=False):
         include_decisions: If True, include intervention recommendations
         
     Returns:
-        Dictionary with risk score, signal breakdowns, and optional decisions.
+        Dictionary with risk score (0-100 percentage), signal breakdowns, and optional decisions.
         NEVER returns None - always returns a valid dictionary with safe defaults.
     """
     # Validate input
@@ -46,11 +47,11 @@ def calculate_student_risk(student_data, include_decisions=False):
             logger.error("predict_risk returned invalid result. Using safe default.")
             result = get_safe_default_prediction()
         
-        # Extract and validate risk_score
-        risk_score = result.get('risk_score', 0.5)
-        risk_score = validate_and_clamp_probability(
+        # Extract and validate risk_score (now in 0-100 percentage scale)
+        risk_score = result.get('risk_score', 50.0)
+        risk_score = validate_and_clamp_risk_score(
             risk_score, 
-            default=0.5, 
+            default=50.0, 
             context="risk_score in calculate_student_risk"
         )
         
@@ -60,30 +61,32 @@ def calculate_student_risk(student_data, include_decisions=False):
             engagement_score = validate_and_clamp_probability(
                 engagement_score,
                 default=0.5,
-                context="engagement_score"
+                context="engagement_score (probability)"
             )
+            # Convert engagement to percentage for consistency
+            engagement_score_pct = engagement_score * 100.0
         except Exception as eng_error:
-            logger.warning(f"Engagement score calculation failed: {eng_error}. Using default 0.5")
-            engagement_score = 0.5
+            logger.warning(f"Engagement score calculation failed: {eng_error}. Using default 50.0")
+            engagement_score_pct = 50.0
         
-        # Determine retention likelihood category based on risk_score
-        if risk_score < 0.3:
+        # Determine retention likelihood category based on risk_score (0-100 scale)
+        if risk_score < 30.0:
             retention_likelihood = "High"
-        elif risk_score < 0.6:
+        elif risk_score < 60.0:
             retention_likelihood = "Moderate"
         else:
             retention_likelihood = "Low"
         
         # Build response with validated values
         response = {
-            'risk_score': round(risk_score, 3),
-            'engagement_score': round(engagement_score, 3),
+            'risk_score': round(risk_score, 2),  # Percentage 0-100
+            'engagement_score': round(engagement_score_pct, 2),  # Percentage 0-100
             'retention_likelihood': retention_likelihood,
             'attendance': student_data.get('absrate7', 0.0),
             'assignments': student_data.get('q4mpa7', 0.0),
             'grades': student_data.get('q4mpa7', 0.0),
             'model_version': result.get('model_version', 'unknown'),
-            'signal_breakdown': result.get('signal_breakdown', {}),
+            'signal_breakdown': result.get('signal_breakdown', {}),  # Signals remain 0-1
             'top_risk_factors': result.get('top_risk_factors', []),
             'prediction_error': result.get('prediction_error', False)
         }
