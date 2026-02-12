@@ -1,7 +1,6 @@
 import React, { createContext, useState, useEffect, useContext, useCallback } from 'react';
-import { getStudents as fetchStudentsFromApi, getBatchPredictions } from '../api';
-import { validateRiskScore, isValidPrediction, getSafeDefaultPrediction, sanitizePrediction } from '../utils/riskScoreValidator';
-import Spinner from '../components/common/Spinner';
+import { getStudents as fetchStudentsFromApi } from '../api';
+import { validateRiskScore } from '../utils/riskScoreValidator';
 
 const StudentContext = createContext();
 
@@ -18,38 +17,17 @@ export const StudentProvider = ({ children }) => {
       setLoading(true);
       setError(null);
 
-      // Fetch all students and predictions in parallel
-      const [fetchedStudents, predictions] = await Promise.all([
-        fetchStudentsFromApi(1500),
-        getBatchPredictions(1500)
-      ]);
-
+      // Backend returns students pre-computed with risk scores and features
+      const fetchedStudents = await fetchStudentsFromApi(2000);
       setTotalStudents(fetchedStudents.length);
 
-      // Merge students with their predictions
-      const studentsWithPredictions = fetchedStudents.map((student) => {
-        let prediction = predictions[student.id];
+      // Validate risk scores
+      const studentsWithData = fetchedStudents.map(student => ({
+        ...student,
+        risk_score: validateRiskScore(student.risk_score, 50),
+      }));
 
-        // If prediction is missing or invalid, use safe default
-        if (!prediction || !isValidPrediction(prediction)) {
-          console.warn(`Missing or invalid prediction for student ${student.id}, using safe default`);
-          prediction = getSafeDefaultPrediction();
-        } else {
-          // Sanitize prediction to ensure all values are valid
-          prediction = sanitizePrediction(prediction);
-        }
-
-        // Ensure risk_score is in valid range
-        const riskScore = validateRiskScore(prediction.risk_score, 50);
-
-        return {
-          ...student,
-          ...prediction,
-          risk_score: riskScore  // Override with validated value
-        };
-      });
-
-      setStudents(studentsWithPredictions);
+      setStudents(studentsWithData);
     } catch (err) {
       setError('Failed to fetch student data: ' + err.message);
       console.error('Error loading students:', err);
@@ -62,7 +40,6 @@ export const StudentProvider = ({ children }) => {
     loadStudents();
   }, [loadStudents]);
 
-  // Function to refresh student data
   const refreshStudents = useCallback(() => {
     loadStudents();
   }, [loadStudents]);

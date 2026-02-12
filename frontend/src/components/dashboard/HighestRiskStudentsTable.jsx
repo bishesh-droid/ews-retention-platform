@@ -28,12 +28,19 @@ const HighestRiskStudentsTable = ({ students }) => {
 
   const getIntervention = (factor) => {
     switch (factor) {
-      case 'Attendance':
+      case 'Exam Attendance':
         return 'Schedule 1-on-1 meeting';
-      case 'Assignments':
+      case 'Content Completion':
+        return 'Encourage course engagement';
+      case 'Graded Quiz Performance':
         return 'Offer tutoring resources';
-      case 'Grades':
+      case 'Graded Assignment Performance':
+        return 'Recommend assignment support';
+      case 'Exam Performance':
         return 'Recommend academic counseling';
+      case 'Login Consistency':
+      case 'Time Investment':
+        return 'Check in on engagement';
       default:
         return 'Monitor closely';
     }
@@ -53,7 +60,7 @@ const HighestRiskStudentsTable = ({ students }) => {
       <table className="modern-table">
         <thead>
           <tr>
-            <th>ID</th>
+            <th>Student</th>
             <th>
               <OverlayTrigger
                 placement="top"
@@ -78,7 +85,7 @@ const HighestRiskStudentsTable = ({ students }) => {
                 animate={{ opacity: 1, x: 0 }}
                 transition={{ delay: index * 0.1 }}
               >
-                <td className="fw-medium">#{student.id}</td>
+                <td className="fw-medium">{student.name || student.id}</td>
                 <td><RiskScore value={student.risk_score} /></td>
                 <td>{primaryRiskFactor}</td>
                 <td className="text-muted">{getIntervention(primaryRiskFactor)}</td>

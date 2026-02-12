@@ -305,17 +305,122 @@ class FeatureEngineer:
         return breakdown
 
     @staticmethod
-    def calculate_all_features(enrollments: List[Dict]) -> Dict:
+    def calculate_graded_quiz_score(graded_components: List[Dict]) -> float:
+        """
+        Calculate average graded quiz score as percentage.
+
+        Data Used: GradedComponent records where component_type='quiz'
+
+        Returns:
+            Score [0-100], where 100 = perfect on all quizzes
+        """
+        quizzes = [g for g in graded_components if g.get('component_type') == 'quiz']
+        if not quizzes:
+            return 0.0
+
+        scores = []
+        for q in quizzes:
+            max_score = q.get('max_score', 0) or 0
+            if max_score <= 0:
+                continue
+            score = q.get('score')
+            if score is None or q.get('missed', False):
+                scores.append(0.0)  # Missed quiz = 0
+            else:
+                scores.append(min(100.0, (score / max_score) * 100))
+
+        if not scores:
+            return 0.0
+        return round(sum(scores) / len(scores), 2)
+
+    @staticmethod
+    def calculate_graded_assignment_score(graded_components: List[Dict]) -> float:
+        """
+        Calculate average graded assignment score as percentage.
+
+        Data Used: GradedComponent records where component_type='assignment'
+
+        Returns:
+            Score [0-100]
+        """
+        assignments = [g for g in graded_components if g.get('component_type') == 'assignment']
+        if not assignments:
+            return 0.0
+
+        scores = []
+        for a in assignments:
+            max_score = a.get('max_score', 0) or 0
+            if max_score <= 0:
+                continue
+            score = a.get('score')
+            if score is None or a.get('missed', False):
+                scores.append(0.0)
+            else:
+                scores.append(min(100.0, (score / max_score) * 100))
+
+        if not scores:
+            return 0.0
+        return round(sum(scores) / len(scores), 2)
+
+    @staticmethod
+    def calculate_exam_score(exam_records: List[Dict]) -> float:
+        """
+        Calculate exam performance score.
+
+        Combines marks percentage with attendance penalty.
+        Absent exams count as 0 marks.
+
+        Returns:
+            Score [0-100]
+        """
+        if not exam_records:
+            return 0.0
+
+        scores = []
+        for e in exam_records:
+            total = e.get('marks_total', 0) or 0
+            present = e.get('present', True)
+
+            if not present:
+                scores.append(0.0)
+            elif total > 0:
+                obtained = e.get('marks_obtained') or 0
+                scores.append(min(100.0, (obtained / total) * 100))
+
+        if not scores:
+            return 0.0
+        return round(sum(scores) / len(scores), 2)
+
+    @staticmethod
+    def calculate_exam_attendance_rate(exam_records: List[Dict]) -> float:
+        """
+        Calculate what percentage of exams the student attended.
+
+        Returns:
+            Rate [0-100]
+        """
+        if not exam_records:
+            return 0.0
+
+        attended = sum(1 for e in exam_records if e.get('present', True))
+        return round((attended / len(exam_records)) * 100, 2)
+
+    @staticmethod
+    def calculate_all_features(enrollments: List[Dict],
+                               graded_components: List[Dict] = None,
+                               exam_records: List[Dict] = None) -> Dict:
         """
         Calculate all engagement features for a student.
 
         Args:
             enrollments: List of enrollment dictionaries for one student
+            graded_components: List of graded quiz/assignment records
+            exam_records: List of exam records
 
         Returns:
             Dictionary with all calculated features
         """
-        return {
+        features = {
             "content_completion_score": FeatureEngineer.calculate_content_completion_score(enrollments),
             "w1w2_completion_score": FeatureEngineer.calculate_w1w2_completion_score(enrollments),
             "quiz_engagement_score": FeatureEngineer.calculate_quiz_engagement_score(enrollments),
@@ -329,3 +434,19 @@ class FeatureEngineer:
             "per_course_breakdown": FeatureEngineer.get_per_course_breakdown(enrollments),
             "total_courses": len(enrollments),
         }
+
+        if graded_components:
+            features["graded_quiz_score"] = FeatureEngineer.calculate_graded_quiz_score(graded_components)
+            features["graded_assignment_score"] = FeatureEngineer.calculate_graded_assignment_score(graded_components)
+        else:
+            features["graded_quiz_score"] = 0.0
+            features["graded_assignment_score"] = 0.0
+
+        if exam_records:
+            features["exam_score"] = FeatureEngineer.calculate_exam_score(exam_records)
+            features["exam_attendance_rate"] = FeatureEngineer.calculate_exam_attendance_rate(exam_records)
+        else:
+            features["exam_score"] = 0.0
+            features["exam_attendance_rate"] = 0.0
+
+        return features

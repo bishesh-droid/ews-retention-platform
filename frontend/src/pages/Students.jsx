@@ -17,9 +17,9 @@ const Students = () => {
   const [showCompareModal, setShowCompareModal] = useState(false);
 
   // Advanced filters
-  const [gpaRange, setGpaRange] = useState([0, 4.0]);
+  const [quizScoreRange, setQuizScoreRange] = useState([0, 100]);
   const [attendanceRange, setAttendanceRange] = useState([0, 100]);
-  const [courseFilter, setCourseFilter] = useState('all');
+  const [departmentFilter, setDepartmentFilter] = useState('all');
 
   // Student drawer
   const [showDrawer, setShowDrawer] = useState(false);
@@ -29,7 +29,13 @@ const Students = () => {
   const [currentPage, setCurrentPage] = useState(1);
   const [pageSize, setPageSize] = useState(50);
 
+  const departments = useMemo(() => {
+    const depts = new Set(students.map(s => s.department).filter(Boolean));
+    return [...depts].sort();
+  }, [students]);
+
   const filteredStudents = useMemo(() => {
+    const term = searchTerm.toLowerCase();
     return students
       .filter(student => {
         const riskScore = Number(student.risk_score);
@@ -41,20 +47,26 @@ const Students = () => {
         return true;
       })
       .filter(student => {
-        // GPA filter
-        const gpa = student.gpa || 2.5;
-        if (gpa < gpaRange[0] || gpa > gpaRange[1]) return false;
+        // Quiz score filter
+        const quizScore = student.graded_quiz_score ?? 0;
+        if (quizScore < quizScoreRange[0] || quizScore > quizScoreRange[1]) return false;
 
         // Attendance filter
-        const attendance = student.attendance || Math.floor(Math.random() * 100);
+        const attendance = student.exam_attendance_rate ?? 0;
         if (attendance < attendanceRange[0] || attendance > attendanceRange[1]) return false;
+
+        // Department filter
+        if (departmentFilter !== 'all' && student.department !== departmentFilter) return false;
 
         return true;
       })
-      .filter(student =>
-        student.id.toLowerCase().includes(searchTerm.toLowerCase())
-      );
-  }, [students, searchTerm, riskFilter, gpaRange, attendanceRange]);
+      .filter(student => {
+        if (!term) return true;
+        const name = (student.name || '').toLowerCase();
+        const id = (student.id || '').toLowerCase();
+        return name.includes(term) || id.includes(term);
+      });
+  }, [students, searchTerm, riskFilter, quizScoreRange, attendanceRange, departmentFilter]);
 
   const handleSelectStudent = (studentId, isSelectAll) => {
     if (isSelectAll) {
@@ -101,16 +113,16 @@ const Students = () => {
     }
   };
 
-  const hasActiveFilters = gpaRange[0] !== 0 || gpaRange[1] !== 4.0 ||
+  const hasActiveFilters = quizScoreRange[0] !== 0 || quizScoreRange[1] !== 100 ||
     attendanceRange[0] !== 0 || attendanceRange[1] !== 100 ||
-    courseFilter !== 'all' || riskFilter !== 'all';
+    departmentFilter !== 'all' || riskFilter !== 'all';
 
   const clearAllFilters = () => {
     setSearchTerm('');
     setRiskFilter('all');
-    setGpaRange([0, 4.0]);
+    setQuizScoreRange([0, 100]);
     setAttendanceRange([0, 100]);
-    setCourseFilter('all');
+    setDepartmentFilter('all');
   };
 
   if (error) {
@@ -216,37 +228,34 @@ const Students = () => {
               </Form.Select>
             </Form.Group>
 
-            {/* GPA Range */}
+            {/* Quiz Score Range */}
             <Form.Group className="mb-3">
               <Form.Label className="small text-muted">
-                GPA Range: {gpaRange[0].toFixed(1)} - {gpaRange[1].toFixed(1)}
+                Quiz Score: {quizScoreRange[0]} - {quizScoreRange[1]}
               </Form.Label>
               <div className="d-flex gap-2 mb-2">
                 <Form.Control
                   type="number"
                   min="0"
-                  max="4"
-                  step="0.1"
-                  value={gpaRange[0]}
-                  onChange={(e) => setGpaRange([parseFloat(e.target.value), gpaRange[1]])}
+                  max="100"
+                  value={quizScoreRange[0]}
+                  onChange={(e) => setQuizScoreRange([parseInt(e.target.value), quizScoreRange[1]])}
                   size="sm"
                 />
                 <Form.Control
                   type="number"
                   min="0"
-                  max="4"
-                  step="0.1"
-                  value={gpaRange[1]}
-                  onChange={(e) => setGpaRange([gpaRange[0], parseFloat(e.target.value)])}
+                  max="100"
+                  value={quizScoreRange[1]}
+                  onChange={(e) => setQuizScoreRange([quizScoreRange[0], parseInt(e.target.value)])}
                   size="sm"
                 />
               </div>
               <Form.Range
                 min="0"
-                max="4"
-                step="0.1"
-                value={gpaRange[1]}
-                onChange={(e) => setGpaRange([gpaRange[0], parseFloat(e.target.value)])}
+                max="100"
+                value={quizScoreRange[1]}
+                onChange={(e) => setQuizScoreRange([quizScoreRange[0], parseInt(e.target.value)])}
               />
             </Form.Group>
 
@@ -281,19 +290,18 @@ const Students = () => {
               />
             </Form.Group>
 
-            {/* Course Filter */}
+            {/* Department Filter */}
             <Form.Group className="mb-3">
-              <Form.Label className="small text-muted">Course</Form.Label>
+              <Form.Label className="small text-muted">Department</Form.Label>
               <Form.Select
-                value={courseFilter}
-                onChange={(e) => setCourseFilter(e.target.value)}
+                value={departmentFilter}
+                onChange={(e) => setDepartmentFilter(e.target.value)}
                 size="sm"
               >
-                <option value="all">All Courses</option>
-                <option value="MATH-201">MATH-201</option>
-                <option value="ENG-101">ENG-101</option>
-                <option value="BIO-301">BIO-301</option>
-                <option value="CS-101">CS-101</option>
+                <option value="all">All Departments</option>
+                {departments.map(dept => (
+                  <option key={dept} value={dept}>{dept}</option>
+                ))}
               </Form.Select>
             </Form.Group>
 
@@ -324,12 +332,12 @@ const Students = () => {
                   />
                 </Badge>
               )}
-              {(gpaRange[0] !== 0 || gpaRange[1] !== 4.0) && (
+              {(quizScoreRange[0] !== 0 || quizScoreRange[1] !== 100) && (
                 <Badge bg="secondary" className="d-flex align-items-center gap-2">
-                  GPA: {gpaRange[0].toFixed(1)}-{gpaRange[1].toFixed(1)}
+                  Quiz Score: {quizScoreRange[0]}-{quizScoreRange[1]}
                   <FaTimes
                     style={{ cursor: 'pointer' }}
-                    onClick={() => setGpaRange([0, 4.0])}
+                    onClick={() => setQuizScoreRange([0, 100])}
                   />
                 </Badge>
               )}
@@ -342,12 +350,12 @@ const Students = () => {
                   />
                 </Badge>
               )}
-              {courseFilter !== 'all' && (
+              {departmentFilter !== 'all' && (
                 <Badge bg="secondary" className="d-flex align-items-center gap-2">
-                  Course: {courseFilter}
+                  Dept: {departmentFilter}
                   <FaTimes
                     style={{ cursor: 'pointer' }}
-                    onClick={() => setCourseFilter('all')}
+                    onClick={() => setDepartmentFilter('all')}
                   />
                 </Badge>
               )}

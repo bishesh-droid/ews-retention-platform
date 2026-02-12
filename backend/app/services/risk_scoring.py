@@ -2,19 +2,12 @@
 Risk Scoring Engine for EWS Retention Platform.
 
 Calculates dropout risk from engagement features derived from
-Engagement_Analysis.xlsx data.
+real XLSX data (Engagement_Analysis, Quiz/Assignment/Exam).
 
 Risk Score Formula:
     risk = 100 - weighted_engagement
 
-    weighted_engagement = (
-        0.30 * content_completion_score +
-        0.20 * quiz_engagement_score +
-        0.15 * login_consistency_score +
-        0.15 * time_investment_score +
-        0.10 * discussion_engagement_score +
-        0.10 * assignment_score
-    )
+    weighted_engagement = sum of (weight * score) for all components
 
 Higher risk score = higher chance of disengagement/dropout.
 """
@@ -29,12 +22,16 @@ class RiskScorer:
 
     # Engagement component weights (must sum to 1.0)
     WEIGHTS = {
-        'content_completion': 0.30,
-        'quiz_engagement': 0.20,
-        'login_consistency': 0.15,
-        'time_investment': 0.15,
-        'discussion_engagement': 0.10,
-        'assignment': 0.10,
+        'content_completion': 0.15,
+        'quiz_engagement': 0.05,
+        'login_consistency': 0.05,
+        'time_investment': 0.05,
+        'discussion_engagement': 0.05,
+        'assignment': 0.05,
+        'graded_quiz': 0.20,
+        'graded_assignment': 0.15,
+        'exam': 0.15,
+        'exam_attendance': 0.10,
     }
 
     # Risk thresholds
@@ -55,19 +52,32 @@ class RiskScorer:
         Returns:
             Risk score [0-100], where higher = higher risk of dropout
         """
-        weighted_engagement = (
-            RiskScorer.WEIGHTS['content_completion'] * features.get('content_completion_score', 0) +
-            RiskScorer.WEIGHTS['quiz_engagement'] * features.get('quiz_engagement_score', 0) +
-            RiskScorer.WEIGHTS['login_consistency'] * features.get('login_consistency_score', 0) +
-            RiskScorer.WEIGHTS['time_investment'] * features.get('time_investment_score', 0) +
-            RiskScorer.WEIGHTS['discussion_engagement'] * features.get('discussion_engagement_score', 0) +
-            RiskScorer.WEIGHTS['assignment'] * features.get('assignment_score', 0)
-        )
+        # Map weight keys to feature keys
+        feature_key_map = {
+            'content_completion': 'content_completion_score',
+            'quiz_engagement': 'quiz_engagement_score',
+            'login_consistency': 'login_consistency_score',
+            'time_investment': 'time_investment_score',
+            'discussion_engagement': 'discussion_engagement_score',
+            'assignment': 'assignment_score',
+            'graded_quiz': 'graded_quiz_score',
+            'graded_assignment': 'graded_assignment_score',
+            'exam': 'exam_score',
+            'exam_attendance': 'exam_attendance_rate',
+        }
+
+        weighted_engagement = 0.0
+        for key, weight in RiskScorer.WEIGHTS.items():
+            feature_key = feature_key_map.get(key, f'{key}_score')
+            score = features.get(feature_key, 0)
+            if score is None:
+                score = 0
+            weighted_engagement += weight * score
 
         # Zero-progress penalty: if all courses have 0 progress, increase risk
         zero_ratio = features.get('zero_progress_ratio', 0)
         if zero_ratio >= 0.8:
-            weighted_engagement *= 0.5  # Halve engagement if mostly zero progress
+            weighted_engagement *= 0.5
 
         risk_score = 100 - weighted_engagement
         risk_score = max(0.0, min(100.0, risk_score))
@@ -104,20 +114,37 @@ class RiskScorer:
     @staticmethod
     def get_dominant_risk_factor(features: Dict) -> str:
         """Identify which engagement component is weakest (contributes most to risk)."""
-        component_scores = {
-            'content_completion': features.get('content_completion_score', 0),
-            'quiz_engagement': features.get('quiz_engagement_score', 0),
-            'login_consistency': features.get('login_consistency_score', 0),
-            'time_investment': features.get('time_investment_score', 0),
-            'discussion_engagement': features.get('discussion_engagement_score', 0),
-            'assignment': features.get('assignment_score', 0),
+        feature_key_map = {
+            'Content Completion': 'content_completion_score',
+            'Quiz Engagement': 'quiz_engagement_score',
+            'Login Consistency': 'login_consistency_score',
+            'Time Investment': 'time_investment_score',
+            'Discussion Engagement': 'discussion_engagement_score',
+            'Assignment Submissions': 'assignment_score',
+            'Graded Quiz Performance': 'graded_quiz_score',
+            'Graded Assignment Performance': 'graded_assignment_score',
+            'Exam Performance': 'exam_score',
+            'Exam Attendance': 'exam_attendance_rate',
         }
 
-        # Risk contribution = (100 - score) * weight
-        risk_contributions = {
-            k: (100 - v) * RiskScorer.WEIGHTS[k]
-            for k, v in component_scores.items()
+        weight_map = {
+            'Content Completion': 'content_completion',
+            'Quiz Engagement': 'quiz_engagement',
+            'Login Consistency': 'login_consistency',
+            'Time Investment': 'time_investment',
+            'Discussion Engagement': 'discussion_engagement',
+            'Assignment Submissions': 'assignment',
+            'Graded Quiz Performance': 'graded_quiz',
+            'Graded Assignment Performance': 'graded_assignment',
+            'Exam Performance': 'exam',
+            'Exam Attendance': 'exam_attendance',
         }
+
+        risk_contributions = {}
+        for label, feature_key in feature_key_map.items():
+            score = features.get(feature_key, 0) or 0
+            weight = RiskScorer.WEIGHTS.get(weight_map[label], 0)
+            risk_contributions[label] = (100 - score) * weight
 
         return max(risk_contributions, key=risk_contributions.get)
 
@@ -131,6 +158,10 @@ class RiskScorer:
             'time_investment_risk': round(100 - features.get('time_investment_score', 0), 2),
             'discussion_engagement_risk': round(100 - features.get('discussion_engagement_score', 0), 2),
             'assignment_risk': round(100 - features.get('assignment_score', 0), 2),
+            'graded_quiz_risk': round(100 - features.get('graded_quiz_score', 0), 2),
+            'graded_assignment_risk': round(100 - features.get('graded_assignment_score', 0), 2),
+            'exam_risk': round(100 - features.get('exam_score', 0), 2),
+            'exam_attendance_risk': round(100 - features.get('exam_attendance_rate', 0), 2),
             'weights': RiskScorer.WEIGHTS,
         }
 

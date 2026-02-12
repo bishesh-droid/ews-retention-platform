@@ -1,17 +1,15 @@
 """
 Feature API Endpoints
-Provides access to engineered features and triggers feature computation
+Provides access to engineered features for students.
 """
 
-from fastapi import APIRouter, Depends, HTTPException, BackgroundTasks
+from fastapi import APIRouter, Depends, HTTPException, Query
 from sqlalchemy.orm import Session
 from typing import Optional
-from datetime import date
 
-from backend.app.database import get_db
-from backend.app.models import EngineeredFeatures, Student
-from backend.app.services.core.feature_service import compute_all_features
-import json
+from backend.app.api.deps import get_db
+from backend.app.services.student_service import StudentService
+from backend.database import Student
 
 router = APIRouter(
     responses={404: {"description": "Not found"}},
@@ -20,170 +18,114 @@ router = APIRouter(
 
 @router.get("/{student_id}")
 def get_student_features(student_id: str, db: Session = Depends(get_db)):
-    """
-    Get latest engineered features for a student
-    """
-    # Get most recent features
-    features = db.query(EngineeredFeatures).filter(
-        EngineeredFeatures.student_id == student_id
-    ).order_by(EngineeredFeatures.computation_date.desc()).first()
-    
-    if not features:
-        raise HTTPException(status_code=404, detail="No features found for student. Try computing features first.")
-    
+    """Get computed engagement features for a student."""
+    student = StudentService.get_student_by_id(db, student_id)
+
+    if not student:
+        raise HTTPException(status_code=404, detail="No features found for student.")
+
     return {
-        "student_id": features.student_id,
-        "computation_date": features.computation_date,
+        "student_id": student_id,
+        "computation_date": "latest",
         "academic_signals": {
-            "assignment_completion_rate": features.assignment_completion_rate,
-            "average_grade": features.average_grade,
-            "deadline_adherence_score": features.deadline_adherence_score,
-            "grade_trend": features.grade_trend
+            "assignment_completion_rate": student.get("assignment_score", 0) / 100.0,
+            "average_grade": student.get("graded_quiz_score", 0) / 100.0,
+            "deadline_adherence_score": student.get("graded_assignment_score", 0) / 100.0,
+            "grade_trend": 0.0,
         },
         "engagement_signals": {
-            "login_frequency": features.login_frequency,
-            "avg_session_duration": features.avg_session_duration,
-            "video_completion_rate": features.video_completion_rate,
-            "platform_interaction_score": features.platform_interaction_score
+            "login_frequency": student.get("login_consistency_score", 0) / 100.0,
+            "avg_session_duration": student.get("time_investment_score", 0) / 100.0,
+            "video_completion_rate": student.get("content_completion_score", 0) / 100.0,
+            "platform_interaction_score": student.get("discussion_engagement_score", 0) / 100.0,
         },
         "consistency_signals": {
-            "attendance_rate": features.attendance_rate,
-            "activity_regularity_score": features.activity_regularity_score,
-            "missed_classes_count": features.missed_classes_count,
-            "attendance_trend": features.attendance_trend
+            "attendance_rate": student.get("exam_attendance_rate", 0) / 100.0,
+            "activity_regularity_score": student.get("login_consistency_score", 0) / 100.0,
+            "missed_classes_count": 0,
+            "attendance_trend": 0.0,
         },
         "intent_signals": {
-            "engagement_trend": features.engagement_trend,
-            "days_inactive": features.days_inactive,
-            "declining_performance_flag": features.declining_performance_flag
+            "engagement_trend": student.get("trend", "active"),
+            "days_inactive": 0,
+            "declining_performance_flag": student.get("trend") == "declining",
         },
         "responsiveness_signals": {
-            "email_open_rate": features.email_open_rate,
-            "message_reply_rate": features.message_reply_rate,
-            "avg_response_time_hours": features.avg_response_time_hours
-        }
+            "email_open_rate": 0.0,
+            "message_reply_rate": 0.0,
+            "avg_response_time_hours": 0.0,
+        },
     }
 
 
 @router.post("/compute")
 def compute_features(
     student_id: Optional[str] = None,
-    background_tasks: BackgroundTasks = None,
     db: Session = Depends(get_db)
 ):
-    """
-    Trigger feature computation for a student or all students
-    
-    Query params:
-    - student_id: Optional student ID. If omitted, computes for all students (async)
-    """
+    """Trigger feature computation. Features are computed on-the-fly from enrollment data."""
     if student_id:
-        # Compute for single student synchronously
-        features = compute_all_features(student_id, db)
-        
-        if not features:
-            raise HTTPException(status_code=500, detail="Failed to compute features")
-        
-        # Save features
-        db.add(features)
-        db.commit()
-        db.refresh(features)
-        
+        student = StudentService.get_student_by_id(db, student_id)
+        if not student:
+            raise HTTPException(status_code=404, detail="Student not found")
+
         return {
             "status": "success",
             "student_id": student_id,
-            "computation_date": features.computation_date,
-            "message": "Features computed successfully"
+            "computation_date": "now",
+            "message": "Features computed successfully (on-the-fly from enrollment data)",
         }
     else:
-        # Batch computation (would normally be async, but simplified here)
-        students = db.query(Student).all()
-        computed_count = 0
-        failed_count = 0
-        
-        for student in students[:50]:  # Limit to 50 for demo
-            features = compute_all_features(student.id, db)
-            if features:
-                db.add(features)
-                computed_count += 1
-            else:
-                failed_count += 1
-        
-        db.commit()
-        
+        total = db.query(Student).count()
         return {
             "status": "completed",
-            "computed": computed_count,
-            "failed": failed_count,
-            "message": f"Batch feature computation completed for {computed_count} students"
+            "computed": total,
+            "failed": 0,
+            "message": f"Features are computed on-the-fly for all {total} students",
         }
 
 
 @router.get("/signal-summary/{signal_category}")
 def get_signal_summary(
     signal_category: str,
-    threshold_low: float = 0.3,
-    threshold_high: float = 0.7,
     db: Session = Depends(get_db)
 ):
-    """
-    Get summary statistics for a specific signal category across all students
-    
-    Signal categories: academic, engagement, consistency, intent, responsiveness
-    """
+    """Get summary statistics for a signal category across all students."""
     valid_categories = ["academic", "engagement", "consistency", "intent", "responsiveness"]
     if signal_category not in valid_categories:
-        raise HTTPException(status_code=400, detail=f"Invalid signal category. Must be one of: {valid_categories}")
-    
-    # Get latest features for all students
-    # This is a simplified query - in production you'd use window functions
-    all_features = db.query(EngineeredFeatures).all()
-    
-    # Group by student and get latest
-    latest_features = {}
-    for f in all_features:
-        if f.student_id not in latest_features or f.computation_date > latest_features[f.student_id].computation_date:
-            latest_features[f.student_id] = f
-    
-    # Extract signal values based on category
-    signal_mapping = {
-        "academic": lambda f: (f.average_grade / 100.0 + f.assignment_completion_rate + f.deadline_adherence_score) / 3.0,
-        "engagement": lambda f: (f.login_frequency / 10.0 + f.video_completion_rate + f.platform_interaction_score) / 3.0,
-        "consistency": lambda f: (f.attendance_rate + f.activity_regularity_score) / 2.0,
-        "intent": lambda f: max(0, 1.0 - (f.days_inactive / 30.0)),  # Invert days inactive
-        "responsiveness": lambda f: (f.email_open_rate + f.message_reply_rate) / 2.0
+        raise HTTPException(
+            status_code=400,
+            detail=f"Invalid signal category. Must be one of: {valid_categories}"
+        )
+
+    students = StudentService.get_all_students(db, 0, 2000)
+
+    signal_map = {
+        "academic": lambda s: s.get("graded_quiz_score", 0) / 100.0,
+        "engagement": lambda s: s.get("content_completion_score", 0) / 100.0,
+        "consistency": lambda s: s.get("exam_attendance_rate", 0) / 100.0,
+        "intent": lambda s: s.get("graded_assignment_score", 0) / 100.0,
+        "responsiveness": lambda s: s.get("exam_score", 0) / 100.0,
     }
-    
-    values = []
-    low_count = 0
-    medium_count = 0
-    high_count = 0
-    
-    for features in latest_features.values():
-        try:
-            value = signal_mapping[signal_category](features)
-            values.append(value)
-            
-            if value < threshold_low:
-                low_count += 1
-            elif value < threshold_high:
-                medium_count += 1
-            else:
-                high_count += 1
-        except:
-            continue
-    
-    import numpy as np
-    
+
+    values = [signal_map[signal_category](s) for s in students]
+
+    if not values:
+        return {"signal_category": signal_category, "total_students": 0, "mean": 0, "median": 0}
+
+    values.sort()
+    n = len(values)
+    mean_val = sum(values) / n
+    median_val = values[n // 2]
+
+    low = sum(1 for v in values if v < 0.3)
+    medium = sum(1 for v in values if 0.3 <= v < 0.7)
+    high = sum(1 for v in values if v >= 0.7)
+
     return {
         "signal_category": signal_category,
-        "total_students": len(values),
-        "mean": float(np.mean(values)) if values else 0,
-        "median": float(np.median(values)) if values else 0,
-        "std_dev": float(np.std(values)) if values else 0,
-        "distribution": {
-            "low": low_count,
-            "medium": medium_count,
-            "high": high_count
-        }
+        "total_students": n,
+        "mean": round(mean_val, 3),
+        "median": round(median_val, 3),
+        "distribution": {"low": low, "medium": medium, "high": high},
     }

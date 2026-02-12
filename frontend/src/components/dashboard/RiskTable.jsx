@@ -25,31 +25,25 @@ const RiskScore = ({ student }) => {
   );
 };
 
-// Calculate average GPA from latest semester's quarterly marks
-const getLatestGPA = (student) => {
-  const q1 = student.q1mpa7 || 0;
-  const q2 = student.q2mpa7 || 0;
-  const q3 = student.q3mpa7 || 0;
-  const q4 = student.q4mpa7 || 0;
-  const avg = (q1 + q2 + q3 + q4) / 4;
-  return avg.toFixed(2);
+// Get quiz score from backend
+const getQuizScore = (student) => {
+  return Math.round(student.graded_quiz_score ?? 0);
 };
 
-// Get attendance rate from latest semester
+// Get exam attendance rate from backend
 const getAttendanceRate = (student) => {
-  const absRate = student.absrate7 || 0;
-  // absrate can be negative (standardized), so we normalize it
-  // Lower is better, typical range is -10 to +30
-  const normalized = Math.max(0, Math.min(100, 100 - (absRate * 3)));
-  return Math.round(normalized);
+  return Math.round(student.exam_attendance_rate ?? 0);
 };
 
-// Get graduation status badge
-const GradStatusBadge = ({ nograd }) => {
-  if (nograd === 1) {
-    return <Badge bg="danger" className="px-2">At Risk</Badge>;
+// Get risk category badge
+const RiskCategoryBadge = ({ student }) => {
+  const score = student.risk_score ?? 50;
+  if (score >= 70) {
+    return <Badge bg="danger" className="px-2">High Risk</Badge>;
+  } else if (score >= 40) {
+    return <Badge bg="warning" className="px-2">Medium</Badge>;
   }
-  return <Badge bg="success" className="px-2">On Track</Badge>;
+  return <Badge bg="success" className="px-2">Low Risk</Badge>;
 };
 
 const RiskTable = ({ students, onSelectStudent, selectedStudents }) => {
@@ -64,10 +58,10 @@ const RiskTable = ({ students, onSelectStudent, selectedStudents }) => {
         let bVal = b[sortConfig.key];
 
         // Handle computed fields
-        if (sortConfig.key === 'latestGPA') {
-          aVal = parseFloat(getLatestGPA(a));
-          bVal = parseFloat(getLatestGPA(b));
-        } else if (sortConfig.key === 'attendance') {
+        if (sortConfig.key === 'graded_quiz_score') {
+          aVal = getQuizScore(a);
+          bVal = getQuizScore(b);
+        } else if (sortConfig.key === 'exam_attendance_rate') {
           aVal = getAttendanceRate(a);
           bVal = getAttendanceRate(b);
         }
@@ -125,14 +119,14 @@ const RiskTable = ({ students, onSelectStudent, selectedStudents }) => {
                 Risk Score {getSortIndicator('risk_score')}
               </div>
             </th>
-            <th onClick={() => requestSort('latestGPA')} style={{ cursor: 'pointer' }}>
+            <th onClick={() => requestSort('graded_quiz_score')} style={{ cursor: 'pointer' }}>
               <div className="d-flex align-items-center gap-2">
-                Latest GPA {getSortIndicator('latestGPA')}
+                Quiz Score {getSortIndicator('graded_quiz_score')}
               </div>
             </th>
-            <th onClick={() => requestSort('attendance')} style={{ cursor: 'pointer' }}>
+            <th onClick={() => requestSort('exam_attendance_rate')} style={{ cursor: 'pointer' }}>
               <div className="d-flex align-items-center gap-2">
-                Attendance {getSortIndicator('attendance')}
+                Exam Attendance {getSortIndicator('exam_attendance_rate')}
               </div>
             </th>
             <th onClick={() => requestSort('engagement_score')} style={{ cursor: 'pointer' }}>
@@ -140,9 +134,9 @@ const RiskTable = ({ students, onSelectStudent, selectedStudents }) => {
                 Engagement {getSortIndicator('engagement_score')}
               </div>
             </th>
-            <th onClick={() => requestSort('nograd')} style={{ cursor: 'pointer' }}>
+            <th onClick={() => requestSort('risk_score')} style={{ cursor: 'pointer' }}>
               <div className="d-flex align-items-center gap-2">
-                Status {getSortIndicator('nograd')}
+                Status {getSortIndicator('risk_score')}
               </div>
             </th>
             <th>Confidence</th>
@@ -166,11 +160,11 @@ const RiskTable = ({ students, onSelectStudent, selectedStudents }) => {
                   onClick={(e) => e.stopPropagation()}
                 />
               </td>
-              <td className="fw-medium">{student.id}</td>
+              <td className="fw-medium">{student.name || student.id}</td>
               <td><RiskScore student={student} /></td>
               <td>
-                <span className={parseFloat(getLatestGPA(student)) < 2.0 ? 'text-danger fw-bold' : ''}>
-                  {getLatestGPA(student)}
+                <span className={getQuizScore(student) < 40 ? 'text-danger fw-bold' : ''}>
+                  {getQuizScore(student)}%
                 </span>
               </td>
               <td>
@@ -179,7 +173,7 @@ const RiskTable = ({ students, onSelectStudent, selectedStudents }) => {
                 </span>
               </td>
               <td>{Math.round(student.engagement_score || 0)}%</td>
-              <td><GradStatusBadge nograd={student.nograd} /></td>
+              <td><RiskCategoryBadge student={student} /></td>
               <td><ConfidenceBadge student={student} size="sm" showLabel={false} /></td>
             </motion.tr>
           ))}

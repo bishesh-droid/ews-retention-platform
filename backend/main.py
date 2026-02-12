@@ -9,8 +9,9 @@ from fastapi.middleware.cors import CORSMiddleware
 from contextlib import asynccontextmanager
 
 from backend.config import API_HOST, API_PORT, CORS_ORIGINS, LOG_LEVEL
-from backend.database import init_db
+from backend.database import init_db, SessionLocal
 from backend.app.api.routes import api_router
+from backend.app.services.core.data_ingestion import ingest_all_data
 
 import logging
 
@@ -28,7 +29,16 @@ async def lifespan(app: FastAPI):
     logger.info("Starting EWS Retention Platform API...")
     init_db()
     logger.info("Database initialized.")
-    
+
+    # Ingest XLSX data on first run
+    db = SessionLocal()
+    try:
+        ingest_all_data(db)
+    except Exception as e:
+        logger.error(f"Data ingestion error: {e}")
+    finally:
+        db.close()
+
     yield
     
     # Shutdown

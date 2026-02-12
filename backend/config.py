@@ -86,8 +86,15 @@ if additional_origins:
     CORS_ORIGINS.extend([origin.strip() for origin in additional_origins.split(",")])
 
 # ========== Data Ingestion ==========
-ENGAGEMENT_DATA_PATH = DATA_DIR / "Engagement_Analysis.xlsx"
+RAW_DATA_DIR = BASE_DIR / "data" / "raw"
+ENGAGEMENT_DATA_PATH = RAW_DATA_DIR / "Engagement_Analysis.xlsx"
+QUIZ_EXAM_DATA_PATH = RAW_DATA_DIR / "_Trimester-1 2025 Attendance Quiz-Assignment-Exam 5Jan2025.xlsx"
+LIVE_ATTENDANCE_DATA_PATH = RAW_DATA_DIR / "B.S and M.Sc Live Summary Data C-1, Trimester 1.xlsx"
 LABELS_DATA_PATH = DATA_DIR / "labels.csv"
+WEEK3_USAGE_PATH = RAW_DATA_DIR / "Learner usage week 3.xlsx"
+GRADED_QUIZ_COMPLETE_PATH = RAW_DATA_DIR / "graded quiz 1 10 feb complete.xlsx"
+LIVE_T1_PATH = RAW_DATA_DIR / "B.S and M.Sc Live Summary Data C-1, Trimester 1.xlsx"
+LIVE_T2_PATH = RAW_DATA_DIR / "B.S and M.Sc Summary Data Trimester 2.xlsx"
 
 # ========== Logging ==========
 LOG_LEVEL = os.getenv("LOG_LEVEL", "INFO")

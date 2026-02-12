@@ -2,7 +2,7 @@
 Student Service for EWS Retention Platform.
 
 Integrates feature engineering and risk scoring to provide
-comprehensive student engagement data from Engagement_Analysis.xlsx.
+comprehensive student engagement data from real XLSX data.
 """
 
 from typing import Dict, List, Optional
@@ -11,10 +11,7 @@ from sqlalchemy import func
 
 from backend.app.services.feature_engineering import FeatureEngineer
 from backend.app.services.risk_scoring import RiskScorer
-from backend.app.models.student import Student
-from backend.app.models.enrollment import Enrollment
-from backend.app.models.course import Course
-from backend.app.models.intervention import Intervention
+from backend.database import Student, Course, Enrollment, GradedComponent, ExamRecord, Intervention
 
 
 class StudentService:
@@ -29,10 +26,7 @@ class StudentService:
 
     @staticmethod
     def _get_enrollment_dicts(db: Session, student_id: str) -> List[Dict]:
-        """
-        Get enrollment records for a student as dictionaries.
-        Includes course name from the join.
-        """
+        """Get enrollment records for a student as dictionaries."""
         enrollments = (
             db.query(Enrollment, Course.name)
             .join(Course, Enrollment.course_id == Course.id, isouter=True)
@@ -70,11 +64,53 @@ class StudentService:
         return result
 
     @staticmethod
-    def calculate_student_metrics(student: Student, enrollment_dicts: List[Dict]) -> Dict:
-        """
-        Calculate all metrics for a single student from enrollment data.
-        """
-        features = FeatureEngineer.calculate_all_features(enrollment_dicts)
+    def _get_graded_components(db: Session, student_id: str) -> List[Dict]:
+        """Get graded quiz/assignment records for a student."""
+        records = db.query(GradedComponent).filter(
+            GradedComponent.student_id == student_id
+        ).all()
+        return [
+            {
+                'component_type': r.component_type,
+                'component_number': r.component_number,
+                'score': r.score,
+                'max_score': r.max_score,
+                'missed': r.missed,
+                'course_code': r.course_code,
+                'course_name': r.course_name,
+            }
+            for r in records
+        ]
+
+    @staticmethod
+    def _get_exam_records(db: Session, student_id: str) -> List[Dict]:
+        """Get exam records for a student."""
+        records = db.query(ExamRecord).filter(
+            ExamRecord.student_id == student_id
+        ).all()
+        return [
+            {
+                'course_code': r.course_code,
+                'course_name': r.course_name,
+                'slot': r.slot,
+                'marks_obtained': r.marks_obtained,
+                'marks_total': r.marks_total,
+                'present': r.present,
+                'mode': r.mode,
+            }
+            for r in records
+        ]
+
+    @staticmethod
+    def calculate_student_metrics(student: Student, enrollment_dicts: List[Dict],
+                                  graded_dicts: List[Dict] = None,
+                                  exam_dicts: List[Dict] = None) -> Dict:
+        """Calculate all metrics for a single student."""
+        features = FeatureEngineer.calculate_all_features(
+            enrollment_dicts,
+            graded_components=graded_dicts,
+            exam_records=exam_dicts,
+        )
         risk_score = RiskScorer.calculate_risk_score(features)
         risk_category = RiskScorer.get_risk_category(risk_score)
         retention_likelihood = RiskScorer.get_retention_likelihood(risk_score)
@@ -101,17 +137,20 @@ class StudentService:
             'login_consistency_score': features['login_consistency_score'],
             'time_investment_score': features['time_investment_score'],
             'assignment_score': features['assignment_score'],
+            'graded_quiz_score': features['graded_quiz_score'],
+            'graded_assignment_score': features['graded_assignment_score'],
+            'exam_score': features['exam_score'],
+            'exam_attendance_rate': features['exam_attendance_rate'],
             'zero_progress_ratio': features['zero_progress_ratio'],
             'progress_category': features['progress_category'],
             'trend': features['engagement_trend'],
             'total_courses': features['total_courses'],
             'per_course_breakdown': features['per_course_breakdown'],
             # Compatibility fields for frontend
-            'attendance_score': features['login_consistency_score'],
+            'attendance_score': features.get('exam_attendance_rate', 0),
             'academic_score': features['content_completion_score'],
             'behavioral_score': features['discussion_engagement_score'],
             'stability_score': features['time_investment_score'],
-            'graduated': True,  # No graduation data in this dataset
         }
 
     @staticmethod
@@ -123,7 +162,11 @@ class StudentService:
             return None
 
         enrollment_dicts = StudentService._get_enrollment_dicts(db, student_id)
-        return StudentService.calculate_student_metrics(student, enrollment_dicts)
+        graded_dicts = StudentService._get_graded_components(db, student_id)
+        exam_dicts = StudentService._get_exam_records(db, student_id)
+        return StudentService.calculate_student_metrics(
+            student, enrollment_dicts, graded_dicts, exam_dicts
+        )
 
     @staticmethod
     def get_all_students(db: Session, skip: int = 0, limit: int = 100,
@@ -133,14 +176,12 @@ class StudentService:
         """Get all students with calculated metrics, with filtering and pagination."""
         students = db.query(Student).all()
 
-        # Pre-fetch all enrollments in one query for efficiency
+        # Batch-fetch all enrollments
         all_enrollments = (
             db.query(Enrollment, Course.name)
             .join(Course, Enrollment.course_id == Course.id, isouter=True)
             .all()
         )
-
-        # Group enrollments by student_id
         enrollment_map = {}
         for enrollment, course_name in all_enrollments:
             if enrollment.student_id not in enrollment_map:
@@ -169,11 +210,47 @@ class StudentService:
                 'last_scorm_visit_date': enrollment.last_scorm_visit_date,
             })
 
+        # Batch-fetch graded components
+        all_graded = db.query(GradedComponent).all()
+        graded_map = {}
+        for g in all_graded:
+            if g.student_id not in graded_map:
+                graded_map[g.student_id] = []
+            graded_map[g.student_id].append({
+                'component_type': g.component_type,
+                'component_number': g.component_number,
+                'score': g.score,
+                'max_score': g.max_score,
+                'missed': g.missed,
+                'course_code': g.course_code,
+                'course_name': g.course_name,
+            })
+
+        # Batch-fetch exam records
+        all_exams = db.query(ExamRecord).all()
+        exam_map = {}
+        for e in all_exams:
+            if e.student_id not in exam_map:
+                exam_map[e.student_id] = []
+            exam_map[e.student_id].append({
+                'course_code': e.course_code,
+                'course_name': e.course_name,
+                'slot': e.slot,
+                'marks_obtained': e.marks_obtained,
+                'marks_total': e.marks_total,
+                'present': e.present,
+                'mode': e.mode,
+            })
+
         # Calculate metrics for all students
         student_metrics = []
         for student in students:
             enrollments = enrollment_map.get(student.id, [])
-            metrics = StudentService.calculate_student_metrics(student, enrollments)
+            graded = graded_map.get(student.id, [])
+            exams = exam_map.get(student.id, [])
+            metrics = StudentService.calculate_student_metrics(
+                student, enrollments, graded, exams
+            )
             student_metrics.append(metrics)
 
         # Filter
@@ -187,7 +264,9 @@ class StudentService:
         sortable_fields = [
             'risk_score', 'content_completion_score', 'quiz_engagement_score',
             'login_consistency_score', 'time_investment_score',
-            'attendance_score', 'academic_score', 'behavioral_score', 'stability_score',
+            'graded_quiz_score', 'graded_assignment_score', 'exam_score',
+            'exam_attendance_rate', 'attendance_score', 'academic_score',
+            'behavioral_score', 'stability_score',
         ]
         if sort_by in sortable_fields:
             student_metrics.sort(key=lambda x: x.get(sort_by, 0), reverse=reverse)
@@ -213,13 +292,12 @@ class StudentService:
                 'total_courses': 0,
             }
 
-        # Pre-fetch enrollments
+        # Batch-fetch enrollments
         all_enrollments = (
             db.query(Enrollment, Course.name)
             .join(Course, Enrollment.course_id == Course.id, isouter=True)
             .all()
         )
-
         enrollment_map = {}
         for enrollment, course_name in all_enrollments:
             if enrollment.student_id not in enrollment_map:
@@ -238,12 +316,39 @@ class StudentService:
                 'num_logins': enrollment.num_logins,
             })
 
+        # Batch-fetch graded components
+        all_graded = db.query(GradedComponent).all()
+        graded_map = {}
+        for g in all_graded:
+            if g.student_id not in graded_map:
+                graded_map[g.student_id] = []
+            graded_map[g.student_id].append({
+                'component_type': g.component_type,
+                'score': g.score,
+                'max_score': g.max_score,
+                'missed': g.missed,
+            })
+
+        # Batch-fetch exam records
+        all_exams = db.query(ExamRecord).all()
+        exam_map = {}
+        for e in all_exams:
+            if e.student_id not in exam_map:
+                exam_map[e.student_id] = []
+            exam_map[e.student_id].append({
+                'marks_obtained': e.marks_obtained,
+                'marks_total': e.marks_total,
+                'present': e.present,
+            })
+
         risk_scores = []
         risk_categories = {'low': 0, 'medium': 0, 'high': 0}
 
         for student in students:
             enrollments = enrollment_map.get(student.id, [])
-            features = FeatureEngineer.calculate_all_features(enrollments)
+            graded = graded_map.get(student.id, [])
+            exams = exam_map.get(student.id, [])
+            features = FeatureEngineer.calculate_all_features(enrollments, graded, exams)
             risk_score = RiskScorer.calculate_risk_score(features)
             risk_category = RiskScorer.get_risk_category(risk_score)
 
@@ -265,8 +370,7 @@ class StudentService:
 
     @staticmethod
     def get_analytics_data(db: Session) -> Dict:
-        """Get analytics data — per-department and per-course engagement summaries."""
-        # Per-department stats
+        """Get analytics data - per-department and per-course engagement summaries."""
         dept_stats = {}
         students = db.query(Student).all()
 
@@ -275,7 +379,6 @@ class StudentService:
             .join(Course, Enrollment.course_id == Course.id, isouter=True)
             .all()
         )
-
         enrollment_map = {}
         for enrollment, course_name in all_enrollments:
             if enrollment.student_id not in enrollment_map:
@@ -294,13 +397,39 @@ class StudentService:
                 'num_logins': enrollment.num_logins,
             })
 
+        # Batch graded + exams for risk
+        all_graded = db.query(GradedComponent).all()
+        graded_map = {}
+        for g in all_graded:
+            if g.student_id not in graded_map:
+                graded_map[g.student_id] = []
+            graded_map[g.student_id].append({
+                'component_type': g.component_type,
+                'score': g.score,
+                'max_score': g.max_score,
+                'missed': g.missed,
+            })
+
+        all_exams = db.query(ExamRecord).all()
+        exam_map = {}
+        for e in all_exams:
+            if e.student_id not in exam_map:
+                exam_map[e.student_id] = []
+            exam_map[e.student_id].append({
+                'marks_obtained': e.marks_obtained,
+                'marks_total': e.marks_total,
+                'present': e.present,
+            })
+
         for student in students:
             dept = student.parent_department_name or 'Unknown'
             if dept not in dept_stats:
                 dept_stats[dept] = {'students': 0, 'risk_scores': []}
 
             enrollments = enrollment_map.get(student.id, [])
-            features = FeatureEngineer.calculate_all_features(enrollments)
+            graded = graded_map.get(student.id, [])
+            exams = exam_map.get(student.id, [])
+            features = FeatureEngineer.calculate_all_features(enrollments, graded, exams)
             risk_score = RiskScorer.calculate_risk_score(features)
 
             dept_stats[dept]['students'] += 1

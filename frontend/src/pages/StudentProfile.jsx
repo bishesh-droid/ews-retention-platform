@@ -127,7 +127,7 @@ function StudentProfile() {
           <FaArrowLeft size={14} /> Back to Directory
         </Link>
         <div className="d-flex justify-content-between align-items-end mt-2">
-          <h1 className="display-6 fw-bold text-gradient mb-0">Student Profile <span className="text-secondary opacity-50">#{id}</span></h1>
+          <h1 className="display-6 fw-bold text-gradient mb-0">{student.name || id} <span className="text-secondary opacity-50 fs-6">{student.department || ''}</span></h1>
           <div className="d-flex align-items-center gap-2">
             <RiskTrendIndicator student={{ ...student, risk_score: prediction.risk_score }} showDelta={true} />
             <ConfidenceBadge student={{ ...student, risk_score: prediction.risk_score }} size="md" showLabel={true} />
@@ -255,44 +255,39 @@ function StudentProfile() {
             </div>
           </motion.div>
 
-          {/* Historical Data Section */}
+          {/* Engagement Metrics */}
           <motion.div variants={variants.item} className="glass-panel p-4 mb-4">
-            <h5 className="mb-4 fw-bold">Historical Records</h5>
-            <div className="accordion accordion-flush" id="historyAccordion">
-              {[...Array(7)].map((_, i) => {
-                const year = i + 1;
-                return (
-                  <div key={year} className="accordion-item bg-transparent border-bottom border-light">
-                    <h2 className="accordion-header" id={`heading${year}`}>
-                      <button className="accordion-button collapsed bg-transparent shadow-none" type="button" data-bs-toggle="collapse" data-bs-target={`#collapse${year}`} aria-expanded="false" aria-controls={`collapse${year}`}>
-                        <span className="fw-medium">Academic Year {year}</span>
-                      </button>
-                    </h2>
-                    <div id={`collapse${year}`} className="accordion-collapse collapse" aria-labelledby={`heading${year}`} data-bs-parent="#historyAccordion">
-                      <div className="accordion-body text-muted">
-                        <Row>
-                          <Col md={6}>
-                            <ul className="list-unstyled mb-0">
-                              <li className="mb-2 d-flex justify-content-between"><span>Absence Rate:</span> <span className={student[`absrate${year}`] > 0.1 ? 'text-danger fw-bold' : ''}>{student[`absrate${year}`] !== undefined ? `${Math.round(student[`absrate${year}`] * 100)}%` : 'N/A'}</span></li>
-                              <li className="mb-2 d-flex justify-content-between"><span>Suspensions:</span> <span>{student[`nsusp${year}`] !== undefined ? student[`nsusp${year}`] : 'N/A'}</span></li>
-                            </ul>
-                          </Col>
-                          <Col md={6}>
-                            <strong className="d-block mb-2 text-muted small text-uppercase">MPA Scores</strong>
-                            <div className="d-flex justify-content-between small">
-                              <span>Q1: {student[`q1mpa${year}`] || '-'}</span>
-                              <span>Q2: {student[`q2mpa${year}`] || '-'}</span>
-                              <span>Q3: {student[`q3mpa${year}`] || '-'}</span>
-                              <span>Q4: {student[`q4mpa${year}`] || '-'}</span>
-                            </div>
-                          </Col>
-                        </Row>
-                      </div>
-                    </div>
-                  </div>
-                );
-              })}
-            </div>
+            <h5 className="mb-4 fw-bold">Engagement Metrics</h5>
+            <Row className="g-3">
+              <Col md={6}>
+                <div className="p-3 bg-surface-hover rounded-3">
+                  <small className="text-muted d-block mb-2 text-uppercase fw-bold">Academic Performance</small>
+                  <ul className="list-unstyled mb-0">
+                    <li className="mb-2 d-flex justify-content-between"><span>Graded Quiz Score:</span> <span className={`fw-bold ${(student.graded_quiz_score ?? 0) < 40 ? 'text-danger' : ''}`}>{Math.round(student.graded_quiz_score ?? 0)}%</span></li>
+                    <li className="mb-2 d-flex justify-content-between"><span>Graded Assignment Score:</span> <span className="fw-bold">{Math.round(student.graded_assignment_score ?? 0)}%</span></li>
+                    <li className="mb-2 d-flex justify-content-between"><span>Exam Score:</span> <span className="fw-bold">{Math.round(student.exam_score ?? 0)}%</span></li>
+                    <li className="mb-2 d-flex justify-content-between"><span>Exam Attendance:</span> <span className={`fw-bold ${(student.exam_attendance_rate ?? 0) < 70 ? 'text-warning' : ''}`}>{Math.round(student.exam_attendance_rate ?? 0)}%</span></li>
+                  </ul>
+                </div>
+              </Col>
+              <Col md={6}>
+                <div className="p-3 bg-surface-hover rounded-3">
+                  <small className="text-muted d-block mb-2 text-uppercase fw-bold">LMS Engagement</small>
+                  <ul className="list-unstyled mb-0">
+                    <li className="mb-2 d-flex justify-content-between"><span>Content Completion:</span> <span className="fw-bold">{Math.round(student.content_completion_score ?? 0)}%</span></li>
+                    <li className="mb-2 d-flex justify-content-between"><span>Quiz Engagement:</span> <span className="fw-bold">{Math.round(student.quiz_engagement_score ?? 0)}%</span></li>
+                    <li className="mb-2 d-flex justify-content-between"><span>Login Consistency:</span> <span className="fw-bold">{Math.round(student.login_consistency_score ?? 0)}%</span></li>
+                    <li className="mb-2 d-flex justify-content-between"><span>Time Investment:</span> <span className="fw-bold">{Math.round(student.time_investment_score ?? 0)}%</span></li>
+                  </ul>
+                </div>
+              </Col>
+            </Row>
+            {student.dominant_risk_factor && (
+              <div className="mt-3 p-2 bg-surface-hover rounded-3 text-center">
+                <small className="text-muted">Primary Risk Factor: </small>
+                <span className="fw-bold text-danger">{student.dominant_risk_factor}</span>
+              </div>
+            )}
           </motion.div>
         </Col>
 
@@ -339,54 +334,44 @@ function StudentProfile() {
               </Row>
               <div className="mt-3">
                 <div className="d-flex justify-content-between mb-1 small text-muted">
-                  <span>Attendance Rate</span>
-                  <span>{Math.round(student.absrate7 ? 100 - (student.absrate7 * 100) : 0)}%</span>
+                  <span>Exam Attendance</span>
+                  <span>{Math.round(student.exam_attendance_rate ?? 0)}%</span>
                 </div>
                 <div className="progress" style={{ height: '6px' }}>
-                  <div className="progress-bar bg-info" role="progressbar" style={{ width: `${Math.round(student.absrate7 ? 100 - (student.absrate7 * 100) : 0)}%` }}></div>
+                  <div className="progress-bar bg-info" role="progressbar" style={{ width: `${Math.round(student.exam_attendance_rate ?? 0)}%` }}></div>
+                </div>
+              </div>
+              <div className="mt-2">
+                <div className="d-flex justify-content-between mb-1 small text-muted">
+                  <span>Quiz Score</span>
+                  <span>{Math.round(student.graded_quiz_score ?? 0)}%</span>
+                </div>
+                <div className="progress" style={{ height: '6px' }}>
+                  <div className="progress-bar bg-primary" role="progressbar" style={{ width: `${Math.round(student.graded_quiz_score ?? 0)}%` }}></div>
+                </div>
+              </div>
+              <div className="mt-2">
+                <div className="d-flex justify-content-between mb-1 small text-muted">
+                  <span>Content Completion</span>
+                  <span>{Math.round(student.content_completion_score ?? 0)}%</span>
+                </div>
+                <div className="progress" style={{ height: '6px' }}>
+                  <div className="progress-bar bg-success" role="progressbar" style={{ width: `${Math.round(student.content_completion_score ?? 0)}%` }}></div>
                 </div>
               </div>
             </div>
           </motion.div>
 
-          {/* Historical Data Section - Collapsible */}
+          {/* Additional Info - Collapsible */}
           <motion.div variants={variants.item} className="mb-4">
-            <CollapsiblePanel title="Historical Records" defaultExpanded={false}>
-              <div className="accordion accordion-flush" id="historyAccordion">
-                {[...Array(7)].map((_, i) => {
-                  const year = i + 1;
-                  return (
-                    <div key={year} className="accordion-item bg-transparent border-bottom border-light">
-                      <h2 className="accordion-header" id={`heading${year}`}>
-                        <button className="accordion-button collapsed bg-transparent shadow-none" type="button" data-bs-toggle="collapse" data-bs-target={`#collapse${year}`} aria-expanded="false" aria-controls={`collapse${year}`}>
-                          <span className="fw-medium">Academic Year {year}</span>
-                        </button>
-                      </h2>
-                      <div id={`collapse${year}`} className="accordion-collapse collapse" aria-labelledby={`heading${year}`} data-bs-parent="#historyAccordion">
-                        <div className="accordion-body text-muted">
-                          <Row>
-                            <Col md={6}>
-                              <ul className="list-unstyled mb-0">
-                                <li className="mb-2 d-flex justify-content-between"><span>Absence Rate:</span> <span className={student[`absrate${year}`] > 0.1 ? 'text-danger fw-bold' : ''}>{student[`absrate${year}`] !== undefined ? `${Math.round(student[`absrate${year}`] * 100)}%` : 'N/A'}</span></li>
-                                <li className="mb-2 d-flex justify-content-between"><span>Suspensions:</span> <span>{student[`nsusp${year}`] !== undefined ? student[`nsusp${year}`] : 'N/A'}</span></li>
-                              </ul>
-                            </Col>
-                            <Col md={6}>
-                              <strong className="d-block mb-2 text-muted small text-uppercase">MPA Scores</strong>
-                              <div className="d-flex justify-content-between small">
-                                <span>Q1: {student[`q1mpa${year}`] || '-'}</span>
-                                <span>Q2: {student[`q2mpa${year}`] || '-'}</span>
-                                <span>Q3: {student[`q3mpa${year}`] || '-'}</span>
-                                <span>Q4: {student[`q4mpa${year}`] || '-'}</span>
-                              </div>
-                            </Col>
-                          </Row>
-                        </div>
-                      </div>
-                    </div>
-                  );
-                })}
-              </div>
+            <CollapsiblePanel title="Student Details" defaultExpanded={false}>
+              <ul className="list-unstyled mb-0">
+                <li className="mb-2 d-flex justify-content-between"><span>Student ID:</span> <span className="fw-medium">{student.id}</span></li>
+                <li className="mb-2 d-flex justify-content-between"><span>Department:</span> <span className="fw-medium">{student.department || 'N/A'}</span></li>
+                <li className="mb-2 d-flex justify-content-between"><span>Program:</span> <span className="fw-medium">{student.program || 'N/A'}</span></li>
+                <li className="mb-2 d-flex justify-content-between"><span>Risk Category:</span> <span className={`fw-bold ${student.risk_category === 'high' ? 'text-danger' : student.risk_category === 'medium' ? 'text-warning' : 'text-success'}`}>{(student.risk_category || 'N/A').toUpperCase()}</span></li>
+                <li className="mb-2 d-flex justify-content-between"><span>Total Courses:</span> <span className="fw-medium">{student.total_courses ?? 'N/A'}</span></li>
+              </ul>
             </CollapsiblePanel>
           </motion.div>
         </Col>
