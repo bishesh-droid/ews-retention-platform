@@ -10,8 +10,8 @@ from contextlib import asynccontextmanager
 
 from backend.config import API_HOST, API_PORT, CORS_ORIGINS, LOG_LEVEL
 from backend.database import init_db, SessionLocal
-from backend.app.api.routes import api_router
-from backend.app.services.core.data_ingestion import ingest_all_data
+from backend.routes import api_router
+from backend.services.core.data_ingestion import ingest_all_data
 
 import logging
 
@@ -61,6 +61,28 @@ app.add_middleware(
     allow_methods=["*"],
     allow_headers=["*"],
 )
+
+# Rate Limiting Middleware (Simple IP-based)
+from fastapi import Request, HTTPException
+import time
+rate_limit_store = {}
+
+@app.middleware("http")
+async def rate_limit_middleware(request: Request, call_next):
+    client_ip = request.client.host
+    current_time = time.time()
+    if client_ip in rate_limit_store:
+        last_time, count = rate_limit_store[client_ip]
+        if current_time - last_time < 60:
+            if count >= 100:
+                from fastapi.responses import JSONResponse
+                return JSONResponse(status_code=429, content={"detail": "Too many requests"})
+            rate_limit_store[client_ip] = (last_time, count + 1)
+        else:
+            rate_limit_store[client_ip] = (current_time, 1)
+    else:
+        rate_limit_store[client_ip] = (current_time, 1)
+    return await call_next(request)
 
 # Include API Router
 app.include_router(api_router, prefix="/api/v1")

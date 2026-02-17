@@ -15,3 +15,7 @@ joblib
 schedule
 numpy
 openpyxl==3.1.5
+python-jose[cryptography]
+passlib[bcrypt]
+redis
+fpdf

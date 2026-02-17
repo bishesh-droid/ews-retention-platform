@@ -5,7 +5,7 @@ Session factory and dependency injection for FastAPI.
 """
 
 from sqlalchemy.orm import sessionmaker, Session
-from backend.app.database.connection import engine
+from backend.database.connection import engine
 
 # Create session factory
 SessionLocal = sessionmaker(autocommit=False, autoflush=False, bind=engine)

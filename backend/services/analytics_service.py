@@ -1,0 +1,142 @@
+from sqlalchemy.orm import Session
+from sqlalchemy import func
+from datetime import datetime, timedelta
+from typing import List, Dict, Any
+
+from backend.database import RiskSnapshot, Prediction
+from backend.schemas.student import Student
+
+class AnalyticsService:
+    @staticmethod
+    def capture_risk_snapshot(db: Session, student_id: str, risk_score: float, engagement_score: float):
+        """
+        Creates a new risk snapshot and calculates velocity/acceleration.
+        """
+        # Get last snapshot
+        last_snapshot = db.query(RiskSnapshot).filter(
+            RiskSnapshot.student_id == student_id
+        ).order_by(RiskSnapshot.timestamp.desc()).first()
+
+        velocity = 0.0
+        acceleration = 0.0
+
+        if last_snapshot:
+            # Velocity = change in risk score
+            velocity = risk_score - last_snapshot.risk_score
+            # Acceleration = change in velocity
+            acceleration = velocity - (last_snapshot.velocity or 0.0)
+
+        snapshot = RiskSnapshot(
+            student_id=student_id,
+            risk_score=risk_score,
+            velocity=velocity,
+            acceleration=acceleration,
+            engagement_score=engagement_score,
+            timestamp=datetime.utcnow()
+        )
+        db.add(snapshot)
+        db.commit()
+        db.refresh(snapshot)
+        return snapshot
+
+    @staticmethod
+    def get_risk_trends(db: Session, student_id: str, days: int = 30) -> Dict[str, Any]:
+        """
+        Calculates 7-day and 30-day trend slopes and identifies anomalies.
+        """
+        start_date = datetime.utcnow() - timedelta(days=days)
+        snapshots = db.query(RiskSnapshot).filter(
+            RiskSnapshot.student_id == student_id,
+            RiskSnapshot.timestamp >= start_date
+        ).order_by(RiskSnapshot.timestamp.asc()).all()
+
+        if not snapshots:
+            return {"trend": "stable", "slope": 0, "snapshots": []}
+
+        # Simple linear regression (slope) for the trend
+        # x = time (days from start), y = risk_score
+        y_values = [s.risk_score for s in snapshots]
+        x_values = range(len(y_values))
+        
+        if len(x_values) > 1:
+            mean_x = sum(x_values) / len(x_values)
+            mean_y = sum(y_values) / len(y_values)
+            numerator = sum((x - mean_x) * (y - mean_y) for x, y in zip(x_values, y_values))
+            denominator = sum((x - mean_x) ** 2 for x in x_values)
+            slope = numerator / denominator if denominator != 0 else 0
+        else:
+            slope = 0
+
+        # Anomaly detection: Sudden drop in engagement
+        engagement_scores = [s.engagement_score for s in snapshots]
+        is_anomaly = False
+        if len(engagement_scores) >= 2:
+            last_change = engagement_scores[-1] - engagement_scores[-2]
+            if last_change < -0.3:  # 30% drop in engagement is an anomaly
+                is_anomaly = True
+
+        return {
+            "student_id": student_id,
+            "current_risk": y_values[-1],
+            "slope": slope,
+            "trend": "increasing" if slope > 0.01 else "decreasing" if slope < -0.01 else "stable",
+            "is_anomaly": is_anomaly,
+            "snapshots": [
+                {
+                    "timestamp": s.timestamp.isoformat(),
+                    "risk_score": s.risk_score,
+                    "velocity": s.velocity,
+                    "acceleration": s.acceleration
+                } for s in snapshots
+            ]
+        }
+
+    @staticmethod
+    def get_top_risk_velocity(db: Session, limit: int = 10):
+        """
+        Identify students with the fastest growing risk scores.
+        """
+        latest_snapshots = db.query(RiskSnapshot).order_by(
+            RiskSnapshot.student_id, RiskSnapshot.timestamp.desc()
+        ).distinct(RiskSnapshot.student_id).all()
+        
+        sorted_snapshots = sorted(latest_snapshots, key=lambda x: x.velocity, reverse=True)
+        return sorted_snapshots[:limit]
+
+    @staticmethod
+    def get_kpi_cards(db: Session, filters: Dict[str, Any] = None):
+        """
+        Aggregate key performance indicators for the dashboard.
+        """
+        # Apply filters to base query if provided (department, semester, etc.)
+        # For simplicity, we'll implement core logic first
+        
+        # 1. Top 10 At-Risk Students
+        top_at_risk = db.query(Prediction).order_by(Prediction.risk_score.desc()).limit(10).all()
+        
+        # 2. Biggest Attendance Drop (Velocity in attendance)
+        # We'd need historical attendance snapshots similarly to risk scores
+        
+        # 3. Engagement Decline Alerts (Anomalies)
+        anomalies_count = db.query(RiskSnapshot).filter(
+            RiskSnapshot.timestamp >= datetime.utcnow() - timedelta(days=7),
+            RiskSnapshot.velocity > 0.2 # Arbitrary spike threshold
+        ).count()
+
+        return {
+            "top_at_risk": [
+                {"student_id": p.student_id, "risk_score": p.risk_score} for p in top_at_risk
+            ],
+            "engagement_alerts": anomalies_count,
+            "system_health": "stable" # Placeholder
+        }
+
+    @staticmethod
+    def get_drill_down(db: Session, metric: str, filters: Dict[str, Any] = None):
+        """
+        Provide detailed data for a specific KPI metric.
+        """
+        if metric == "top-risk":
+            return db.query(Prediction).order_by(Prediction.risk_score.desc()).limit(20).all()
+        # Add more drill-down logic
+        return []

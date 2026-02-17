@@ -8,8 +8,8 @@ Tests verify that:
 """
 
 import pytest
-from backend.app.services.feature_engineering import FeatureEngineer
-from backend.app.services.risk_scoring import RiskScorer
+from backend.services.feature_engineering import FeatureEngineer
+from backend.services.risk_scoring import RiskScorer
 
 
 class TestFeatureEngineering:

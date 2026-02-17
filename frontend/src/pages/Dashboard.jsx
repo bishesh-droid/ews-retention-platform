@@ -1,17 +1,13 @@
 import React, { useState, useMemo } from 'react';
 import { Link, useNavigate } from 'react-router-dom';
-import { Button, Row, Col, ListGroup } from 'react-bootstrap';
 import { FaUsers, FaUserShield, FaChartLine, FaExclamationTriangle, FaArrowRight, FaClipboardList, FaLightbulb } from 'react-icons/fa';
 import { motion } from 'framer-motion';
 import Charts from '../components/dashboard/Charts';
 import HighestRiskStudentsTable from '../components/dashboard/HighestRiskStudentsTable';
-import InterventionSuggestions from '../components/interventions/InterventionSuggestions';
-import TimeFilter from '../components/common/TimeFilter';
 import { useStudentData } from '../context/StudentContext';
 import { getPrimaryRiskFactor } from '../utils/studentUtils';
 import KpiCard from '../components/dashboard/KpiCard';
 import { variants } from '../utils/motionConfig';
-import AIRecommendationCard from '../components/ai/AIRecommendationCard';
 import AiInsight from '../components/ai/AiInsight';
 import { generateBulkRecommendations } from '../utils/recommendationEngine';
 import { generateShortRiskSummary } from '../utils/riskNarrativeGenerator';
@@ -35,24 +31,14 @@ function Dashboard() {
     }));
   }, [students]);
 
-  const topRecommendations = useMemo(() => {
-    const bulkRecs = generateBulkRecommendations(students.filter(s => s.risk_score > 60));
-    return bulkRecs.slice(0, 3);
-  }, [students]);
-
   const atRiskStudents = useMemo(() => students.filter(s => s.risk_score > 75).length, [students]);
   const averageRiskScore = useMemo(() => students.length > 0 ? parseFloat((students.reduce((acc, s) => acc + s.risk_score, 0) / students.length).toFixed(0)) : 0, [students]);
 
-  // Calculate active interventions based on students needing intervention (risk >= 30%)
-  // In production, this would come from the Intervention table via API
   const activeInterventions = useMemo(() => {
-    // Students above gentle reminder threshold (30%) are candidates for intervention
     const interventionCandidates = students.filter(s => s.risk_score >= 30);
-    // Estimate ~60% of candidates have active interventions
     return Math.floor(interventionCandidates.length * 0.6);
   }, [students]);
 
-  // Students whose risk changed significantly (for the explainer)
   const studentsWithRiskChanges = useMemo(() => {
     return students.filter(s => s.risk_score > 40).slice(0, 10);
   }, [students]);
@@ -65,10 +51,6 @@ function Dashboard() {
     setRiskFactorFilter(prevFilter => prevFilter === newFilter ? null : newFilter);
   };
 
-  const filteredStudentsForTable = useMemo(() => riskFactorFilter
-    ? students.filter(student => getPrimaryRiskFactor(student) === riskFactorFilter)
-    : students, [students, riskFactorFilter]);
-
   const filteredStudentsForChart = useMemo(() => riskFilter ? students.filter(student => {
     if (riskFilter === 'High Risk') return student.risk_score > 75;
     if (riskFilter === 'Medium Risk') return student.risk_score > 50 && student.risk_score <= 75;
@@ -79,12 +61,12 @@ function Dashboard() {
 
   if (students.length === 0) {
     return (
-      <div className="d-flex flex-column align-items-center justify-content-center" style={{ minHeight: '60vh' }}>
-        <h2 className="text-gradient mb-3 display-4 fw-bold">No Data Available</h2>
-        <p className="text-muted mb-4 fs-5">Import or add students to get started.</p>
-        <Button as={Link} to="/students" variant="primary" size="lg" className="rounded-pill px-4 shadow-lg">
+      <div className="flex flex-col items-center justify-center min-h-[60vh] text-center">
+        <h2 className="text-4xl font-display font-bold text-slate-900 mb-4 tracking-tight">No Data Available</h2>
+        <p className="text-slate-500 mb-8 max-w-md">Import or add students to get started with the Early Warning System.</p>
+        <Link to="/students" className="bg-primary-500 text-white px-8 py-3 rounded-xl font-semibold shadow-glow hover:bg-primary-600 transition-all">
           Add Students
-        </Button>
+        </Link>
       </div>
     );
   }
@@ -94,57 +76,48 @@ function Dashboard() {
       initial="hidden"
       animate="visible"
       variants={variants.container}
-      className="pb-5"
+      className="space-y-8 pb-12"
     >
-      <div className="mb-4 d-flex justify-content-between align-items-end">
+      <div className="flex flex-col md:flex-row md:items-end justify-between gap-4">
         <div>
-          <h1 className="display-5 fw-bold text-gradient mb-2">Overview</h1>
-          <p className="text-secondary fs-5 mb-0" style={{ maxWidth: '600px' }}>
-            Real-time insights into student retention risks and engagement metrics.
+          <h1 className="text-4xl font-display font-bold text-slate-900 tracking-tight">Overview</h1>
+          <p className="text-slate-500 mt-2">
+            Real-time insights into student retention risks and institutional health.
           </p>
         </div>
-        <TimeFilter selectedRange={timeRange} onRangeChange={setTimeRange} showCustom={false} />
       </div>
 
-      <Row className="g-4 mb-5">
-        <Col md={3}>
-          <motion.div variants={variants.item} className="h-100" style={{ cursor: 'pointer' }} onClick={() => navigate('/students')}>
-            <KpiCard title="Total Students" value={students.length} icon={<FaUsers />} />
-          </motion.div>
-        </Col>
-        <Col md={3}>
-          <motion.div variants={variants.item} className="h-100" style={{ cursor: 'pointer' }} onClick={() => navigate('/students')}>
-            <KpiCard
-              title="At-Risk Students"
-              value={atRiskStudents}
-              icon={<FaUserShield className="text-danger" />}
-              suffix={atRiskStudents > 0 ? "Critical" : "Stable"}
-            />
-          </motion.div>
-        </Col>
-        <Col md={3}>
-          <motion.div variants={variants.item} className="h-100" style={{ cursor: 'pointer' }} onClick={() => navigate('/insights')}>
-            <KpiCard title="Avg Risk Score" value={averageRiskScore} icon={<FaChartLine className="text-warning" />} isPercent={true} />
-          </motion.div>
-        </Col>
-        <Col md={3}>
-          <motion.div variants={variants.item} className="h-100" style={{ cursor: 'pointer' }} onClick={() => navigate('/interventions')}>
-            <KpiCard
-              title="Active Interventions"
-              value={activeInterventions}
-              icon={<FaClipboardList className="text-primary" />}
-              suffix="Ongoing"
-            />
-          </motion.div>
-        </Col>
-      </Row>
+      <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-6">
+        <motion.div variants={variants.item} className="cursor-pointer" onClick={() => navigate('/students')}>
+          <KpiCard title="Total Students" value={students.length} icon={<FaUsers />} />
+        </motion.div>
+        <motion.div variants={variants.item} className="cursor-pointer" onClick={() => navigate('/students')}>
+          <KpiCard
+            title="At-Risk Students"
+            value={atRiskStudents}
+            icon={<FaUserShield className="text-rose-500" />}
+            suffix={atRiskStudents > 0 ? "Critical" : "Stable"}
+          />
+        </motion.div>
+        <motion.div variants={variants.item} className="cursor-pointer" onClick={() => navigate('/insights')}>
+          <KpiCard title="Avg Risk Score" value={averageRiskScore} icon={<FaChartLine className="text-amber-500" />} isPercent={true} />
+        </motion.div>
+        <motion.div variants={variants.item} className="cursor-pointer" onClick={() => navigate('/interventions')}>
+          <KpiCard
+            title="Active Interventions"
+            value={activeInterventions}
+            icon={<FaClipboardList className="text-primary-500" />}
+            suffix="Ongoing"
+          />
+        </motion.div>
+      </div>
 
-      <Row className="g-4">
-        <Col lg={8}>
-          <motion.div variants={variants.item} className="glass-panel p-4 mb-4 h-100">
-            <div className="d-flex justify-content-between align-items-center mb-4">
-              <h4 className="mb-0 fw-semibold">Risk Analysis</h4>
-              <small className="text-muted bg-surface-hover px-3 py-1 rounded-pill">Interactive Charts</small>
+      <div className="grid grid-cols-1 lg:grid-cols-12 gap-8">
+        <div className="lg:col-span-8 space-y-8">
+          <motion.div variants={variants.item} className="bg-white p-8 rounded-3xl border border-slate-100 shadow-soft">
+            <div className="flex justify-between items-center mb-8">
+              <h3 className="text-xl font-display font-bold text-slate-900">Risk Analysis</h3>
+              <span className="text-xs font-bold text-slate-400 bg-slate-100 px-3 py-1 rounded-full uppercase tracking-wider">Interactive</span>
             </div>
             <Charts
               students={filteredStudentsForChart}
@@ -155,96 +128,85 @@ function Dashboard() {
             />
           </motion.div>
 
-          {/* AI Weekly Brief Section */}
-          <motion.div variants={variants.item} className="mb-4">
+          <motion.div variants={variants.item}>
             <AiInsight
               title="Weekly Institutional Brief"
-              content="Overall institutional risk has decreased by 2.5% this week. However, the 'Computer Science 101' cohort is showing early signs of disengagement (Attendance drop > 15%). Recommended action: Schedule a check-in with the CS faculty lead."
+              content="Overall institutional risk has decreased by 2.5% this week. However, the 'Computer Science 101' cohort is showing early signs of disengagement (Attendance drop > 15%). Recommended action: Schedule a check-in with the faculty lead."
               confidence="high"
-              sources={['Attendance Logs (Past 7 Days)', 'LMS Gradebook', 'CS101 Course Metadata']}
+              sources={['Attendance Logs', 'LMS Gradebook']}
               type="summary"
             />
           </motion.div>
-        </Col>
+        </div>
 
-        <Col lg={4}>
-          <div className="d-flex flex-column gap-4 h-100">
-            {/* Warnings Panel */}
-            <motion.div variants={variants.item} className="glass-panel p-4 position-relative overflow-hidden" style={{ borderLeft: '4px solid var(--high-risk-color)' }}>
-              <div className="d-flex align-items-center gap-2 mb-4 text-danger">
-                <FaExclamationTriangle size={20} />
-                <h5 className="mb-0 fw-bold">Critical Warnings</h5>
+        <div className="lg:col-span-4 space-y-8">
+          <motion.div variants={variants.item} className="bg-white p-6 rounded-3xl border border-slate-100 shadow-soft border-l-4 border-l-rose-500">
+            <div className="flex items-center gap-3 mb-6">
+              <div className="w-10 h-10 rounded-xl bg-rose-50 text-rose-500 flex items-center justify-center">
+                <FaExclamationTriangle size={18} />
               </div>
-
-              <ListGroup variant="flush" className="bg-transparent d-flex flex-column gap-3">
-                {warnings.map(warning => (
-                  <motion.div key={warning.id} whileHover={{ x: 5 }} transition={{ type: 'spring', stiffness: 300 }}>
-                    <Link to={`/students/${warning.id}`} className="text-decoration-none text-primary">
-                      <div className="p-3 rounded-3 bg-surface-hover border border-secondary-subtle shadow-sm">
-                        <div className="d-flex justify-content-between align-items-start">
-                          <span className="fw-bold">Student #{warning.id}</span>
-                          <span className="badge bg-danger bg-opacity-10 text-danger border border-danger border-opacity-25 rounded-pill px-2">Action Needed</span>
-                        </div>
-                        <p className="text-muted small mb-1 mt-2">{warning.message}</p>
-                        <small className="text-danger fw-medium">Risk Score: {warning.riskScore}</small>
-                      </div>
-                    </Link>
-                  </motion.div>
-                ))}
-                {warnings.length === 0 && <div className="text-muted small">No active warnings.</div>}
-              </ListGroup>
-            </motion.div>
-
-            {/* AI Recommendations Panel */}
-            <motion.div variants={variants.item} className="glass-panel p-4 flex-grow-1">
-              <div className="d-flex align-items-center gap-2 mb-3">
-                <FaLightbulb className="text-warning" />
-                <h5 className="mb-0 fw-bold">AI Recommendations</h5>
-              </div>
-              {topRecommendations.length > 0 ? (
-                <div>
-                  {topRecommendations.map((rec) => (
-                    <AIRecommendationCard
-                      key={`${rec.studentId}-${rec.id}`}
-                      recommendation={{ ...rec, studentLabel: `Student ${rec.studentId}` }}
-                      onAccept={() => console.log('Accept recommendation:', rec)}
-                      onDismiss={() => console.log('Dismiss recommendation:', rec)}
-                    />
-                  ))}
-                </div>
-              ) : (
-                <p className="text-muted small mb-0">No high-priority recommendations at this time.</p>
-              )}
-            </motion.div>
-          </div>
-        </Col>
-      </Row>
-
-      <Row className="mt-4 g-4">
-        <Col lg={8}>
-          <motion.div variants={variants.item} className="glass-panel p-4">
-            <div className="d-flex justify-content-between align-items-center mb-4">
-              <h4 className="mb-0 fw-semibold">Top Priority Cases</h4>
-              <Link to="/students" className="btn btn-link text-decoration-none">View All <FaArrowRight /></Link>
+              <h3 className="text-lg font-display font-bold text-slate-900">Critical Warnings</h3>
             </div>
-            <HighestRiskStudentsTable students={filteredStudentsForTable} />
-          </motion.div>
-        </Col>
-        <Col lg={4}>
-          <motion.div variants={variants.item}>
-            <RiskChangeExplainer students={studentsWithRiskChanges} limit={4} />
-          </motion.div>
-        </Col>
-      </Row>
 
-      {/* Faculty Summary Section */}
-      <Row className="mt-4">
-        <Col md={12}>
-          <motion.div variants={variants.item}>
-            <FacultySummaryCard students={students} />
+            <div className="space-y-4">
+              {warnings.map(warning => (
+                <Link to={`/students/${warning.id}`} key={warning.id} className="block group">
+                  <div className="p-4 rounded-2xl bg-slate-50 border border-slate-100 group-hover:bg-white group-hover:border-primary-200 transition-all duration-200 group-hover:shadow-md">
+                    <div className="flex justify-between items-center mb-2">
+                      <span className="font-bold text-slate-900">Student #{warning.id}</span>
+                      <span className="text-[10px] font-bold text-rose-500 bg-rose-50 px-2 py-0.5 rounded-full uppercase">Priority</span>
+                    </div>
+                    <p className="text-sm text-slate-500 line-clamp-2 mb-2">{warning.message}</p>
+                    <div className="flex items-center justify-between">
+                      <span className="text-xs font-bold text-rose-600">Risk: {warning.riskScore}%</span>
+                      <FaArrowRight size={12} className="text-slate-300 group-hover:text-primary-500 transition-colors" />
+                    </div>
+                  </div>
+                </Link>
+              ))}
+              {warnings.length === 0 && <p className="text-slate-400 text-sm italic">No active warnings.</p>}
+            </div>
           </motion.div>
-        </Col>
-      </Row>
+
+          <motion.div variants={variants.item} className="bg-white p-6 rounded-3xl border border-slate-100 shadow-soft">
+            <div className="flex items-center gap-3 mb-6">
+              <div className="w-10 h-10 rounded-xl bg-amber-50 text-amber-500 flex items-center justify-center">
+                <FaLightbulb size={18} />
+              </div>
+              <h3 className="text-lg font-display font-bold text-slate-900">Insights</h3>
+            </div>
+            <p className="text-sm text-slate-500 mb-6 leading-relaxed">
+              Based on recent activity, 12% of your medium-risk students have improved their engagement scores this week.
+            </p>
+            <button className="w-full py-3 rounded-xl bg-slate-100 text-slate-900 font-bold text-sm hover:bg-slate-200 transition-colors">
+              Compare Cohorts
+            </button>
+          </motion.div>
+        </div>
+      </div>
+
+      <div className="grid grid-cols-1 lg:grid-cols-12 gap-8">
+        <div className="lg:col-span-8">
+          <motion.div variants={variants.item} className="bg-white p-8 rounded-3xl border border-slate-100 shadow-soft">
+            <div className="flex justify-between items-center mb-8">
+              <h3 className="text-xl font-display font-bold text-slate-900">Top Priority Cases</h3>
+              <Link to="/students" className="text-sm font-bold text-primary-500 hover:text-primary-600 transition-colors flex items-center gap-1">
+                View All Students <FaArrowRight size={12} />
+              </Link>
+            </div>
+            <HighestRiskStudentsTable students={students} />
+          </motion.div>
+        </div>
+        <div className="lg:col-span-4">
+          <motion.div variants={variants.item} className="h-full">
+            <RiskChangeExplainer students={studentsWithRiskChanges} limit={3} />
+          </motion.div>
+        </div>
+      </div>
+
+      <motion.div variants={variants.item}>
+        <FacultySummaryCard students={students} />
+      </motion.div>
     </motion.div>
   );
 }

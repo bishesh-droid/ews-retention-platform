@@ -3,13 +3,6 @@ import { Link } from 'react-router-dom';
 import { FaCheckCircle, FaExclamationTriangle, FaUserTie, FaArrowRight } from 'react-icons/fa';
 import { motion } from 'framer-motion';
 
-/**
- * Faculty Summary Card Component
- *
- * Provides a quick, actionable summary for faculty members.
- * Shows what they need to do TODAY without overwhelming detail.
- */
-
 const FacultySummaryCard = ({ students }) => {
     const summary = useMemo(() => {
         if (!students || students.length === 0) {
@@ -27,9 +20,7 @@ const FacultySummaryCard = ({ students }) => {
         const highRisk = students.filter(s => s.risk_score > 70 && s.risk_score <= 85);
         const needsReview = students.filter(s => s.risk_score > 60 && s.risk_score <= 70);
 
-        // Generate concerns based on patterns
         const topConcerns = [];
-
         if (critical.length > 3) {
             topConcerns.push({
                 severity: 'critical',
@@ -38,7 +29,6 @@ const FacultySummaryCard = ({ students }) => {
             });
         }
 
-        // Check for clusters of high-risk students (simulated course analysis)
         const highRiskPercentage = ((critical.length + highRisk.length) / students.length) * 100;
         if (highRiskPercentage > 15) {
             topConcerns.push({
@@ -48,17 +38,14 @@ const FacultySummaryCard = ({ students }) => {
             });
         }
 
-        // Generate suggested actions
         const suggestedActions = [];
-
         if (critical.length > 0) {
             suggestedActions.push({
                 priority: 1,
-                action: `Schedule calls with ${Math.min(critical.length, 5)} critical-risk students`,
+                action: `Schedule calls with ${Math.min(critical.length, 5)} critical cases`,
                 type: 'urgent'
             });
         }
-
         if (highRisk.length > 0) {
             suggestedActions.push({
                 priority: 2,
@@ -67,19 +54,11 @@ const FacultySummaryCard = ({ students }) => {
             });
         }
 
-        if (needsReview.length > 0) {
-            suggestedActions.push({
-                priority: 3,
-                action: `Review ${needsReview.length} borderline cases this week`,
-                type: 'moderate'
-            });
-        }
-
         return {
             criticalCount: critical.length,
             highRiskCount: highRisk.length,
             needsReviewCount: needsReview.length,
-            recentlyImproved: Math.floor(students.length * 0.05),  // Simulated
+            recentlyImproved: Math.floor(students.length * 0.05),
             topConcerns,
             suggestedActions: suggestedActions.slice(0, 3)
         };
@@ -87,154 +66,84 @@ const FacultySummaryCard = ({ students }) => {
 
     return (
         <motion.div
-            className="glass-panel p-4"
-            initial={{ opacity: 0, y: 20 }}
-            animate={{ opacity: 1, y: 0 }}
+            className="bg-slate-900 text-white p-8 rounded-3xl shadow-xl overflow-hidden relative"
+            initial={{ opacity: 0, scale: 0.95 }}
+            animate={{ opacity: 1, scale: 1 }}
             transition={{ delay: 0.2 }}
         >
-            <div className="d-flex align-items-center gap-2 mb-4">
-                <FaUserTie className="text-primary" />
-                <h5 className="mb-0 fw-bold">Faculty Action Summary</h5>
-            </div>
+            {/* Decorative background circle */}
+            <div className="absolute -right-20 -top-20 w-64 h-64 bg-primary-500/10 rounded-full blur-3xl"></div>
 
-            {/* Quick Stats */}
-            <div className="d-flex gap-3 mb-4">
-                <StatBadge
-                    count={summary.criticalCount}
-                    label="Critical"
-                    color="var(--color-error)"
-                    bgColor="rgba(239, 68, 68, 0.1)"
-                />
-                <StatBadge
-                    count={summary.highRiskCount}
-                    label="High Risk"
-                    color="var(--color-warning)"
-                    bgColor="rgba(245, 158, 11, 0.1)"
-                />
-                <StatBadge
-                    count={summary.needsReviewCount}
-                    label="Review"
-                    color="var(--color-info)"
-                    bgColor="rgba(59, 130, 246, 0.1)"
-                />
-                <StatBadge
-                    count={summary.recentlyImproved}
-                    label="Improved"
-                    color="var(--color-success)"
-                    bgColor="rgba(16, 185, 129, 0.1)"
-                />
-            </div>
-
-            {/* Top Concerns */}
-            {summary.topConcerns.length > 0 && (
-                <div className="mb-4">
-                    <div className="small text-muted text-uppercase fw-semibold mb-2" style={{ letterSpacing: '0.05em' }}>
-                        Key Concerns
+            <div className="relative z-10">
+                <div className="flex items-center gap-3 mb-8">
+                    <div className="w-12 h-12 rounded-2xl bg-white/10 flex items-center justify-center text-primary-400">
+                        <FaUserTie size={24} />
                     </div>
-                    {summary.topConcerns.map((concern, idx) => (
-                        <div
-                            key={idx}
-                            className="d-flex align-items-start gap-2 p-2 rounded mb-2"
-                            style={{
-                                background: concern.severity === 'critical'
-                                    ? 'rgba(239, 68, 68, 0.05)'
-                                    : 'rgba(245, 158, 11, 0.05)',
-                                borderLeft: `3px solid ${concern.severity === 'critical' ? 'var(--color-error)' : 'var(--color-warning)'}`
-                            }}
-                        >
-                            <FaExclamationTriangle
-                                size={14}
-                                className="mt-1"
-                                style={{
-                                    color: concern.severity === 'critical' ? 'var(--color-error)' : 'var(--color-warning)'
-                                }}
-                            />
-                            <div>
-                                <div className="small fw-medium text-dark">{concern.message}</div>
-                                <div className="small text-muted">{concern.action}</div>
-                            </div>
-                        </div>
-                    ))}
-                </div>
-            )}
-
-            {/* Suggested Actions */}
-            {summary.suggestedActions.length > 0 && (
-                <div className="mb-3">
-                    <div className="small text-muted text-uppercase fw-semibold mb-2" style={{ letterSpacing: '0.05em' }}>
-                        Suggested Actions
+                    <div>
+                        <h2 className="text-2xl font-display font-bold tracking-tight">Faculty Action Brief</h2>
+                        <p className="text-slate-400 text-sm">Prioritized interventions for today</p>
                     </div>
-                    {summary.suggestedActions.map((item, idx) => (
-                        <div
-                            key={idx}
-                            className="d-flex align-items-center justify-content-between p-2 rounded mb-2"
-                            style={{ background: 'var(--gray-50)' }}
-                        >
-                            <div className="d-flex align-items-center gap-2">
-                                <span
-                                    className="badge rounded-pill"
-                                    style={{
-                                        background: item.type === 'urgent'
-                                            ? 'var(--color-error)'
-                                            : item.type === 'important'
-                                                ? 'var(--color-warning)'
-                                                : 'var(--gray-500)',
-                                        color: 'white',
-                                        fontSize: '0.65rem'
-                                    }}
-                                >
-                                    {item.priority}
-                                </span>
-                                <span className="small">{item.action}</span>
-                            </div>
-                            <FaCheckCircle
-                                size={14}
-                                className="text-muted"
-                                style={{ cursor: 'pointer', opacity: 0.5 }}
-                                title="Mark as done"
-                            />
-                        </div>
-                    ))}
                 </div>
-            )}
 
-            {/* Action Links */}
-            <div className="d-flex gap-3 pt-3 border-top">
-                <Link
-                    to="/students"
-                    className="btn btn-sm btn-outline-primary d-flex align-items-center gap-2"
-                >
-                    View All Students <FaArrowRight size={12} />
-                </Link>
-                <Link
-                    to="/interventions"
-                    className="btn btn-sm btn-primary d-flex align-items-center gap-2"
-                >
-                    Intervention Queue <FaArrowRight size={12} />
-                </Link>
+                <div className="grid grid-cols-2 md:grid-cols-4 gap-4 mb-10">
+                    <StatBadge count={summary.criticalCount} label="Critical" color="text-rose-400" />
+                    <StatBadge count={summary.highRiskCount} label="High Risk" color="text-amber-400" />
+                    <StatBadge count={summary.needsReviewCount} label="Review" color="text-blue-400" />
+                    <StatBadge count={summary.recentlyImproved} label="Improved" color="text-emerald-400" />
+                </div>
+
+                <div className="grid grid-cols-1 lg:grid-cols-2 gap-8">
+                    <div>
+                        <h4 className="text-[10px] font-bold text-slate-500 uppercase tracking-widest mb-4">Key Concerns</h4>
+                        <div className="space-y-3">
+                            {summary.topConcerns.map((concern, idx) => (
+                                <div key={idx} className="flex gap-4 p-4 rounded-2xl bg-white/5 border border-white/10">
+                                    <FaExclamationTriangle className={concern.severity === 'critical' ? 'text-rose-400' : 'text-amber-400'} />
+                                    <div>
+                                        <p className="text-sm font-bold leading-none mb-1">{concern.message}</p>
+                                        <p className="text-xs text-slate-400">{concern.action}</p>
+                                    </div>
+                                </div>
+                            ))}
+                            {summary.topConcerns.length === 0 && <p className="text-sm text-slate-500 italic">No major cohort concerns.</p>}
+                        </div>
+                    </div>
+
+                    <div>
+                        <h4 className="text-[10px] font-bold text-slate-500 uppercase tracking-widest mb-4">Suggested Actions</h4>
+                        <div className="space-y-3">
+                            {summary.suggestedActions.map((item, idx) => (
+                                <div key={idx} className="flex items-center justify-between p-4 rounded-2xl bg-white/5 border border-white/10 hover:bg-white/[0.08] transition-colors group">
+                                    <div className="flex items-center gap-4">
+                                        <span className={`w-6 h-6 rounded-full flex items-center justify-center text-[10px] font-bold ${item.type === 'urgent' ? 'bg-rose-500' : 'bg-primary-500'}`}>
+                                            {item.priority}
+                                        </span>
+                                        <span className="text-sm font-medium">{item.action}</span>
+                                    </div>
+                                    <FaCheckCircle className="text-slate-600 group-hover:text-emerald-400 transition-colors cursor-pointer" />
+                                </div>
+                            ))}
+                        </div>
+                    </div>
+                </div>
+
+                <div className="mt-10 pt-8 border-t border-white/10 flex flex-wrap gap-4">
+                    <Link to="/students" className="px-6 py-2.5 rounded-xl bg-white text-slate-900 font-bold text-sm hover:bg-slate-100 transition-all flex items-center gap-2">
+                        View All Students <FaArrowRight size={10} />
+                    </Link>
+                    <Link to="/interventions" className="px-6 py-2.5 rounded-xl bg-primary-500 text-white font-bold text-sm hover:bg-primary-600 transition-all flex items-center gap-2 shadow-glow">
+                        Intervention Queue <FaArrowRight size={10} />
+                    </Link>
+                </div>
             </div>
         </motion.div>
     );
 };
 
-const StatBadge = ({ count, label, color, bgColor }) => (
-    <div
-        className="text-center px-3 py-2 rounded"
-        style={{ background: bgColor, minWidth: '70px' }}
-    >
-        <div
-            className="fw-bold"
-            style={{
-                fontSize: 'var(--font-size-h2)',
-                color,
-                fontFamily: 'var(--font-family-mono)'
-            }}
-        >
-            {count}
-        </div>
-        <div className="small" style={{ color, opacity: 0.8 }}>
-            {label}
-        </div>
+const StatBadge = ({ count, label, color }) => (
+    <div className="bg-white/5 p-4 rounded-2xl border border-white/10 text-center">
+        <p className={`text-3xl font-display font-bold mb-1 ${color}`}>{count}</p>
+        <p className="text-[10px] font-bold text-slate-500 uppercase tracking-wider">{label}</p>
     </div>
 );
 

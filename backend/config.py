@@ -70,6 +70,10 @@ GEMINI_MODEL = os.getenv("GEMINI_MODEL", "gemini-pro")
 LLM_TEMPERATURE = float(os.getenv("LLM_TEMPERATURE", "0.7"))
 LLM_MAX_TOKENS = int(os.getenv("LLM_MAX_TOKENS", "1024"))
 
+# ========== Integration API ==========
+INTEGRATION_API_KEY = os.getenv("INTEGRATION_API_KEY", "ews-integration-dev-key")
+AI_ADVISOR_ORIGIN = os.getenv("AI_ADVISOR_ORIGIN", "http://localhost:8001")
+
 # ========== API Configuration ==========
 API_HOST = os.getenv("API_HOST", "0.0.0.0")
 API_PORT = int(os.getenv("API_PORT", "8000"))
@@ -78,6 +82,7 @@ CORS_ORIGINS = [
     "http://localhost",
     "http://localhost:3000",
     "http://localhost:8000",
+    AI_ADVISOR_ORIGIN,
 ]
 
 # Additional CORS origins from environment
@@ -95,6 +100,15 @@ WEEK3_USAGE_PATH = RAW_DATA_DIR / "Learner usage week 3.xlsx"
 GRADED_QUIZ_COMPLETE_PATH = RAW_DATA_DIR / "graded quiz 1 10 feb complete.xlsx"
 LIVE_T1_PATH = RAW_DATA_DIR / "B.S and M.Sc Live Summary Data C-1, Trimester 1.xlsx"
 LIVE_T2_PATH = RAW_DATA_DIR / "B.S and M.Sc Summary Data Trimester 2.xlsx"
+
+# ========== Security ==========
+SECRET_KEY = os.getenv("SECRET_KEY", "your-secret-key-for-dev-only")
+ALGORITHM = "HS256"
+ACCESS_TOKEN_EXPIRE_MINUTES = int(os.getenv("ACCESS_TOKEN_EXPIRE_MINUTES", "1440"))  # 24 hours
+
+# ========== Redis & Cache ==========
+REDIS_URL = os.getenv("REDIS_URL", "redis://localhost:6379/0")
+CACHE_EXPIRE_SECONDS = int(os.getenv("CACHE_EXPIRE_SECONDS", "3600"))
 
 # ========== Logging ==========
 LOG_LEVEL = os.getenv("LOG_LEVEL", "INFO")

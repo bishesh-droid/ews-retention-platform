@@ -4,10 +4,11 @@ import { Row, Col, Button, Spinner as BootstrapSpinner, Form, Badge } from 'reac
 import { LineChart, Line, XAxis, YAxis, CartesianGrid, Tooltip, Legend, ResponsiveContainer } from 'recharts';
 import { motion } from 'framer-motion';
 import { FaArrowLeft, FaHistory, FaLightbulb, FaClipboardList, FaHeartbeat } from 'react-icons/fa';
-import { getStudent, getStudentPrediction, getStudentRiskHistory, getAIAdvice, getInterventions, createIntervention } from '../api';
+import { getStudent, getStudentPrediction, getStudentRiskHistory, getAIAdvice, getInterventions, createIntervention, getStudentMLPrediction } from '../api';
 import Spinner from '../components/common/Spinner';
 import { variants } from '../utils/motionConfig';
 import RiskExplanation from '../components/ai/RiskExplanation';
+import MLRiskCard from '../components/student/MLRiskCard';
 import RiskBreakdownChart from '../components/student/RiskBreakdownChart';
 import DataQualityPanel from '../components/quality/DataQualityPanel';
 import AIRecommendationCard from '../components/ai/AIRecommendationCard';
@@ -21,6 +22,7 @@ import CollapsiblePanel from '../components/common/CollapsiblePanel';
 function StudentProfile() {
   const [student, setStudent] = useState(null);
   const [prediction, setPrediction] = useState(null);
+  const [mlPrediction, setMlPrediction] = useState(null);
   const [riskHistory, setRiskHistory] = useState([]);
   const [interventions, setInterventions] = useState([]);
   const [loading, setLoading] = useState(true);
@@ -47,9 +49,12 @@ function StudentProfile() {
         setLoading(true);
         const studentData = await getStudent(id);
         const predictionData = await getStudentPrediction(id);
+        const mlData = await getStudentMLPrediction(id);
         const riskHistoryData = await getStudentRiskHistory(id, predictionData.risk_score);
+
         setStudent(studentData);
         setPrediction(predictionData);
+        setMlPrediction(mlData);
         setRiskHistory(riskHistoryData);
         await fetchInterventions(id);
       } catch (err) {
@@ -134,6 +139,13 @@ function StudentProfile() {
           </div>
         </div>
       </div>
+
+      {/* ML Risk Assessment Card */}
+      {mlPrediction && (
+        <motion.div variants={variants.item} className="mb-4">
+          <MLRiskCard mlPrediction={mlPrediction} ruleRiskScore={prediction.risk_score} />
+        </motion.div>
+      )}
 
       {/* Risk Explanation - Full Width */}
       <motion.div variants={variants.item} className="mb-4">

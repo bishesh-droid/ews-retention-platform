@@ -21,42 +21,34 @@ const AnimatedNumber = ({ value, isPercent = false }) => {
     }, [inView, value]);
 
     return (
-        <span ref={ref} className="fw-bold text-gradient display-6">
+        <span ref={ref} className="text-3xl font-display font-bold text-slate-900 leading-none">
             {displayValue}{isPercent ? '%' : ''}
         </span>
     );
 };
 
-const KpiCard = ({ title, value, icon, children, isPercent }) => (
+const KpiCard = ({ title, value, icon, children, isPercent, suffix }) => (
     <motion.div
-        className="glass-panel p-4 h-100 d-flex flex-column justify-content-between position-relative overflow-hidden"
-        whileHover={{ y: -5, boxShadow: 'var(--shadow-glow)' }}
-        initial={{ opacity: 0, y: 20 }}
+        className="bg-white p-6 rounded-2xl border border-slate-100 shadow-soft hover:shadow-glow hover:border-primary-100 transition-all duration-300 flex flex-col justify-between group h-full"
+        whileHover={{ y: -4 }}
+        initial={{ opacity: 0, y: 10 }}
         animate={{ opacity: 1, y: 0 }}
         transition={{ duration: 0.4 }}
     >
-        <div className="d-flex align-items-center justify-content-between mb-3">
-            <div>
-                <h6 className="text-secondary text-uppercase fw-bold mb-1" style={{ fontSize: '0.75rem', letterSpacing: '0.05em' }}>{title}</h6>
-                <AnimatedNumber value={value} isPercent={isPercent} />
+        <div className="flex items-start justify-between mb-4">
+            <div className="flex flex-col gap-1">
+                <span className="text-xs font-bold text-slate-400 uppercase tracking-wider">{title}</span>
+                <div className="flex items-baseline gap-2">
+                    <AnimatedNumber value={value} isPercent={isPercent} />
+                    {suffix && <span className="text-xs font-medium text-slate-400">{suffix}</span>}
+                </div>
             </div>
-            <div className="p-3 rounded-circle" style={{ background: 'rgba(79, 70, 229, 0.1)', color: 'var(--primary-color)' }}>
-                {React.cloneElement(icon, { size: 24 })}
+            <div className="w-12 h-12 rounded-xl bg-primary-50 text-primary-500 flex items-center justify-center group-hover:bg-primary-500 group-hover:text-white transition-colors duration-300">
+                {React.cloneElement(icon, { size: 22 })}
             </div>
         </div>
-        {children && <div className="mt-2">{children}</div>}
 
-        {/* Decorative background element */}
-        <div style={{
-            position: 'absolute',
-            top: '-50%',
-            right: '-10%',
-            width: '150px',
-            height: '150px',
-            background: 'radial-gradient(circle, rgba(79,70,229,0.1) 0%, rgba(0,0,0,0) 70%)',
-            zIndex: 0,
-            pointerEvents: 'none'
-        }} />
+        {children && <div className="mt-2">{children}</div>}
     </motion.div>
 );
 

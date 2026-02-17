@@ -21,6 +21,6 @@ def init_db():
     Should be called on application startup.
     """
     # Import all models to ensure they're registered with Base
-    from backend.app.models import student, prediction, intervention, llm, event, feature
+    from backend.database.models import student, prediction, intervention, llm, event, feature
     
     Base.metadata.create_all(bind=engine)

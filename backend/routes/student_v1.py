@@ -1,0 +1,42 @@
+from fastapi import APIRouter, Depends
+from typing import List
+from sqlalchemy.orm import Session
+
+from backend.database import Student, Goal, RiskSnapshot
+from backend.app.api import deps
+from backend.schemas.student import Student as StudentSchema
+
+router = APIRouter()
+
+@router.get("/me", response_model=StudentSchema)
+def get_my_profile(
+    current_user: deps.User = Depends(deps.require_role(["Student"])),
+    db: Session = Depends(deps.get_db)
+):
+    """
+    Get current student's profile and disengagement risks.
+    """
+    student = db.query(Student).filter(Student.id == current_user.email).first()
+    return student
+
+@router.get("/goals")
+def get_my_goals(
+    current_user: deps.User = Depends(deps.require_role(["Student"])),
+    db: Session = Depends(deps.get_db)
+):
+    """
+    Get current student's active goals.
+    """
+    goals = db.query(Goal).filter(Goal.student_id == current_user.email).all()
+    return goals
+
+@router.get("/risk-history")
+def get_my_risk_history(
+    current_user: deps.User = Depends(deps.require_role(["Student"])),
+    db: Session = Depends(deps.get_db)
+):
+    """
+    Get current student's historical risk snapshots.
+    """
+    history = db.query(RiskSnapshot).filter(RiskSnapshot.student_id == current_user.email).all()
+    return history

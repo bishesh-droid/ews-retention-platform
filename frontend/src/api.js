@@ -68,6 +68,15 @@ export const getStudentPrediction = async (id) => {
   };
 };
 
+export const getStudentMLPrediction = async (id) => {
+  const response = await fetch(`${API_BASE}/ml/predict/${encodeURIComponent(id)}`);
+  if (!response.ok) {
+    if (response.status === 404) return null; // No ML prediction yet
+    throw new Error('Failed to fetch ML prediction');
+  }
+  return await response.json();
+};
+
 export const getBatchPredictions = async (limit = 2000) => {
   const students = await getStudents(limit);
   const predictions = {};

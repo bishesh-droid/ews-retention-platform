@@ -1,0 +1,405 @@
+================================================================================
+        EWS RETENTION PLATFORM - COMPLETE PROMPTS DOCUMENTATION
+================================================================================
+
+Last Updated: 2026-02-17
+
+================================================================================
+TABLE OF CONTENTS
+================================================================================
+
+  1.  PROJECT OVERVIEW
+  2.  PROMPT FILES
+      2.1   faculty_advice.txt
+      2.2   marketing_advice.txt
+      2.3   sales_advice.txt
+      2.4   student_specific_advice.txt
+  3.  PROMPT TEMPLATE STRUCTURE
+  4.  IMPLEMENTATION & INTEGRATION
+      4.1   AI Advisor Service (backend/app/services/ai/advisor.py)
+      4.2   LLM Routes (backend/routes/llm.py)
+      4.3   Advisor Routes (backend/routes/advisor.py)
+  5.  DYNAMIC PLACEHOLDER SYSTEM
+  6.  FILE INDEX
+
+
+================================================================================
+1. PROJECT OVERVIEW
+================================================================================
+
+The `prompts/` directory contains four text files that serve as dynamic
+templates for interacting with Large Language Models (LLMs), specifically
+Google Gemini Pro, within the EWS Retention Platform. These prompts are
+fundamental for generating context-aware and personalized advice, summaries,
+or messages tailored for different stakeholders (faculty, marketing, sales teams,
+and students themselves). They ensure that the LLM's responses are relevant,
+structured, and align with the specific needs of each audience.
+
+All four prompt templates are fully implemented and actively used by the
+backend's AI advisor service. Each prompt is loaded dynamically based on
+the `prompt_name` parameter passed to the `get_ai_advice()` function.
+
+
+================================================================================
+2. PROMPT FILES
+================================================================================
+
+Each prompt file defines a specific interaction with the LLM, meticulously
+tailored to a particular audience and purpose. They share a common set of
+six dynamic placeholders that are populated with real-time student data:
+
+  - `{student_name}`: Full name of the student.
+  - `{risk_score}`: The student's calculated risk score (0-100).
+  - `{retention_likelihood}`: Human-readable retention likelihood
+    (e.g., "Very High", "High", "Medium", "Low", "Very Low").
+  - `{grades}`: Overall grade average.
+  - `{attendance}`: Overall attendance rate.
+  - `{engagement_score}`: Overall engagement score.
+
+--------------------------------------------------------------------------------
+2.1 faculty_advice.txt
+--------------------------------------------------------------------------------
+
+- **Location**: `prompts/faculty_advice.txt`
+
+- **Purpose**: To generate personalized advice and actionable conversation
+  starters for faculty members who are engaging with at-risk students.
+
+- **Role**: "Expert academic advisor with years of experience in student
+  retention and success strategies."
+
+- **Context**: The LLM is told it is advising a faculty member about a
+  specific student who may be at risk of dropping out, and should provide
+  constructive, empathetic, and proactive support recommendations.
+
+- **Required Output Format** (4 sections):
+    1. **Summary of Situation**: A brief, gentle summary of the student's
+       current standing based on the provided data points.
+    2. **Key Areas of Concern**: Identification of the top 1-2 areas
+       contributing most to the student's risk score.
+    3. **Recommended Actions & Conversation Starters**: 3-4 specific,
+       actionable steps the faculty member can take, each accompanied by
+       a non-judgmental, supportive conversation starter phrase.
+    4. **University Resources to Suggest**: At least 2 relevant university
+       resources the faculty member can recommend to the student (e.g.,
+       Tutoring Center, Writing Center, Counseling Services, Financial Aid,
+       Career Services).
+
+- **Tone Directive**: Constructive, empathetic, proactive support. Avoids
+  blaming language and focuses on how to help the student succeed.
+
+--------------------------------------------------------------------------------
+2.2 marketing_advice.txt
+--------------------------------------------------------------------------------
+
+- **Location**: `prompts/marketing_advice.txt`
+
+- **Purpose**: To generate personalized re-engagement communication strategies
+  and messaging for the marketing team to reach at-risk students. Used for
+  retention campaigns, targeted outreach, and student re-engagement efforts.
+
+- **Role**: "Strategic marketing and communications expert specializing in
+  student success and retention in higher education."
+
+- **Context**: The LLM is told it is crafting a personalized communication
+  strategy for a specific at-risk student, with the goal of re-engaging them,
+  informing them of available support services, and encouraging persistence
+  toward degree completion.
+
+- **Required Output Format** (structured communication plan):
+    1. **Suggested Communication Channel**: The most appropriate channel
+       for reaching this student (Email, SMS, Personalized Portal Message),
+       based on the student's engagement patterns.
+    2. **Headline / Subject Line**: A catchy, empathetic subject line that
+       encourages the student to open and read the message.
+    3. **Personalized Message Body** containing:
+       - A supportive opening acknowledgment ("We're here for you" tone)
+       - Indirect acknowledgment of the student's current challenges
+         (without referencing risk scores or internal metrics directly)
+       - 1-2 relevant university support services based on the student's
+         specific risk factors
+       - A clear, low-barrier call to action (e.g., "Click here to book
+         a 15-minute chat with your advisor")
+       - Positive, encouraging closing tone
+
+- **Tone Directive**: Warm, supportive, non-intrusive. The student should
+  feel cared for, not monitored.
+
+- **Placeholders**: Uses the standard 6 placeholders (`{student_name}`,
+  `{risk_score}`, `{retention_likelihood}`, `{grades}`, `{attendance}`,
+  `{engagement_score}`).
+
+--------------------------------------------------------------------------------
+2.3 sales_advice.txt
+--------------------------------------------------------------------------------
+
+- **Location**: `prompts/sales_advice.txt`
+
+- **Purpose**: To provide guidance, talking points, and objection-handling
+  strategies for the sales/admissions team when conducting urgent intervention
+  conversations with at-risk students or their guardians. Especially critical
+  for high-risk students where continued enrollment is at stake.
+
+- **Role**: "Student success and retention specialist adept at communicating
+  value and encouraging commitment to educational goals."
+
+- **Context**: The LLM is told it is preparing a sales/retention team member
+  for a conversation with a specific at-risk student (or their guardian),
+  with the goal of persuading them to persist and highlighting the value
+  of degree completion.
+
+- **Required Output Format** (4 sections):
+    1. **Core Message / Objective**: A clear, concise primary goal statement
+       for the conversation (e.g., "Re-engage the student by addressing
+       their specific concerns and highlighting the long-term value of
+       completing their degree").
+    2. **Key Talking Points**: 3-5 structured talking points including:
+       - Empathy and acknowledgment of the student's situation
+       - Value proposition of degree completion
+       - Available support systems and resources
+       - Addressing specific concerns indicated by the data
+       - Instilling hope and a forward-looking perspective
+    3. **Call to Action**: A clear, manageable next step for the student
+       (e.g., "Schedule a meeting with your academic advisor this week").
+    4. **Handling Objections**: Pre-prepared responses to common student
+       objections such as:
+       - "I don't have enough time"
+       - "It's too late to catch up"
+       - "I can't afford to continue"
+       - "The coursework is too difficult"
+
+- **Tone Directive**: Persuasive but empathetic. Focuses on the student's
+  long-term benefit, never on institutional metrics.
+
+- **Placeholders**: Uses the standard 6 placeholders.
+
+--------------------------------------------------------------------------------
+2.4 student_specific_advice.txt
+--------------------------------------------------------------------------------
+
+- **Location**: `prompts/student_specific_advice.txt`
+
+- **Purpose**: To generate direct, empathetic, and actionable advice that
+  is delivered directly to the student. Used for personalized emails, chatbot
+  interactions, or within the student-facing portal. The goal is to empower
+  students to take ownership of their academic journey and improve outcomes.
+
+- **Role**: "Empathetic and knowledgeable student success coach specializing
+  in personalized academic strategies."
+
+- **Context**: The LLM is told it is writing a message directly to a student,
+  providing personalized guidance based on their current academic standing.
+  The message should feel like it comes from a caring mentor, not a system.
+
+- **Required Output Format** (cohesive paragraph format, NO section labels):
+  The response is formatted as a single, flowing message to the student
+  containing these elements woven together naturally:
+    1. **Empathy Opening**: Acknowledges the student's challenges without
+       condescension. Uses first-person address ("I can see you've been
+       working hard...").
+    2. **Key Areas Summary**: Gently identifies 1-2 areas where the student
+       could improve, framed constructively (e.g., "One area where a small
+       change could make a big difference is...").
+    3. **Actionable Steps**: 2-3 specific, practical steps the student can
+       take immediately, within their direct control (e.g., "Try spending
+       just 30 minutes reviewing this week's material before the next quiz").
+    4. **Resource Suggestions**: 1-2 specific university support services
+       relevant to the student's situation.
+    5. **Encouraging Close**: Reaffirms belief in the student's potential
+       and the university's commitment to their success.
+
+- **Tone Directive**: Non-judgmental, future-oriented, warm, and supportive.
+  Avoids jargon, risk scores, or internal metric language. The student
+  should feel motivated, not alarmed.
+
+- **Placeholders**: Uses the standard 6 placeholders.
+
+
+================================================================================
+3. PROMPT TEMPLATE STRUCTURE
+================================================================================
+
+All four prompt templates follow a consistent internal structure:
+
+```
+Role:
+You are a [specific role description]...
+
+Context:
+[Scenario description and objective]...
+
+Student Information:
+- Name: {student_name}
+- Risk Score: {risk_score}/100
+- Retention Likelihood: {retention_likelihood}
+- Grades: {grades}
+- Attendance: {attendance}
+- Engagement Score: {engagement_score}
+
+Task:
+[Specific instructions for what to generate]...
+
+Output Format:
+[Explicit formatting guidelines]...
+```
+
+This consistent structure ensures:
+- Predictable LLM behavior across all prompt types
+- Easy maintenance and updates to prompt templates
+- Consistent placeholder names for automated population
+- Clear separation of role, context, data, and instructions
+
+
+================================================================================
+4. IMPLEMENTATION & INTEGRATION
+================================================================================
+
+--------------------------------------------------------------------------------
+4.1 AI Advisor Service (backend/app/services/ai/advisor.py)
+--------------------------------------------------------------------------------
+
+The `AI Advisor Service` is the primary consumer of these prompt templates.
+Its `get_ai_advice()` function orchestrates the following workflow:
+
+1.  **Dependency Check**: Verifies that the `google-generativeai` library is
+    installed and that the `GEMINI_API_KEY` is configured in the environment.
+
+2.  **Prompt Loading**: Dynamically loads the appropriate prompt template file
+    based on the `prompt_name` parameter:
+    ```python
+    prompt_path = f"prompts/{prompt_name}_advice.txt"
+    ```
+    Valid `prompt_name` values: "faculty", "marketing", "sales", "student_specific"
+
+3.  **Data Retrieval**: Fetches the student's latest prediction record and
+    other relevant data from the database:
+    - Student name (first_name + last_name)
+    - Risk score (from latest Prediction record)
+    - Retention likelihood (derived from risk_score via RiskScorer)
+    - Grades (from graded components average)
+    - Attendance (from exam attendance rate)
+    - Engagement score (from feature engineering calculations)
+
+4.  **Prompt Formatting**: Populates the placeholders within the loaded prompt
+    template using Python's `str.format()`:
+    ```python
+    formatted_prompt = template.format(
+        student_name=student_name,
+        risk_score=risk_score,
+        retention_likelihood=retention_likelihood,
+        grades=grades,
+        attendance=attendance,
+        engagement_score=engagement_score
+    )
+    ```
+
+5.  **LLM Invocation**: Calls the Google Gemini Pro model:
+    ```python
+    model = genai.GenerativeModel('gemini-pro')
+    response = model.generate_content(formatted_prompt)
+    ```
+    Configuration: temperature=0.7, max_tokens=1024 (from .env settings).
+
+6.  **Response Handling**: Returns the generated text from the LLM, or a
+    descriptive error message if any issues occur (e.g., missing API key,
+    file not found, API call failure, empty response).
+
+--------------------------------------------------------------------------------
+4.2 LLM Routes (backend/routes/llm.py)
+--------------------------------------------------------------------------------
+
+The LLM router exposes several endpoints that internally leverage the prompt
+templates:
+
+- **POST /llm/student-advice**: Accepts a `StudentAdviceRequest` with
+  `student_id` and optional `question`. Calls the advisor service with
+  the `student_specific` prompt.
+
+- **POST /llm/faculty-summary**: Generates faculty-oriented advice using
+  the `faculty` prompt template.
+
+- **POST /llm/intervention-package**: Generates multi-channel intervention
+  messaging that may use the `marketing` and `sales` prompt templates.
+
+- **POST /llm/explain-risk-change**: Uses a dynamically constructed prompt
+  (not template-based) to explain risk score changes.
+
+- **POST /llm/what-if-analysis**: Uses the risk formula to simulate
+  scenario changes (not template-based).
+
+- **POST /llm/report-narrative**: Generates executive report narratives
+  using a dynamically constructed prompt.
+
+--------------------------------------------------------------------------------
+4.3 Advisor Routes (backend/routes/advisor.py)
+--------------------------------------------------------------------------------
+
+The advisor router provides higher-level AI-powered endpoints:
+
+- **POST /advisor/study-plan/{student_id}**: Generates a personalized
+  4-week study plan with weekly goals and estimated hours. Uses the
+  `student_specific` prompt as a foundation, then applies additional
+  study plan formatting instructions.
+
+- **POST /advisor/faculty-summary/{student_id}**: Generates a faculty-
+  appropriate summary with optional talking points. Uses the `faculty`
+  prompt template with optional `include_talking_points=true` parameter.
+
+- **GET /advisor/context/{student_id}**: Returns raw advisor context data
+  (student metrics, risk factors, engagement data) without LLM processing.
+
+
+================================================================================
+5. DYNAMIC PLACEHOLDER SYSTEM
+================================================================================
+
+The placeholder population flow:
+
+```
+Database (Student, Enrollment, Prediction tables)
+    |
+    v
+StudentService.calculate_student_metrics()
+    |
+    v
+Six placeholder values extracted:
+    {student_name}          <- Student.first_name + " " + Student.last_name
+    {risk_score}            <- RiskScorer.calculate_risk_score(features)
+    {retention_likelihood}  <- RiskScorer.get_retention_likelihood(risk_score)
+    {grades}                <- FeatureEngineer.calculate_graded_quiz_score()
+    {attendance}            <- FeatureEngineer.calculate_exam_attendance_rate()
+    {engagement_score}      <- Weighted average of all engagement features
+    |
+    v
+Template loaded from prompts/{prompt_name}_advice.txt
+    |
+    v
+str.format() populates placeholders
+    |
+    v
+Formatted prompt sent to Google Gemini Pro
+    |
+    v
+LLM response returned to API caller
+```
+
+
+================================================================================
+6. FILE INDEX
+================================================================================
+
+- `prompts/faculty_advice.txt`: Prompt template for generating personalized
+  advice and conversation starters for faculty members engaging with at-risk
+  students. Fully implemented and active.
+
+- `prompts/marketing_advice.txt`: Prompt template for generating re-engagement
+  communication strategies and personalized messaging for marketing teams.
+  Fully implemented and active.
+
+- `prompts/sales_advice.txt`: Prompt template for generating talking points,
+  objection-handling strategies, and intervention scripts for the sales/
+  admissions team. Fully implemented and active.
+
+- `prompts/student_specific_advice.txt`: Prompt template for generating
+  direct, empathetic advice delivered to students via email, chatbot, or
+  the student portal. Fully implemented and active.

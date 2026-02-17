@@ -1,0 +1,9 @@
+model:
+  type: xgboost
+  path: saved_models/xgboost_model.pkl
+  features:
+    - academic_score
+    - engagement_score
+training:
+  test_size: 0.2
+  random_state: 42
