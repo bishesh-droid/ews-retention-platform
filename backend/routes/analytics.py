@@ -2,7 +2,7 @@ from fastapi import APIRouter, Depends, Query
 from sqlalchemy.orm import Session
 from typing import List, Dict, Any
 
-from backend.app.api import deps
+from backend.api import deps
 from backend.services.analytics_service import AnalyticsService
 
 router = APIRouter()

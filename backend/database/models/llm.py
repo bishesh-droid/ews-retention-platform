@@ -4,7 +4,7 @@ LLM Models
 Database models for LLM interactions, insights, and explanations.
 """
 
-from sqlalchemy import Column, Integer, String, Date
+from sqlalchemy import Column, Integer, String, Boolean, Date
 from backend.database.connection import Base
 
 
@@ -41,7 +41,7 @@ class LLMInsight(Base):
     confidence = Column(String)  # 'high', 'medium', 'low'
     visibility = Column(String)  # 'public', 'admin_only', 'leadership'
     created_at = Column(Date)
-    dismissed = Column(Integer, default=0)  # Boolean: has admin dismissed this?
+    dismissed = Column(Boolean, default=False)  # Has admin dismissed this?
 
 
 class AIExplanation(Base):
@@ -57,7 +57,7 @@ class AIExplanation(Base):
     content = Column(String)  # The generated explanation text
     confidence = Column(String)  # 'high', 'medium', 'low'
     created_at = Column(Date)
-    viewed = Column(Integer, default=0)  # Boolean: has student viewed this?
+    viewed = Column(Boolean, default=False)  # Has student viewed this?
 
 
 class PatternDiscovery(Base):
@@ -78,5 +78,5 @@ class PatternDiscovery(Base):
     supporting_data = Column(String)  # JSON of statistical evidence
     confidence = Column(String)  # 'high', 'medium', 'low'
     discovered_at = Column(Date)
-    acknowledged = Column(Integer, default=0)  # Has admin reviewed this?
-    acted_upon = Column(Integer, default=0)  # Has action been taken?
+    acknowledged = Column(Boolean, default=False)  # Has admin reviewed this?
+    acted_upon = Column(Boolean, default=False)  # Has action been taken?

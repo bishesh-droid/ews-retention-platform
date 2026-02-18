@@ -2,23 +2,7 @@ from sqlalchemy import create_engine, Column, Integer, String, Float, ForeignKey
 from datetime import datetime
 
 from sqlalchemy.orm import sessionmaker, relationship, Session
-
-def get_db():
-    db = SessionLocal()
-    try:
-        yield db
-    finally:
-        db.close()
-
-def get_student_by_id(db: Session, student_id: str):
-    return db.query(Student).filter(Student.id == student_id).first()
-
-DATABASE_URL = "sqlite:///./sql_app.db"
-engine = create_engine(DATABASE_URL)
-SessionLocal = sessionmaker(autocommit=False, autoflush=False, bind=engine)
-from sqlalchemy.orm import declarative_base
-
-Base = declarative_base()
+from .connection import Base, engine, SessionLocal
 
 class Student(Base):
     __tablename__ = "students"
@@ -235,100 +219,33 @@ class LiveSessionAttendance(Base):
     attended = Column(Boolean, default=False)
     student = relationship("Student", backref="live_attendance")
 
-class GradedComponent(Base):
-    __tablename__ = "graded_components"
-    id = Column(Integer, primary_key=True, autoincrement=True)
-    student_id = Column(String, ForeignKey("students.id"), index=True)
-    course_code = Column(String)
-    course_name = Column(String)
-    component_type = Column(String)  # "quiz" or "assignment"
-    component_number = Column(Integer)
-    score = Column(Float, nullable=True)  # null = missed/absent
-    max_score = Column(Float)
-    missed = Column(Boolean, default=False)
-    student = relationship("Student", backref="graded_components")
 
-class ExamRecord(Base):
-    __tablename__ = "exam_records"
-    id = Column(Integer, primary_key=True, autoincrement=True)
-    student_id = Column(String, ForeignKey("students.id"), index=True)
-    course_code = Column(String)
-    course_name = Column(String)
-    slot = Column(String)  # "slot-1", "slot-2"
-    marks_obtained = Column(Float, nullable=True)
-    marks_total = Column(Float)
-    present = Column(Boolean, default=True)
-    mode = Column(String, nullable=True)  # "Online" or "Onsite"
-    student = relationship("Student", back_populates="exam_records")
+
+
 
 # ============================================================================
 # RBAC & AUTHENTICATION MODELS
 # ============================================================================
 
-class User(Base):
-    """System users with RBAC roles"""
-    __tablename__ = "users"
-    id = Column(Integer, primary_key=True, index=True)
-    username = Column(String, unique=True, index=True)
-    email = Column(String, unique=True, index=True)
-    hashed_password = Column(String)
-    role = Column(String)  # Student, Faculty, Admin, Retention Team
-    is_active = Column(Boolean, default=True)
-    is_superuser = Column(Boolean, default=False)
-    created_at = Column(DateTime, default=datetime.utcnow)
+
 
 # ============================================================================
 # ANALYTICS & TREND MODELS
 # ============================================================================
 
-class RiskSnapshot(Base):
-    """Historical risk snapshots for trend & velocity analysis"""
-    __tablename__ = "risk_snapshots"
-    id = Column(Integer, primary_key=True, index=True)
-    student_id = Column(String, ForeignKey("students.id"), index=True)
-    risk_score = Column(Float)
-    velocity = Column(Float)      # Weekly change
-    acceleration = Column(Float)  # Rate of change of velocity
-    engagement_score = Column(Float)
-    timestamp = Column(DateTime, default=datetime.utcnow, index=True)
 
-    student = relationship("Student", backref="risk_history")
 
 # ============================================================================
 # GOALS & PROGRESS TRACKER MODELS
 # ============================================================================
 
-class Goal(Base):
-    """Student progress goals"""
-    __tablename__ = "goals"
-    id = Column(Integer, primary_key=True, index=True)
-    student_id = Column(String, ForeignKey("students.id"), index=True)
-    type = Column(String)  # "login", "study_hours", "assignment", "attendance"
-    title = Column(String)
-    target_value = Column(Float)
-    current_value = Column(Float, default=0.0)
-    start_date = Column(DateTime, default=datetime.utcnow)
-    end_date = Column(DateTime)
-    status = Column(String, default="active")  # active, completed, failed
-    
-    student = relationship("Student", backref="goals")
+
 
 # ============================================================================
 # AUDIT & LOGGING MODELS
 # ============================================================================
 
-class AuditLog(Base):
-    """Structured audit trail for system actions"""
-    __tablename__ = "audit_logs"
-    id = Column(Integer, primary_key=True, index=True)
-    timestamp = Column(DateTime, default=datetime.utcnow, index=True)
-    user_id = Column(Integer, ForeignKey("users.id"))
-    user_role = Column(String)
-    action_type = Column(String)  # risk_change, signal_update, login, export, ai_generation
-    affected_student_id = Column(String, index=True)
-    details = Column(JSON)  # Store specific action data
 
-    user = relationship("User", backref="audit_trail")
 
 # ============================================================================
 # CANONICAL DATA MODEL - TIME-INDEXED FACT & DIMENSION TABLES

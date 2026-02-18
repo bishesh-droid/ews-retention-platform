@@ -4,7 +4,7 @@ from sqlalchemy.orm import Session
 from datetime import timedelta
 
 from backend.database import User
-from backend.app.api import deps
+from backend.api import deps
 from backend.core import auth
 from backend.schemas.auth import Token, UserOut, UserCreate
 from backend.config import ACCESS_TOKEN_EXPIRE_MINUTES

@@ -3,7 +3,7 @@ from sqlalchemy.orm import Session
 from typing import List
 
 from backend.database import User, AuditLog
-from backend.app.api import deps
+from backend.api import deps
 from backend.schemas.auth import UserOut
 
 router = APIRouter()

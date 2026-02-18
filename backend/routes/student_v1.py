@@ -3,7 +3,7 @@ from typing import List
 from sqlalchemy.orm import Session
 
 from backend.database import Student, Goal, RiskSnapshot
-from backend.app.api import deps
+from backend.api import deps
 from backend.schemas.student import Student as StudentSchema
 
 router = APIRouter()

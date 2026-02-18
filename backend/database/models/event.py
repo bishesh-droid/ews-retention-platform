@@ -29,7 +29,7 @@ class RawEvent(Base):
     timestamp = Column(DateTime, default=datetime.utcnow, index=True)
     
     # Relationship
-    student = relationship("Student", backref="raw_events")
+    student = relationship("Student", back_populates="raw_events")
 
 
 class EngineeredFeatures(Base):
@@ -76,4 +76,4 @@ class EngineeredFeatures(Base):
     avg_response_time_hours = Column(Float)  # Average time to respond
     
     # Relationship
-    student = relationship("Student", backref="engineered_features")
+    student = relationship("Student", back_populates="engineered_features")

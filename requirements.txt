@@ -19,3 +19,4 @@ python-jose[cryptography]
 passlib[bcrypt]
 redis
 fpdf
+anthropic

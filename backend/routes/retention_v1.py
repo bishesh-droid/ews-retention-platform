@@ -3,7 +3,7 @@ from sqlalchemy.orm import Session
 from typing import List
 
 from backend.database import Student, Prediction
-from backend.app.api import deps
+from backend.api import deps
 
 router = APIRouter()
 

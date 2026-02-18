@@ -2,7 +2,7 @@
         EWS RETENTION PLATFORM - COMPLETE BACKEND DOCUMENTATION
 ================================================================================
 
-Last Updated: 2026-02-16 (Integration API data contract updated)
+Last Updated: 2026-02-18 (Services directory fully documented)
 
 ================================================================================
 TABLE OF CONTENTS
@@ -2502,6 +2502,625 @@ backend/
   data/
     sql_app.db                               SQLite database
     labels.csv                               Student labels
+
+
+================================================================================
+15. ROLE-BASED API ROUTES (backend/routes/)
+================================================================================
+
+This second set of route modules (distinct from backend/app/api/routes/) are
+organised around user roles and the new RBAC model introduced with the User
+and AuditLog tables.  They are registered on the main FastAPI app and share
+the /api/v1 prefix.
+
+--------------------------------------------------------------------------------
+15.1  AUTH API (backend/routes/auth.py)
+--------------------------------------------------------------------------------
+
+Prefix: /api/v1/auth
+
+POST /login
+  OAuth2-compatible password login endpoint.
+  Accepts: OAuth2PasswordRequestForm (username, password)
+  Behaviour:
+    - Looks up the User record by username
+    - Verifies the bcrypt password hash via auth.verify_password()
+    - Returns HTTP 401 for wrong credentials, 400 for inactive users
+    - Creates a JWT access token valid for ACCESS_TOKEN_EXPIRE_MINUTES
+  Returns: {access_token, token_type: "bearer"}
+
+POST /register
+  Create a new system user.
+  Request body: UserCreate {username, email, password, role, is_active}
+  Behaviour:
+    - Checks for duplicate username (returns 400 if exists)
+    - Checks for duplicate email (returns 400 if exists)
+    - Hashes the plaintext password with bcrypt
+    - Persists the User record
+  Returns: UserOut (id, username, email, role, is_active, created_at)
+  Note: No role restriction – open registration intended for initial setup.
+
+
+--------------------------------------------------------------------------------
+15.2  ADMIN API (backend/routes/admin_v1.py)
+--------------------------------------------------------------------------------
+
+Prefix: /api/v1/admin
+
+All endpoints require Admin role (via Depends(require_role(["Admin"]))).
+
+GET /users
+  List all system users.
+  Returns: List[UserOut]
+
+GET /audit-logs
+  Retrieve the most recent 100 audit log entries ordered by timestamp DESC.
+  Returns: List[AuditLog] (id, timestamp, user_id, user_role,
+           action_type, affected_student_id, details)
+
+
+--------------------------------------------------------------------------------
+15.3  FACULTY API (backend/routes/faculty_v1.py)
+--------------------------------------------------------------------------------
+
+Prefix: /api/v1/faculty
+
+All endpoints require Faculty role.
+
+GET /students
+  Get students relevant to the current faculty member.
+  Currently returns all students (up to 100) as faculty-student assignment
+  is not yet implemented.
+  Returns: List[Student]
+
+GET /alerts
+  Retrieve recent disengagement alerts for faculty review.
+  Currently returns {"alerts": []} (stub – will integrate with Event engine).
+
+
+--------------------------------------------------------------------------------
+15.4  RETENTION TEAM API (backend/routes/retention_v1.py)
+--------------------------------------------------------------------------------
+
+Prefix: /api/v1/retention
+
+All endpoints require "Retention Team" role.
+
+GET /risk-summary
+  High-level risk summary for the retention team.
+  Returns:
+    high_risk_students: count of Prediction records with risk_score >= 0.7
+    total_active_students: count of active Student records
+
+GET /at-risk-students
+  List top at-risk students ordered by risk_score descending.
+  Query Parameters:
+    limit (int, default 10)
+  Returns: List[Prediction] ordered by risk_score DESC
+
+
+--------------------------------------------------------------------------------
+15.5  ANALYTICS API (backend/routes/analytics.py)
+--------------------------------------------------------------------------------
+
+Prefix: /api/v1
+
+All endpoints require Faculty, Retention Team, or Admin role.
+
+GET /risk/trend/{student_id}
+  Detailed risk trend metrics for a specific student over a time window.
+  Query Parameters:
+    days (int, 1-90, default 30)
+  Delegates to AnalyticsService.get_risk_trends(db, student_id, days)
+
+GET /analytics/top-risk-velocity
+  Students with the highest rate of risk score increase.
+  Query Parameters:
+    limit (int, 1-50, default 10)
+  Delegates to AnalyticsService.get_top_risk_velocity(db, limit)
+
+GET /analytics/kpis
+  Aggregated KPI metrics for dashboard summary cards.
+  Delegates to AnalyticsService.get_kpi_cards(db)
+  Returns: {total_students, at_risk_count, avg_risk_score, intervention_count, ...}
+
+GET /analytics/drill-down
+  Detailed breakdown for a single KPI metric.
+  Query Parameters:
+    metric (str, required) - e.g. "at_risk", "high_risk", "interventions"
+  Delegates to AnalyticsService.get_drill_down(db, metric)
+
+
+--------------------------------------------------------------------------------
+15.6  GOALS API (backend/routes/goals.py)
+--------------------------------------------------------------------------------
+
+Prefix: /api/v1/goals
+
+GET /{student_id}
+  Get all goals for a student.
+  Auth: Student, Faculty, Retention Team, Admin
+  Students can only fetch their own goals (email must match student_id).
+  Returns 403 if a student tries to access another student's goals.
+  Delegates to GoalsService.get_student_goals(db, student_id)
+
+POST /
+  Create a new goal for a student (Faculty / Admin / Retention Team only).
+  Query Parameters:
+    student_id  (str, required)
+    goal_type   (str, required) - "login", "study_hours", "assignment", "attendance"
+    title       (str, required)
+    target_value (float, required)
+    end_date    (datetime, required)
+  Delegates to GoalsService.create_goal(...)
+  Returns: Goal object
+
+POST /{student_id}/sync
+  Manually trigger progress sync for a student's goals.
+  Auth: Faculty, Retention Team, Admin
+  Delegates to GoalsService.update_goal_progress(db, student_id)
+  Returns: {"status": "success"}
+
+
+--------------------------------------------------------------------------------
+15.7  REPORTS / EXPORT API (backend/routes/reports.py)
+--------------------------------------------------------------------------------
+
+Prefix: /api/v1/reports
+
+All endpoints require "Retention Team" or "Admin" role.
+All export operations are logged via ExportService.log_export().
+
+GET /export/students
+  Export the full student list in the requested format.
+  Query Parameters:
+    format (enum: "csv" | "excel" | "pdf", default "csv")
+  Exports: id, name, department for each student.
+  Returns:
+    csv   -> text/csv  (Content-Disposition: attachment; filename=students.csv)
+    excel -> application/vnd.openxmlformats-officedocument.spreadsheetml.sheet
+    pdf   -> application/pdf
+
+GET /export/risk-summary
+  Export a high-level risk summary of all Prediction records.
+  Query Parameters:
+    format (enum: "csv" | "excel" | "pdf", default "csv")
+  Exports: student_id, risk_score, retention_likelihood
+  Returns: {"message": "Export initiated"} (full streaming response in progress)
+
+
+--------------------------------------------------------------------------------
+15.8  STUDENT SELF-SERVICE API (backend/routes/student_v1.py)
+--------------------------------------------------------------------------------
+
+Prefix: /api/v1/student
+
+All endpoints require "Student" role – users see only their own data.
+
+GET /me
+  Return the current student's profile.
+  Looks up Student by current_user.email.
+  Response model: StudentSchema
+
+GET /goals
+  Return the current student's active goals.
+  Queries Goal table filtered by student_id == current_user.email.
+  Returns: List[Goal]
+
+GET /risk-history
+  Return historical risk snapshots for the current student.
+  Queries RiskSnapshot table filtered by student_id == current_user.email.
+  Returns: List[RiskSnapshot] (id, risk_score, velocity, acceleration,
+           engagement_score, timestamp)
+
+
+================================================================================
+16. CORE INFRASTRUCTURE (backend/core/)
+================================================================================
+
+
+--------------------------------------------------------------------------------
+16.1  JWT AUTHENTICATION (backend/core/auth.py)
+--------------------------------------------------------------------------------
+
+Library dependencies: python-jose (JWT), passlib with bcrypt backend.
+
+FUNCTIONS:
+
+create_access_token(subject, expires_delta=None) -> str
+  Creates a signed JWT.
+  Payload: {"sub": str(subject), "exp": utcnow + expires_delta}
+  Uses SECRET_KEY and ALGORITHM from config.py.
+  Default expiry: 15 minutes if expires_delta is not provided.
+
+verify_password(plain_password, hashed_password) -> bool
+  Verifies a plaintext password against a bcrypt hash using passlib.
+
+get_password_hash(password) -> str
+  Hashes a plaintext password with bcrypt.
+
+
+--------------------------------------------------------------------------------
+16.2  REDIS CACHE (backend/core/redis_cache.py)
+--------------------------------------------------------------------------------
+
+Provides optional Redis-backed caching for FastAPI route responses.
+
+Configuration:
+  REDIS_URL              From config.py (e.g. "redis://localhost:6379/0")
+  CACHE_EXPIRE_SECONDS   From config.py (default TTL)
+
+CLASS: RedisCache
+
+__init__()
+  Attempts to connect to Redis via redis.from_url().
+  Sets self.client = None if connection fails (graceful degradation).
+
+get(key) -> Optional[Any]
+  Returns deserialized JSON value for key, or None if absent / Redis unavailable.
+
+set(key, value, expire=CACHE_EXPIRE_SECONDS)
+  Stores JSON-serialized value with TTL.
+
+SINGLETON: cache = RedisCache()
+  A module-level instance ready for import.
+
+DECORATOR: cache_response(key_prefix, expire)
+  Wraps an async FastAPI handler.
+  Cache key: "{key_prefix}:{hash(str(kwargs))}"
+  On cache hit: returns cached dict immediately.
+  On cache miss: calls handler, stores result, returns result.
+  Usage:
+    @cache_response("students_list", expire=300)
+    async def list_students(...):
+        ...
+
+
+================================================================================
+17. LLM ORCHESTRATOR (backend/services/ai/llm_orchestrator.py)
+================================================================================
+
+Class: LLMOrchestrator
+
+The production LLM integration layer that replaces the stub responses in the
+LLM API routes. It grounds all AI outputs in real student/cohort data fetched
+via a RAG (Retrieval-Augmented Generation) engine, then validates responses
+before returning them.
+
+MULTI-PROVIDER SUPPORT:
+  Supports two LLM backends selected by LLM_PROVIDER config value:
+    "gemini"  -> Google Generative AI (google-generativeai package)
+    "claude"  -> Anthropic Claude (anthropic package)
+  Both providers are imported with try/except so either can be absent.
+  Configuration keys used:
+    GEMINI_API_KEY, GEMINI_MODEL (e.g. "gemini-pro")
+    CLAUDE_API_KEY, CLAUDE_MODEL
+
+RAG COMPONENTS (from backend/services/ai/rag_engine):
+  StudentDataRetriever       - Fetches per-student academic context
+  CohortDataRetriever        - Fetches aggregate cohort statistics
+  InstitutionalDataRetriever - Fetches system-wide institutional metrics
+  ContextAssembler           - Formats retrieved data into prompt text
+  GuardrailValidator         - Validates LLM responses against source data
+
+METHODS:
+
+__init__(db: Session)
+  Instantiates retrievers and selects/initialises the LLM client.
+
+_check_llm_available() -> Optional[Dict]
+  Returns an error dict if the selected provider package is not installed
+  or the API key is missing. Returns None if LLM is ready.
+
+explain_risk_change(student_id, time_period) -> Dict
+  Explains why a student's risk score changed.
+  1. Checks LLM availability
+  2. Retrieves detailed student context via StudentDataRetriever
+  3. Builds prompt via _build_risk_explanation_prompt()
+  4. Calls LLM and validates response with GuardrailValidator
+  5. Calculates confidence via _calculate_confidence()
+  Returns: {content, confidence, sources, timestamp, student_id, validation}
+
+generate_student_advice(student_id, question) -> Dict
+  Provides personalised advice answering a student's question.
+  Context depth: "detailed". Prompt built by _build_student_advice_prompt().
+  Returns: {content, confidence, sources, timestamp}
+
+summarize_student_profile(student_id, for_role) -> Dict
+  Generates a faculty/counselor/admin-appropriate student summary.
+  Context depth: "comprehensive". Prompt via _build_faculty_summary_prompt().
+  Returns: {content, confidence, sources, student_id, risk_category}
+
+suggest_interventions(student_id) -> Dict
+  Evidence-based intervention suggestions grounded in student data.
+  Confidence is always "medium" (interventions are inherently prescriptive).
+  Returns: {content, confidence, sources, student_id}
+
+analyze_cohort_patterns(cohort_filters=None) -> Dict
+  Cohort-level pattern analysis for sales/retention teams.
+  Uses CohortDataRetriever. Confidence is always "medium".
+  Returns: {content, confidence, sources, cohort_size}
+
+simulate_what_if(student_id, scenario) -> Dict
+  Natural-language impact analysis for a hypothetical behaviour change.
+  scenario: Dict e.g. {"attendance": 95, "grades": 3.5}
+  Confidence is always "medium" (speculative).
+  Returns: {content, confidence, sources, scenario}
+
+generate_report_narrative(report_type, data) -> Dict
+  Executive-grade narrative for reports.
+  report_type: "executive" | "cohort" | "institutional"
+  Confidence is "high" for narratives grounded in provided data.
+  Returns: {content, confidence, report_type}
+
+PROMPT BUILDERS (private):
+  _build_risk_explanation_prompt(context, time_period) -> str
+  _build_student_advice_prompt(context, question) -> str
+  _build_faculty_summary_prompt(context, for_role) -> str
+  _build_intervention_prompt(context) -> str
+  _build_cohort_analysis_prompt(context) -> str
+  _build_what_if_prompt(context, scenario) -> str
+  _build_report_narrative_prompt(report_type, data) -> str
+
+_calculate_confidence(validation, context) -> str ("high"|"medium"|"low")
+  Downgrades from "high" if fewer than 2 data sources are available.
+  Downgrades to "low" if validation has more than 2 issues.
+
+
+================================================================================
+18. NEW DATABASE MODELS
+================================================================================
+
+The following models were added to support RBAC, audit trails, goals, and
+historical risk tracking. They live in backend/database/models/.
+
+
+--------------------------------------------------------------------------------
+18.1  USER MODEL (backend/database/models/user.py)
+--------------------------------------------------------------------------------
+
+TABLE: users
+
+  id                Integer, PK, auto-increment
+  username          String, unique, indexed
+  email             String, unique, indexed
+  hashed_password   String (bcrypt hash)
+  role              String ("Student" | "Faculty" | "Admin" | "Retention Team")
+  is_active         Boolean, default True
+  is_superuser      Boolean, default False
+  created_at        DateTime, default UTC now
+  RELATIONSHIPS:    audit_trail (-> AuditLog)
+
+
+--------------------------------------------------------------------------------
+18.2  AUDIT LOG MODEL (backend/database/models/audit.py)
+--------------------------------------------------------------------------------
+
+TABLE: audit_logs
+
+  id                Integer, PK, auto-increment
+  timestamp         DateTime, default UTC now, indexed
+  user_id           Integer, FK -> users.id
+  user_role         String (denormalised for fast queries)
+  action_type       String ("risk_change" | "signal_update" | "login" |
+                           "export" | "ai_generation")
+  affected_student_id String, indexed (nullable – system-level actions)
+  details           JSON  (arbitrary action payload)
+  RELATIONSHIPS:    user (-> User)
+
+
+--------------------------------------------------------------------------------
+18.3  RISK SNAPSHOT MODEL (backend/database/models/goals_and_risks.py)
+--------------------------------------------------------------------------------
+
+TABLE: risk_snapshots
+
+  id                Integer, PK, auto-increment
+  student_id        String, FK -> students.id, indexed
+  risk_score        Float (0-100)
+  velocity          Float (weekly point change)
+  acceleration      Float (rate of change of velocity)
+  engagement_score  Float (0-100)
+  timestamp         DateTime, default UTC now, indexed
+  RELATIONSHIPS:    student (-> Student via back_populates="risk_history")
+
+Use case: Enables risk trend charting and risk-velocity calculations.
+
+
+--------------------------------------------------------------------------------
+18.4  GOAL MODEL (backend/database/models/goals_and_risks.py)
+--------------------------------------------------------------------------------
+
+TABLE: goals
+
+  id                Integer, PK, auto-increment
+  student_id        String, FK -> students.id, indexed
+  type              String ("login" | "study_hours" | "assignment" | "attendance")
+  title             String
+  target_value      Float (numeric target, e.g. 80 for 80% attendance)
+  current_value     Float, default 0.0 (synced from engagement data)
+  start_date        DateTime, default UTC now
+  end_date          DateTime
+  status            String ("active" | "completed" | "failed")
+  RELATIONSHIPS:    student (-> Student via back_populates="goals")
+
+
+================================================================================
+19. UPDATED FILE INDEX (COMPLETE)
+================================================================================
+
+backend/
+  main.py                         Application entry point
+  config.py                       Centralized configuration
+  database.py                     Legacy ORM models & DB connection
+
+  api/
+    deps.py                       Auth & DB dependencies
+
+  app/
+    api/
+      deps.py                     Auth & DB dependencies (app namespace)
+      routes/
+        __init__.py               Router aggregation
+        students.py               Student endpoints
+        predictions.py            Prediction endpoints
+        llm.py                    LLM/AI endpoints (stubs)
+        events.py                 Event ingestion endpoints
+        features.py               Feature computation endpoints
+        decisions.py              Decision engine endpoints
+        feedback.py               Feedback tracking endpoints
+        recommendations.py        Rule-based recommendations
+        advisor.py                AI advisor endpoints
+        business.py               Business intelligence endpoints
+        integration.py            External API endpoints
+
+    models/                       Pydantic request/response schemas
+    schemas/                      Alias for models/
+    database/
+      connection.py               DB engine setup
+      session.py                  Session factory
+      queries.py                  Common queries
+
+  services/
+    student_service.py            Student engagement data orchestration (XLSX-backed)
+    feature_engineering.py        Engagement feature derivation from Enrollment records
+    risk_scoring.py               Weighted dropout risk scoring engine (0-100)
+    analytics_service.py          Risk trend & KPI aggregation queries
+    audit_service.py              AuditLog write helper (RBAC action tracking)
+    export_service.py             CSV / Excel / PDF report export (pandas + fpdf)
+    feature_store_service.py      Persists & refreshes EngineeredFeatures snapshots
+    goals_service.py              Student goal CRUD and progress tracking
+    ml_service.py                 Loads joblib models and runs batch predictions
+
+    core/
+      decision_engine.py          Intervention threshold logic
+      data_ingestion.py           XLSX parsing & DB population
+      ews_engine.py               End-to-end EWS pipeline: predict → validate → store
+      feature_service.py          5-signal feature aggregation from raw events
+
+    ai/
+      advisor.py                  Simple Gemini AI integration (legacy)
+      llm_orchestrator.py         Multi-provider LLM with RAG grounding
+      advisor_context.py          Aggregates EWS data into structured LLM prompt context
+      faculty_summary.py          Generates faculty-safe student summaries (no raw scores)
+      hallucination_guard.py      Validates LLM responses against real data; rejects fabrications
+      rag_engine.py               Retrieves authorised institutional data for LLM context
+      study_plan_generator.py     AI-generated personalised weekly study plans
+
+    analytics/
+      intervention_intel.py       Evidence-based intervention recommendations & similarity matching
+      pattern_discovery.py        Institutional-level pattern & blind-spot detection
+
+    infrastructure/
+      audit_logger.py             LLM query/response audit logging (compliance & bias detection)
+      recommender.py              Rule-based intervention recommendation engine
+      scheduler.py                Automated daily/weekly task runner (features, predictions, retraining)
+
+  routes/                         Role-based route modules
+    auth.py                       JWT login & registration
+    admin_v1.py                   Admin-only: user list, audit logs
+    faculty_v1.py                 Faculty: student list, alerts
+    retention_v1.py               Retention team: risk summary, at-risk list
+    analytics.py                  Risk trends, KPIs, drill-down
+    goals.py                      Student goal CRUD
+    reports.py                    Export endpoints (CSV/Excel/PDF)
+    student_v1.py                 Student self-service: profile, goals, history
+    advisor.py                    AI academic advisor
+    business.py                   Business intelligence
+    decisions.py                  Intervention decisions
+    events.py                     Raw event ingestion
+    features.py                   Feature computation
+    feedback.py                   Feedback tracking
+    integration.py                External API
+    llm.py                        LLM AI insights
+    ml_routes.py                  ML-specific routes
+    predictions.py                Risk predictions
+    recommendations.py            Rule-based recommendations
+    students.py                   Student management
+
+  core/
+    auth.py                       JWT creation & password hashing
+    redis_cache.py                Redis cache singleton & decorator
+
+  database/
+    connection.py                 SQLAlchemy Base & engine
+    __init__.py                   Model exports
+    models/
+      student.py                  Student & Enrollment models
+      course.py                   Course model
+      enrollment.py               Enrollment details
+      academic.py                 GradedComponent & ExamRecord models
+      intervention.py             Intervention model
+      prediction.py               Prediction model
+      event.py                    RawEvent model
+      feature.py                  EngineeredFeature model
+      llm.py                      LLM query/insight/explanation models
+      user.py                     User (RBAC) model
+      audit.py                    AuditLog model
+      goals_and_risks.py          Goal & RiskSnapshot models
+
+  ml/
+    config.py                     ML configuration
+    inference/
+      predictor.py                ML model predictions
+      risk_formula.py             Explainable risk formula
+    models/
+      model_registry.py           Model loading & caching
+      saved/                      Trained model files (.joblib)
+    features/
+      feature_engineering.py      ML feature creation
+    training/
+      train.py                    Model training pipeline
+      evaluate.py                 Model evaluation
+    utils/
+      validation_utils.py         Multi-layer validation
+
+  features/
+    signal_computer.py            Base weighted signal class
+    academic_signals.py           Academic performance signal
+    engagement_signals.py         Engagement signal
+    temporal_features.py          Time-based pattern detection
+    behavioral_features.py        Consistency & effort features
+    composite_indices.py          DVI, AII, RSI, RRI indices
+    risk_scorer.py                Advanced risk aggregation
+    advanced_orchestrator.py      Advanced feature orchestration
+
+  ingestion/
+    pipeline.py                   ETL orchestrator
+    validated_pipeline.py         Validation-aware pipeline
+    transformers.py               Type coercion utilities
+    validators.py                 Data validators
+    row_validators.py             Per-row validation
+    file_validator.py             File-level validation
+    schema_manager.py             Schema definitions
+    error_logger.py               Error tracking
+    quarantine.py                 Invalid record handling
+    defaults.py                   Default values
+
+  jobs/
+    feature_store_job.py          Scheduled feature refresh job
+
+  schemas/
+    auth.py                       Token, UserOut, UserCreate schemas
+    common.py                     Shared Pydantic schemas
+    event.py                      Event schemas
+    intervention.py               Intervention schemas
+    llm.py                        LLM request/response schemas
+    prediction.py                 Prediction schemas
+    student.py                    Student schemas
+
+  tests/
+    test_advanced_features.py     Advanced feature tests
+    test_validation_suite.py      Validation tests
+    test_integration_api.py       Integration API tests
+    test_canonical_implementation.py  Canonical model tests
+    test_risk_scoring.py          Risk scoring tests
+    test_risk_validation.py       Risk validation tests
+    test_llm_services.py          LLM service tests
+
+  data/
+    sql_app.db                    SQLite database
+    labels.csv                    Student labels
 
 
 ================================================================================

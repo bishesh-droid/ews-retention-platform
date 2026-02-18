@@ -12,7 +12,7 @@ import json
 # Add project root to sys.path
 sys.path.append(os.path.abspath(os.path.join(os.path.dirname(__file__), '..')))
 
-from models.feature_engineering import load_data_from_db, engineer_features
+from models.feature_engineering import load_data_from_db, engineer_features, FEATURE_COLS
 
 logging.basicConfig(level=logging.INFO, format='%(asctime)s - %(levelname)s - %(message)s')
 logger = logging.getLogger(__name__)
@@ -45,19 +45,13 @@ def train_models():
         train_df, test_df = train_test_split(full_df, test_size=0.3, random_state=42)
 
     # 3. Prepare X and y
-    feature_cols = [
-        'content_completed', 'content_required', 'quiz_completed', 
-        'total_quiz_attempts', 'num_logins', 'total_time_spent_seconds',
-        'discussion_posts_created', 'discussion_posts_read', 'courses_enrolled',
-        'content_completion_rate', 'quiz_completion_rate', 'avg_time_per_course'
-    ]
     target_col = 'is_dropout'
 
-    X_train = train_df[feature_cols]
+    X_train = train_df[FEATURE_COLS]
     y_train = train_df[target_col]
     
     # Align columns in test set
-    X_test = test_df[feature_cols]
+    X_test = test_df[FEATURE_COLS]
     y_test = test_df[target_col]
 
     logger.info(f"Training shapes: X_train={X_train.shape}, y_train={y_train.shape}")
@@ -93,7 +87,7 @@ def train_models():
 
     # 6. Train XGBoost
     logger.info("Training XGBoost...")
-    xgb = XGBClassifier(use_label_encoder=False, eval_metric='logloss', n_estimators=100, max_depth=6, learning_rate=0.1)
+    xgb = XGBClassifier(eval_metric='logloss', n_estimators=100, max_depth=6, learning_rate=0.1)
     xgb.fit(X_train_res, y_train_res)
     
     xgb_pred = xgb.predict(X_test)
@@ -111,7 +105,7 @@ def train_models():
     
     # Save Feature Importance
     feature_importance = {
-        "feature_names": feature_cols,
+        "feature_names": FEATURE_COLS,
         "importances": list(xgb.feature_importances_.astype(float)) # Convert to float for JSON serialization
     }
     with open(os.path.join(MODELS_DIR, "feature_importance.json"), "w") as f:

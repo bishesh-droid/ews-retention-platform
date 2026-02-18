@@ -4,7 +4,7 @@ from typing import List
 from datetime import datetime
 
 from backend.database import User
-from backend.app.api import deps
+from backend.api import deps
 from backend.services.goals_service import GoalsService
 
 router = APIRouter()

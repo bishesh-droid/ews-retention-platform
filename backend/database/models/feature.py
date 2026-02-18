@@ -36,5 +36,5 @@ class StudentResponse(Base):
     recorded_at = Column(DateTime, default=datetime.utcnow)
     
     # Relationships
-    student = relationship("Student", backref="responses")
-    intervention = relationship("Intervention", backref="responses")
+    student = relationship("Student", back_populates="responses")
+    intervention = relationship("Intervention", back_populates="responses")

@@ -1,10 +1,3 @@
-"""
-LLM Service - Core Orchestration Layer
----------------------------------------
-Manages all LLM interactions with role-based prompts,
-confidence scoring, and hallucination prevention.
-"""
-
 import os
 from typing import Dict, List, Optional, Any
 
@@ -15,6 +8,13 @@ except ImportError:
     genai = None
     GENAI_AVAILABLE = False
 
+try:
+    from anthropic import Anthropic
+    ANTHROPIC_AVAILABLE = True
+except ImportError:
+    Anthropic = None
+    ANTHROPIC_AVAILABLE = False
+
 from sqlalchemy.orm import Session
 from backend.services.ai.rag_engine import (
     StudentDataRetriever,
@@ -23,11 +23,14 @@ from backend.services.ai.rag_engine import (
     ContextAssembler,
     GuardrailValidator
 )
+from backend.config import (
+    LLM_PROVIDER, GEMINI_API_KEY, GEMINI_MODEL, CLAUDE_API_KEY, CLAUDE_MODEL,
+    LLM_TEMPERATURE, LLM_MAX_TOKENS
+)
 
-# Configure Gemini
-GEMINI_MODEL = "gemini-pro"
-if GENAI_AVAILABLE and os.getenv("GEMINI_API_KEY"):
-    genai.configure(api_key=os.getenv("GEMINI_API_KEY"))
+# Configure LLMs
+if LLM_PROVIDER == "gemini" and GENAI_AVAILABLE and GEMINI_API_KEY:
+    genai.configure(api_key=GEMINI_API_KEY)
 
 
 class LLMOrchestrator:
@@ -38,24 +41,68 @@ class LLMOrchestrator:
         self.student_retriever = StudentDataRetriever(db)
         self.cohort_retriever = CohortDataRetriever(db)
         self.institutional_retriever = InstitutionalDataRetriever(db)
-        self.model = genai.GenerativeModel(GEMINI_MODEL) if GENAI_AVAILABLE and os.getenv("GEMINI_API_KEY") else None
+        self.llm_provider = LLM_PROVIDER
+        self.llm_model_name = None
+        self.llm_client = None
+
+        if self.llm_provider == "gemini":
+            if GENAI_AVAILABLE and GEMINI_API_KEY:
+                self.llm_model_name = GEMINI_MODEL
+                self.llm_client = genai.GenerativeModel(self.llm_model_name)
+        elif self.llm_provider == "claude":
+            if ANTHROPIC_AVAILABLE and CLAUDE_API_KEY:
+                self.llm_model_name = CLAUDE_MODEL
+                self.llm_client = Anthropic(api_key=CLAUDE_API_KEY)
+
 
     def _check_llm_available(self) -> Optional[Dict[str, Any]]:
         """Check if LLM is available, return error dict if not."""
-        if not GENAI_AVAILABLE:
+        if self.llm_provider == "gemini":
+            if not GENAI_AVAILABLE:
+                return {
+                    "content": "AI service unavailable - google-generativeai package not installed",
+                    "confidence": "low",
+                    "sources": [],
+                    "error": "Module not installed"
+                }
+            if not GEMINI_API_KEY:
+                return {
+                    "content": "AI service unavailable - GEMINI_API_KEY not configured",
+                    "confidence": "low",
+                    "sources": [],
+                    "error": "API key not set"
+                }
+        elif self.llm_provider == "claude":
+            if not ANTHROPIC_AVAILABLE:
+                return {
+                    "content": "AI service unavailable - anthropic package not installed",
+                    "confidence": "low",
+                    "sources": [],
+                    "error": "Module not installed"
+                }
+            if not CLAUDE_API_KEY:
+                return {
+                    "content": "AI service unavailable - CLAUDE_API_KEY not configured",
+                    "confidence": "low",
+                    "sources": [],
+                    "error": "API key not set"
+                }
+        else:
             return {
-                "content": "AI service unavailable - google-generativeai package not installed",
+                "content": f"AI service unavailable - Unsupported LLM provider: {self.llm_provider}",
                 "confidence": "low",
                 "sources": [],
-                "error": "Module not installed"
+                "error": "Unsupported LLM provider"
             }
-        if not os.getenv("GEMINI_API_KEY"):
+        
+        if not self.llm_client:
             return {
-                "content": "AI service unavailable - GEMINI_API_KEY not configured",
+                "content": "AI service unavailable - LLM client not initialized",
                 "confidence": "low",
                 "sources": [],
-                "error": "API key not set"
+                "error": "LLM client not initialized"
             }
+        
         return None
     
     def explain_risk_change(self, student_id: str, time_period: str = "recent") -> Dict[str, Any]:
@@ -185,11 +232,11 @@ class LLMOrchestrator:
                 "sources": []
             }
         
-        prompt = self._build_faculty_summary_prompt(student_context, for_role)
+        system_message_profile_summary = f"You are an AI assistant helping {for_role} quickly understand a student's situation."
+        user_message_profile_summary = self._build_faculty_summary_prompt(student_context, for_role)
         
         try:
-            response = self.model.generate_content(prompt)
-            summary = response.text
+            summary = self._generate_content(system_message_profile_summary, user_message_profile_summary)
             
             validation = GuardrailValidator.validate_response(summary, student_context)
             confidence = self._calculate_confidence(validation, student_context)
@@ -232,11 +279,11 @@ class LLMOrchestrator:
                 "sources": []
             }
         
-        prompt = self._build_intervention_prompt(student_context)
+        system_message_interventions = "You are an intervention specialist suggesting evidence-based actions for at-risk students."
+        user_message_interventions = self._build_intervention_prompt(student_context)
         
         try:
-            response = self.model.generate_content(prompt)
-            suggestions = response.text
+            suggestions = self._generate_content(system_message_interventions, user_message_interventions)
             
             return {
                 "content": suggestions,
@@ -275,11 +322,11 @@ class LLMOrchestrator:
                 "sources": []
             }
         
-        prompt = self._build_cohort_analysis_prompt(cohort_context)
+        system_message_cohort_analysis = "You are a retention analyst translating academic risk into business insights for sales/retention teams."
+        user_message_cohort_analysis = self._build_cohort_analysis_prompt(cohort_context)
         
         try:
-            response = self.model.generate_content(prompt)
-            analysis = response.text
+            analysis = self._generate_content(system_message_cohort_analysis, user_message_cohort_analysis)
             
             return {
                 "content": analysis,
@@ -319,11 +366,11 @@ class LLMOrchestrator:
                 "sources": []
             }
         
-        prompt = self._build_what_if_prompt(student_context, scenario)
+        system_message_what_if = "You are an academic advisor explaining the likely impact of behavior changes."
+        user_message_what_if = self._build_what_if_prompt(student_context, scenario)
         
         try:
-            response = self.model.generate_content(prompt)
-            simulation = response.text
+            simulation = self._generate_content(system_message_what_if, user_message_what_if)
             
             return {
                 "content": simulation,
@@ -354,11 +401,11 @@ class LLMOrchestrator:
         if llm_error:
             return llm_error
 
-        prompt = self._build_report_narrative_prompt(report_type, data)
+        system_message_report_narrative = "You are a report writer creating executive summaries for leadership."
+        user_message_report_narrative = self._build_report_narrative_prompt(report_type, data)
         
         try:
-            response = self.model.generate_content(prompt)
-            narrative = response.text
+            narrative = self._generate_content(system_message_report_narrative, user_message_report_narrative)
             
             return {
                 "content": narrative,

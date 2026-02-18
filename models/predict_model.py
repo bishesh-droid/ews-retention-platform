@@ -9,7 +9,7 @@ import pandas as pd
 # Add project root to sys.path
 sys.path.append(os.path.abspath(os.path.join(os.path.dirname(__file__), '..')))
 
-from models.feature_engineering import load_data_from_db, engineer_features
+from models.feature_engineering import load_data_from_db, engineer_features, FEATURE_COLS
 
 logging.basicConfig(level=logging.INFO)
 logger = logging.getLogger(__name__)
@@ -48,14 +48,7 @@ def predict(student_id):
 
     student_row = features_df[features_df['student_id'] == student_id]
     
-    feature_cols = [
-        'content_completed', 'content_required', 'quiz_completed', 
-        'total_quiz_attempts', 'num_logins', 'total_time_spent_seconds',
-        'discussion_posts_created', 'discussion_posts_read', 'courses_enrolled',
-        'content_completion_rate', 'quiz_completion_rate', 'avg_time_per_course'
-    ]
-    
-    X_input = student_row[feature_cols]
+    X_input = student_row[FEATURE_COLS]
     
     results = {
         "student_id": student_id,

@@ -438,3 +438,531 @@ of items might be present (e.g., student lists), the application employs
 - `frontend/src/services/`: Directory for service modules that handle structured API interactions using `axios` (e.g., `studentService.js`).
 - `frontend/src/utils/`: Utility functions and helper modules, such as `riskScoreValidator.js`.
 - `frontend/tailwind.config.js`: Configuration file for Tailwind CSS.
+
+
+================================================================================
+12. CUSTOM HOOKS (frontend/src/hooks/)
+================================================================================
+
+Directory: frontend/src/hooks/
+
+Custom React hooks encapsulate reusable, stateful logic that would otherwise
+need to be duplicated across multiple components.
+
+
+---
+
+**12.1  useStudentRisk (frontend/src/hooks/useStudentRisk.js)**
+
+The primary hook for all risk-score-related operations.
+
+EXPORTED CONSTANTS:
+
+  RISK_CATEGORIES:
+    CRITICAL  { min: 85, label: 'Critical',   color: '#DC2626' }
+    HIGH      { min: 70, label: 'High Risk',  color: '#F59E0B' }
+    MODERATE  { min: 40, label: 'Moderate',   color: '#FBBF24' }
+    LOW       { min: 0,  label: 'Low Risk',   color: '#10B981' }
+
+HOOK: useStudentRisk(studentId = null)
+
+Reads the global student list from StudentContext and derives risk state
+for the given studentId.
+
+RETURNED VALUES:
+
+  student             The matched student object (or null)
+  riskScore           Validated risk score via validateRiskScore()
+  riskCategory        RISK_CATEGORIES entry for this student
+  riskDistribution    {critical, high, moderate, low} counts across ALL students
+  loading             Boolean – true while an async API call is in progress
+  error               Error message string if an API call failed
+
+METHODS:
+
+  categorizeRisk(score) -> RISK_CATEGORIES entry
+    Classifies any numeric risk score into the appropriate category.
+
+  getStudentsByCategory(category) -> Student[]
+    Filters the global student list to those matching the given category.
+
+  refreshPrediction(id?) -> sanitized prediction dict
+    Fetches a fresh prediction from /api/v1/predictions/{id}.
+    Applies sanitizePrediction() before returning.
+
+  simulateWhatIf(id?, adjustments) -> simulation result dict
+    POSTs to the what-if simulation endpoint with the given scenario.
+
+---
+
+**12.2  useIntervention (frontend/src/hooks/useIntervention.js)**
+
+Hook for all intervention-lifecycle operations.
+
+EXPORTED CONSTANTS:
+
+  INTERVENTION_TYPES:
+    NO_ACTION         { key: 'no_action',          threshold: 0.30 }
+    GENTLE_REMINDER   { key: 'gentle_reminder',     threshold: 0.60, channels: ['email'] }
+    MENTOR_OUTREACH   { key: 'mentor_outreach',     threshold: 0.80, channels: ['email','call'] }
+    URGENT_INTERVENTION { key: 'urgent_intervention', threshold: 1.0,
+                          channels: ['sales_call','whatsapp','incentive'] }
+
+HOOK: useIntervention()
+
+  loading             Boolean – true during any async call
+  error               Error message string
+
+METHODS:
+
+  getRecommendation(studentId) -> recommendation dict
+    Calls GET /api/v1/decisions/{studentId} for the current recommendation.
+
+  executeIntervention(studentId, interventionType, notes) -> result dict
+    Posts an executed intervention via api.executeDecision().
+
+  getInterventionType(riskScore) -> INTERVENTION_TYPES entry
+    Converts a 0-100 risk score to the matching intervention type.
+
+  getPendingInterventions() -> List[pending intervention]
+    Fetches students awaiting intervention from GET /api/v1/decisions/pending/list.
+
+---
+
+**12.3  hooks/index.js**
+
+Re-exports useStudentRisk and useIntervention for cleaner imports.
+
+
+================================================================================
+13. CONSTANTS (frontend/src/constants/)
+================================================================================
+
+**13.1  riskThresholds.js (frontend/src/constants/riskThresholds.js)**
+
+Centralised risk-threshold definitions that mirror the backend config.
+
+RISK_THRESHOLDS (0-100 scale):
+  CRITICAL   85   (>= 85 = Critical)
+  HIGH       70   (>= 70 = High)
+  MODERATE   40   (>= 40 = Moderate)
+  LOW         0   (< 40 = Low)
+
+INTERVENTION_THRESHOLDS (0-100 scale):
+  NO_ACTION       30
+  GENTLE_REMINDER 60
+  MENTOR_OUTREACH 80
+  URGENT          80
+
+RISK_CATEGORIES:
+  Each entry has: key, label, description, color (hex), bgColor (rgba),
+  threshold (from RISK_THRESHOLDS).
+
+HELPER FUNCTIONS:
+
+  getRiskCategory(riskScore) -> RISK_CATEGORIES entry
+    Returns the category object for a given 0-100 score.
+
+  getInterventionType(riskScore) -> string
+    Returns the intervention action key for the given score.
+
+
+================================================================================
+14. BUSINESS SERVICE (frontend/src/services/businessService.js)
+================================================================================
+
+Handles all business-intelligence API interactions using an `axios` instance
+pre-configured with `X-User-Role: admin` for BI endpoints.
+
+Base URL: process.env.REACT_APP_API_URL || "http://localhost:8000/api/v1"
+
+FUNCTIONS:
+
+getRetentionMetrics(period = 'current_semester')
+  GET /business/metrics/retention?period={period}
+  Returns: retention metrics (enrolled, retained, retention_rate, etc.)
+
+getRevenueAtRisk()
+  GET /business/metrics/revenue-at-risk
+  Returns: revenue breakdown by risk tier (critical, high, moderate, low)
+
+getInterventionROI(period = 'quarterly')
+  GET /business/metrics/intervention-roi?period={period}
+  Returns: ROI analysis (total_interventions, revenue_saved, roi_percentage)
+
+getRetentionFunnel(period = 'current_semester')
+  GET /business/funnel?period={period}
+  Returns: funnel stages array with conversion rates
+
+getExecutiveSummary()
+  GET /business/executive-summary
+  Returns: headline_metrics, trends, alerts, recommended_actions
+
+getAllBusinessMetrics()
+  Executes all four metric calls concurrently via Promise.all().
+  Returns: {retention, revenue, roi, funnel, fetchedAt}
+
+
+================================================================================
+15. UTILITY MODULES (frontend/src/utils/)
+================================================================================
+
+**15.1  riskScoreValidator.js**
+  (Documented in Section 6.3 above)
+
+---
+
+**15.2  riskNarrativeGenerator.js**
+
+Generates natural-language descriptions of a student's risk status.
+
+FUNCTIONS:
+
+generateRiskNarrative(student) -> string
+  Full multi-sentence narrative covering risk level, primary factor, and
+  secondary factors (attendance, GPA).
+
+generateShortRiskSummary(student) -> string
+  One-sentence risk summary for list views.
+
+getRiskLevel(score) -> string
+  'Critical' (>85) | 'High' (>75) | 'Medium' (>50) | 'Low' (>25) | 'Very Low'
+
+getSeverityInfo(score) -> {label, description, action, color, icon}
+  Returns display metadata for each severity level.
+
+getFactorExplanation(factor, student) -> string
+  Returns a factor-specific explanation string for Attendance, Academic,
+  Engagement, or Behavioral.
+
+---
+
+**15.3  studentUtils.js**
+
+General-purpose student data helpers. Exports getPrimaryRiskFactor(student)
+and other utilities used throughout the application.
+
+---
+
+**15.4  trendCalculator.js**
+
+Computes trend direction and magnitude from time-series engagement data.
+Used in student timeline and dashboard charts.
+
+---
+
+**15.5  timelineDataGenerator.js**
+
+Generates the data structure expected by StudentTimeline and other
+time-series components from raw enrollment/engagement records.
+
+---
+
+**15.6  recommendationEngine.js**
+
+Client-side rule engine that mirrors the backend recommendations logic.
+Used for instant recommendation previews without a round-trip to the API.
+
+---
+
+**15.7  dataQualityCalculator.js**
+
+Calculates data completeness and quality scores from student/enrollment
+records. Feeds into the DataQualityPanel component.
+
+---
+
+**15.8  csvParser.js**
+
+Lightweight CSV parser used for bulk student data imports on the frontend.
+
+---
+
+**15.9  motionConfig.js**
+
+Framer Motion animation configuration presets (page transitions, card
+reveal animations, spinner configs) shared across components.
+
+
+================================================================================
+16. COMPONENT CATALOG (frontend/src/components/)
+================================================================================
+
+A complete listing of all components by subdirectory.
+
+---
+
+**16.1  common/**
+
+Layout.jsx              Top-level page wrapper providing sidebar + header shell.
+Header.jsx              Top navigation bar with branding and user actions.
+Sidebar.jsx             Collapsible navigation sidebar with route links.
+Skeleton.jsx / .css     Shimmer skeleton loaders for async content.
+Spinner.jsx             Circular loading spinner.
+CollapsiblePanel.jsx    Accordion-style expandable panel.
+ComparisonModal.jsx     Modal for side-by-side student comparisons.
+ConfidenceBadge.jsx     Badge indicating AI response confidence level.
+ChartExplainerTooltip.jsx  Context tooltip explaining chart methodology.
+FacultyAnnotations.jsx  Sticky note-style annotations for faculty.
+TimeFilter.jsx          Date-range picker for filtering analytics.
+TrendIndicator.jsx      Up/down arrow with colour-coded trend display.
+
+---
+
+**16.2  student/**
+
+SignalBreakdown.jsx     Five-bar breakdown of the 5 engagement signals.
+SignalRadarChart.jsx    Recharts radar chart of all 5 signal scores.
+RiskBreakdownChart.jsx  Bar chart showing per-component risk contribution.
+RiskFactorsChart.jsx    Horizontal bar chart of top risk factors.
+MLRiskCard.jsx          Card displaying ML-predicted risk with model info.
+StudentDrawer.jsx       Slide-out drawer with full student details.
+StudentTimeline.jsx     Chronological timeline of student activity events.
+StudentHealthScore.jsx  Composite "health score" gauge with sub-metrics.
+StudentsLikeThis.jsx    List of similar students for pattern comparison.
+VolatilityScore.jsx     Score indicating how erratic the student's behaviour is.
+
+---
+
+**16.3  ai/**
+
+AiInsight.jsx               Generic AI insight card with sources.
+AIRecommendationCard.jsx    Recommendation card from LLM orchestrator.
+AIStudentSummary.jsx        LLM-generated student summary for faculty.
+ExplainableRiskNarrative.jsx Full explainable narrative from risk formula.
+ReportAISummary.jsx         AI-generated executive summary for reports.
+RiskChangeExplainer.jsx     AI explanation of a risk score change.
+RiskExplanation.jsx         Structured risk factor explanation panel.
+WeeklyProgressBrief.jsx     Weekly digest of student progress from LLM.
+WhatIfSimulator.jsx         Interactive what-if scenario simulator UI.
+WhyAmISeeingThis.jsx        Transparency panel explaining model decisions.
+
+---
+
+**16.4  dashboard/**
+
+Charts.jsx                  Composite dashboard chart container.
+FacultySummaryCard.jsx      At-a-glance faculty-facing student card.
+HighestRiskStudentsTable.jsx Ranked table of highest-risk students.
+KpiCard.jsx                 Single KPI metric card with trend arrow.
+PriorityQueuePanel.jsx      Ordered list of students needing attention.
+RiskChangeExplainer.jsx     Dashboard-level risk change summary widget.
+RiskTable.jsx               Full risk score table with filters/sort.
+
+---
+
+**16.5  analytics/**
+
+CohortChurnDiagnostics.jsx  Cohort-level churn probability analysis chart.
+CourseRiskAnalysis.jsx      Per-course risk distribution visualisation.
+DropoutProbabilityFunnel.jsx Step-funnel chart: Enrolled → At Risk → Recovered.
+
+---
+
+**16.6  business/**
+
+CostPerRetainedStudent.jsx  Cost efficiency metric card.
+RetentionFunnel.jsx         Business retention funnel chart.
+RevenueAtRisk.jsx           Revenue-at-risk breakdown by tier.
+RevenueRiskTranslator.jsx   Translates academic risk to dollar impact.
+SalesAcademicAlignment.jsx  Alignment chart between sales and academic goals.
+
+---
+
+**16.7  interventions/**
+
+InterventionCard.jsx / .css Full intervention detail card.
+InterventionEffectiveness.jsx Chart of intervention effectiveness by type.
+InterventionHistoryCard.jsx  Timeline card for past interventions.
+InterventionSuggestions.jsx  AI-suggested intervention list.
+MicroGoalsStreaks.jsx        Student micro-goals progress and streaks display.
+MicroGoalsSuggester.jsx     Form for suggesting new micro-goals.
+Recommendations.jsx         Rule-based recommendations display.
+
+---
+
+**16.8  quality/**
+
+BiasIndicators.jsx          Indicators of potential model bias.
+DataQualityPanel.jsx        Data completeness / quality score panel.
+SystemPatternDetector.jsx   Pattern discovery alerts from the LLM.
+
+
+================================================================================
+17. PAGES CATALOG (frontend/src/pages/)
+================================================================================
+
+Each page corresponds to a route defined in App.js.
+
+Dashboard.jsx          Main overview: KPI cards, risk table, priority queue,
+                       quick charts and at-risk student highlights.
+
+Students.jsx           Paginated, searchable list of all students with risk
+                       scores, engagement trends, and quick-actions.
+
+StudentProfile.jsx     Full profile for a single student: signal breakdown,
+                       radar chart, timeline, intervention history,
+                       AI summary, and what-if simulator.
+
+StudentPortal.jsx      Student self-service view: own risk history, goals,
+                       motivational messages, and study plan.
+
+FacultyTools.jsx       Faculty-specific dashboard: assigned students,
+                       disengagement alerts, and faculty annotations.
+
+RiskFactors.jsx        Deep-dive into risk factor analysis across the cohort:
+                       factor distribution charts and top contributors.
+
+Interventions.jsx      Intervention management: pending queue, history,
+                       effectiveness metrics, and AI suggestions.
+
+Analytics.jsx          Comprehensive analytics: cohort churn diagnostics,
+                       course risk analysis, dropout funnel, and KPI drill-down.
+
+BusinessAnalytics.jsx  Business intelligence: revenue at risk, intervention
+                       ROI, retention funnel, and executive summary.
+
+BusinessIntelligence.jsx  Extended BI view with sales-academic alignment and
+                          cost-per-retained-student metrics.
+
+Insights.jsx           Curated AI insights: pattern discoveries, LLM-generated
+                       institutional insights, and system-wide alerts.
+
+InstitutionalInsights.jsx  Institutional-level reporting: department summaries,
+                           multi-cohort comparisons, and trend analysis.
+
+Reports.jsx            Report generation hub: export students, risk summaries,
+                       and AI-narrated executive reports in CSV/Excel/PDF.
+
+Settings.jsx           Application settings: API configuration, notification
+                       preferences, and data refresh controls.
+
+
+================================================================================
+18. COMPLETE FILE INDEX
+================================================================================
+
+frontend/src/
+  index.js                        React app mount & providers
+  App.js                          Root routing
+  api.js                          Core fetch-based API utilities (with mocks)
+  chartConfig.js                  Global Chart.js registration
+  App.css                         Application-level styles
+  index.css                       Base/reset styles
+  design-system.css               Design tokens (colours, spacing, typography)
+
+  pages/
+    Dashboard.jsx                 Main overview page
+    Students.jsx                  Student list page
+    StudentProfile.jsx            Single student profile page
+    StudentPortal.jsx             Student self-service portal
+    FacultyTools.jsx              Faculty-specific dashboard
+    RiskFactors.jsx               Risk factor deep-dive
+    Interventions.jsx             Intervention management
+    Analytics.jsx                 Comprehensive analytics
+    BusinessAnalytics.jsx         Business intelligence dashboard
+    BusinessIntelligence.jsx      Extended BI view
+    Insights.jsx                  AI insights and pattern discoveries
+    InstitutionalInsights.jsx     Institutional-level reporting
+    Reports.jsx                   Report generation and export
+    Settings.jsx                  Application settings
+
+  components/
+    common/
+      Layout.jsx                  Page wrapper
+      Header.jsx                  Top navigation bar
+      Sidebar.jsx                 Navigation sidebar
+      Skeleton.jsx / .css         Loading skeleton
+      Spinner.jsx                 Loading spinner
+      CollapsiblePanel.jsx        Accordion panel
+      ComparisonModal.jsx         Student comparison modal
+      ConfidenceBadge.jsx         AI confidence badge
+      ChartExplainerTooltip.jsx   Methodology tooltip
+      FacultyAnnotations.jsx      Faculty sticky notes
+      TimeFilter.jsx              Date-range filter
+      TrendIndicator.jsx          Trend arrow indicator
+    student/
+      SignalBreakdown.jsx         5-signal engagement breakdown
+      SignalRadarChart.jsx        Radar chart of signals
+      RiskBreakdownChart.jsx      Per-component risk bar chart
+      RiskFactorsChart.jsx        Top risk factors chart
+      MLRiskCard.jsx              ML prediction card
+      StudentDrawer.jsx           Slide-out student details
+      StudentTimeline.jsx         Activity timeline
+      StudentHealthScore.jsx      Health score gauge
+      StudentsLikeThis.jsx        Similar student list
+      VolatilityScore.jsx         Volatility indicator
+    ai/
+      AiInsight.jsx               Generic AI insight card
+      AIRecommendationCard.jsx    AI recommendation card
+      AIStudentSummary.jsx        LLM student summary
+      ExplainableRiskNarrative.jsx Narrative explanation
+      ReportAISummary.jsx         AI report summary
+      RiskChangeExplainer.jsx     Risk change explanation
+      RiskExplanation.jsx         Risk factor explanation
+      WeeklyProgressBrief.jsx     Weekly digest
+      WhatIfSimulator.jsx         What-if UI
+      WhyAmISeeingThis.jsx        Model transparency panel
+    dashboard/
+      Charts.jsx                  Dashboard chart container
+      FacultySummaryCard.jsx      Faculty student card
+      HighestRiskStudentsTable.jsx Ranked risk table
+      KpiCard.jsx                 KPI metric card
+      PriorityQueuePanel.jsx      Intervention queue
+      RiskChangeExplainer.jsx     Risk change widget
+      RiskTable.jsx               Full risk score table
+    analytics/
+      CohortChurnDiagnostics.jsx  Cohort churn chart
+      CourseRiskAnalysis.jsx      Course risk distribution
+      DropoutProbabilityFunnel.jsx Dropout funnel
+    business/
+      CostPerRetainedStudent.jsx  Cost efficiency card
+      RetentionFunnel.jsx         Retention funnel chart
+      RevenueAtRisk.jsx           Revenue at risk display
+      RevenueRiskTranslator.jsx   Risk-to-revenue translator
+      SalesAcademicAlignment.jsx  Sales-academic alignment
+    interventions/
+      InterventionCard.jsx / .css Full intervention card
+      InterventionEffectiveness.jsx Effectiveness chart
+      InterventionHistoryCard.jsx History timeline card
+      InterventionSuggestions.jsx AI suggestions
+      MicroGoalsStreaks.jsx        Goal streaks display
+      MicroGoalsSuggester.jsx     Goal suggestion form
+      Recommendations.jsx         Rule-based recs
+    quality/
+      BiasIndicators.jsx          Bias indicator panel
+      DataQualityPanel.jsx        Data quality scores
+      SystemPatternDetector.jsx   Pattern alerts
+    SignalBreakdown.css           Shared signal breakdown styles
+    PopupMenu.css                 Popup/dropdown styles
+
+  context/
+    StudentContext.js             Global student data provider
+
+  hooks/
+    index.js                      Hook re-exports
+    useStudentRisk.js             Risk score & categorisation hook
+    useIntervention.js            Intervention lifecycle hook
+
+  services/
+    index.js                      Service re-exports
+    studentService.js             Student API (axios-based)
+    businessService.js            Business Intelligence API (axios-based)
+
+  utils/
+    riskScoreValidator.js         Risk score validation & sanitisation
+    riskNarrativeGenerator.js     Natural-language risk explanations
+    studentUtils.js               General student helpers
+    trendCalculator.js            Trend direction & magnitude
+    timelineDataGenerator.js      Timeline data structure builder
+    recommendationEngine.js       Client-side recommendation rules
+    dataQualityCalculator.js      Data quality scoring
+    csvParser.js                  CSV import parser
+    motionConfig.js               Framer Motion animation presets
+
+  constants/
+    riskThresholds.js             Risk & intervention threshold constants
+
+frontend/
+  tailwind.config.js              Tailwind CSS configuration
+  package.json                    NPM dependencies

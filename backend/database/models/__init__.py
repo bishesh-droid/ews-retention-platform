@@ -12,6 +12,10 @@ from backend.database.models.intervention import Intervention
 from backend.database.models.llm import LLMQuery, LLMInsight, AIExplanation, PatternDiscovery
 from backend.database.models.event import RawEvent, EngineeredFeatures
 from backend.database.models.feature import StudentResponse
+from .user import User
+from .academic import GradedComponent, ExamRecord
+from .goals_and_risks import Goal, RiskSnapshot
+from .audit import AuditLog
 
 __all__ = [
     "Student",
@@ -26,4 +30,10 @@ __all__ = [
     "RawEvent",
     "EngineeredFeatures",
     "StudentResponse",
+    "User",
+    "GradedComponent",
+    "ExamRecord",
+    "Goal",
+    "RiskSnapshot",
+    "AuditLog",
 ]

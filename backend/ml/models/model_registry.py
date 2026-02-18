@@ -72,4 +72,4 @@ class ModelRegistry:
         """List all available model files."""
         if not MODELS_DIR.exists():
             return []
-        return [f.name for f in MODELS_DIR.glob("*.joblib")]
+        return [f.name for f in MODELS_DIR.glob("*.pkl")]

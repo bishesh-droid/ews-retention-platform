@@ -65,8 +65,16 @@ INTERVENTION_COST_PER_STUDENT = float(os.getenv("INTERVENTION_COST", "350.0"))
 TARGET_RETENTION_RATE = float(os.getenv("TARGET_RETENTION_RATE", "0.95"))
 
 # ========== LLM Configuration ==========
+LLM_PROVIDER = os.getenv("LLM_PROVIDER", "gemini") # "gemini" or "claude"
+
+# Gemini Configuration
 GEMINI_API_KEY = os.getenv("GEMINI_API_KEY")
 GEMINI_MODEL = os.getenv("GEMINI_MODEL", "gemini-pro")
+
+# Claude Configuration
+CLAUDE_API_KEY = os.getenv("CLAUDE_API_KEY")
+CLAUDE_MODEL = os.getenv("CLAUDE_MODEL", "claude-3-opus-20240229")
+
 LLM_TEMPERATURE = float(os.getenv("LLM_TEMPERATURE", "0.7"))
 LLM_MAX_TOKENS = int(os.getenv("LLM_MAX_TOKENS", "1024"))
 

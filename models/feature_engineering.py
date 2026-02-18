@@ -16,6 +16,14 @@ except ImportError:
 
 logger = logging.getLogger(__name__)
 
+# Canonical feature column list — import this in train_model.py and predict_model.py
+FEATURE_COLS = [
+    'content_completed', 'content_required', 'quiz_completed',
+    'total_quiz_attempts', 'num_logins', 'total_time_spent_seconds',
+    'discussion_posts_created', 'discussion_posts_read', 'courses_enrolled',
+    'content_completion_rate', 'quiz_completion_rate', 'avg_time_per_course'
+]
+
 def load_data_from_db():
     """
     Loads data from SQLite database and merges relevant tables.
@@ -82,7 +90,7 @@ def engineer_features(raw_df, semester=None):
                  logger.warning(f"Semester column not found! Available: {raw_df.columns}")
                  return pd.DataFrame()
         
-        raw_df = raw_df[raw_df[sem_col] == semester]
+        raw_df = raw_df[raw_df[sem_col] == semester].copy()
         if raw_df.empty:
             logger.warning(f"No data for semester: {semester}")
             return pd.DataFrame()

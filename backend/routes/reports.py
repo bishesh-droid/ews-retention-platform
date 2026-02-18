@@ -4,7 +4,7 @@ from sqlalchemy.orm import Session
 from typing import List
 
 from backend.database import User, Prediction, Student
-from backend.app.api import deps
+from backend.api import deps
 from backend.services.export_service import ExportService
 
 router = APIRouter()
