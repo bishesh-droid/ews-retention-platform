@@ -1,11 +1,11 @@
 # AI-Based Early Warning System (EWS) for Student Retention
 
-[![Build Status](https://img.shields.io/badge/build-passing-brightgreen)]() 
-[![Python](https://img.shields.io/badge/python-3.10%2B-blue)]() 
-[![React](https://img.shields.io/badge/react-18.0-blue)]() 
+[![Python](https://img.shields.io/badge/python-3.10%2B-blue)]()
+[![React](https://img.shields.io/badge/react-18.2%2B-blue)]()
+[![FastAPI](https://img.shields.io/badge/fastapi-0.104%2B-green)]()
 [![License](https://img.shields.io/badge/license-MIT-green)]()
 
-## 📋 Table of Contents
+## Table of Contents
 
 1. [Overview](#overview)
 2. [System Architecture](#system-architecture)
@@ -18,23 +18,24 @@
 9. [Frontend Architecture](#frontend-architecture)
 10. [ML Pipeline](#ml-pipeline)
 11. [Risk Scoring Logic](#risk-scoring-logic)
-12. [Deployment](#deployment)
-13. [Testing](#testing)
-14. [Monitoring & Logging](#monitoring--logging)
-15. [Troubleshooting](#troubleshooting)
-16. [Contributing](#contributing)
+12. [Advanced Features](#advanced-features)
+13. [Deployment](#deployment)
+14. [Testing](#testing)
+15. [Monitoring & Logging](#monitoring--logging)
+16. [Troubleshooting](#troubleshooting)
+17. [Contributing](#contributing)
 
 ---
 
 ## Overview
 
-The EWS Retention Platform is an **AI-driven Early Warning System** designed for EdTech companies and educational institutions to proactively identify at-risk learners and optimize student retention, revenue, and learning outcomes.
+The EWS Retention Platform is an **AI-driven Early Warning System** (v2.0.0) designed for EdTech companies and educational institutions to proactively identify at-risk learners and optimize student retention, revenue, and learning outcomes.
 
 ### Purpose
 
 - **Predict** dropout risk using ML models trained on historical student data
 - **Monitor** student engagement across multiple touchpoints (LMS, attendance, assessments)
-- **Recommend** personalized, AI-powered interventions via Google Gemini
+- **Recommend** personalized, AI-powered interventions via Google Gemini or Anthropic Claude
 - **Decide** automated intervention triggers based on configurable risk thresholds
 - **Track** effectiveness of interventions over time
 
@@ -57,9 +58,9 @@ graph TB
     B -->|Feature Engineering| C[36 ML Features]
     C -->|XGBoost Model| D[Risk Predictions]
     D -->|Signal Aggregation| E[Risk Scores 0-100]
-    E -->|FastAPI| F[Backend API]
+    E -->|FastAPI v2| F[Backend API]
     F -->|REST| G[React Frontend]
-    F -->|RAG Context| H[Google Gemini]
+    F -->|RAG Context| H[Gemini / Claude]
     H -->|AI Advice| G
 ```
 
@@ -109,17 +110,18 @@ graph TB
                      │
                      v
 ┌─────────────────────────────────────────────────────────────┐
-│              FASTAPI BACKEND (40+ Endpoints)                 │
+│              FASTAPI BACKEND v2 (40+ Endpoints)              │
 │  /students | /business | /decisions | /recommendations     │
+│  /auth | /advisor | /llm | /features | /analytics          │
 └────────────────────┬────────────────────────────────────────┘
                      │
                      ├──────────────────┐
                      v                  v
 ┌──────────────────────────┐    ┌─────────────────────────────┐
-│   REACT FRONTEND         │    │   GOOGLE GEMINI (LLM)       │
-│  - 14 Pages              │    │  - RAG-Grounded Advice      │
-│  - 54+ Components        │    │  - Intervention Suggestions │
-│  - Real-time Dashboards  │    │  - Personalized Insights    │
+│   REACT FRONTEND         │    │   LLM LAYER                 │
+│  - 14 Pages              │    │  - Google Gemini (default)  │
+│  - 54+ Components        │    │  - Anthropic Claude (alt.)  │
+│  - Real-time Dashboards  │    │  - RAG-Grounded Advice      │
 └──────────────────────────┘    └─────────────────────────────┘
 ```
 
@@ -130,11 +132,11 @@ graph TB
 ### 1. Behavioral Monitoring
 
 **Data Sources** (5 categories):
-- **🎓 Learning Management System**: Logins, assignments, content views, quiz scores
-- **📹 Live Classes**: Attendance, duration, participation
-- **🌐 Website/App Usage**: Video completion, page clicks, time spent
-- **💬 Communication**: WhatsApp/Email engagement, response times
-- **📊 Marketing Campaigns**: Meta ads, lead sources, conversion tracking
+- **Learning Management System**: Logins, assignments, content views, quiz scores
+- **Live Classes**: Attendance, duration, participation
+- **Website/App Usage**: Video completion, page clicks, time spent
+- **Communication**: WhatsApp/Email engagement, response times
+- **Marketing Campaigns**: Meta ads, lead sources, conversion tracking
 
 **Frequency**: Real-time to daily updates
 
@@ -159,12 +161,15 @@ graph TB
 
 **Risk Thresholds** (configurable via `backend/config.py`):
 
-| Risk Score | Category | Action | Assigned Team | Urgency |
-|------------|----------|--------|---------------|---------|
-| 0-30       | Low      | No action | Self-service | None |
-| 31-50      | Medium   | Gentle reminder | Automated email | Low |
-| 51-75      | High     | Mentor outreach | Academic mentor | Medium |
-| 76-100     | Critical | Urgent intervention | Department head + counselor | High |
+| Risk Probability | Category | Action | Assigned Team | Urgency |
+|------------------|----------|--------|---------------|---------|
+| < 30%            | Low      | No action | Self-service | None |
+| 30–60%           | Medium   | Gentle reminder | Automated email | Low |
+| 60–80%           | High     | Mentor outreach | Academic mentor | Medium |
+| >= 80%           | Critical | Urgent intervention | Sales + WhatsApp | High |
+
+**Intervention Cooldown**: 7 days minimum between interventions per student
+**Risk Spike Override**: Cooldown bypassed if risk increases by > 15 percentage points
 
 **Intervention Channels**:
 - Email (automated templates)
@@ -175,20 +180,23 @@ graph TB
 
 ### 4. AI-Powered Recommendations
 
-**Google Gemini Integration**:
-- **RAG Engine**: Grounds AI responses in student-specific data
-- **Recommendation Types**:
-  - Personalized study plans
-  - Resource suggestions (videos, practice tests)
-  - Communication templates for faculty
-  - Peer mentoring matches
-- **Context Window**: 7-day activity history + risk trends + intervention history
+**Dual LLM Support** (switchable via `LLM_PROVIDER` env var):
+- **Google Gemini** (`gemini-pro`, default): RAG-grounded recommendations
+- **Anthropic Claude** (`claude-3-opus-20240229`, alternative): Drop-in replacement
+
+**Recommendation Types**:
+- Personalized study plans
+- Resource suggestions (videos, practice tests)
+- Communication templates for faculty
+- Peer mentoring matches
+
+**Context Window**: 7-day activity history + risk trends + intervention history
 
 ### 5. Business Intelligence
 
 **Revenue Impact Metrics**:
-- Revenue at Risk: `high_risk_count × AVG_STUDENT_LTV`
-- Retention ROI: Cost of intervention vs. recovered revenue
+- Revenue at Risk: `high_risk_count × AVG_STUDENT_LTV` (default LTV: $12,500)
+- Retention ROI: Cost of intervention ($350/student) vs. recovered revenue
 - Cohort Performance: Comparative analysis by program/batch
 
 **Executive Dashboards**:
@@ -212,9 +220,13 @@ graph TB
 | Class Balancing | imbalanced-learn | 0.11+ | SMOTE oversampling |
 | Data Processing | pandas | 2.1+ | Data manipulation |
 | Validation | Pydantic | 2.0+ | API schema validation |
-| LLM | google-generativeai | latest | Gemini API client |
+| LLM (Primary) | google-generativeai | latest | Gemini API client |
+| LLM (Alternative) | anthropic | latest | Claude API client |
+| Authentication | python-jose + passlib | latest | JWT auth (HS256, 24h TTL) |
+| Caching | redis | latest | Response caching (1h TTL) |
+| PDF Reports | fpdf | latest | Report generation |
 | Model Serialization | joblib | latest | ML model persistence |
-| Scheduling | schedule | latest | Automated task scheduling |
+| Scheduling | schedule | latest | Automated prediction updates |
 | File Upload | python-multipart | latest | Multipart form data handling |
 | Environment | python-dotenv | latest | .env file management |
 | Numerical | numpy | latest | Numerical computations |
@@ -246,11 +258,19 @@ graph TB
 
 ### 1. Data Ingestion Pipeline
 
-**Source**: 10 raw Excel/CSV files (see `data/DATA_MANIFEST.md`)
+**Source**: Excel/CSV files placed in `data/raw/`
+
+**Key Input Files** (configured in `backend/config.py`):
+- `Engagement_Analysis.xlsx`
+- `_Trimester-1 2025 Attendance Quiz-Assignment-Exam 5Jan2025.xlsx`
+- `B.S and M.Sc Live Summary Data C-1, Trimester 1.xlsx`
+- `Learner usage week 3.xlsx`
+- `graded quiz 1 10 feb complete.xlsx`
+- `B.S and M.Sc Summary Data Trimester 2.xlsx`
 
 **Process Flow**:
 ```
-Raw File (.xlsx) 
+Raw File (.xlsx)
     → File Validator (schema check)
     → Row Validator (data quality checks)
     → [Pass] → Star Schema DB
@@ -271,6 +291,8 @@ Raw File (.xlsx)
 - Original data preserved for manual review
 
 ### 2. Star Schema Database
+
+**Database location**: `backend/data/sql_app.db`
 
 **Dimension Tables**:
 - `dim_student`: Student master (id, name, email, department, program)
@@ -313,7 +335,7 @@ absrate_trend_5_7 = (absrate7 - absrate5) / 2  # Linear slope
 
 **5 Signal Groups** → Aggregated into risk score
 
-**Example: Academic Signal** (see `backend/ml/inference/predictor.py:121-127`):
+**Example: Academic Signal** (see `backend/ml/inference/predictor.py`):
 ```python
 academic_signal_score = weighted_avg([
     quiz_completion_rate,
@@ -353,9 +375,9 @@ risk_score = max(0.0, min(100.0, risk_score))  # Clamp
 assert 0 <= risk_score <= 100
 ```
 
-**Output**: 
+**Output**:
 - `risk_score`: 0-100 percentage (75.3 = 75.3% dropout risk)
-- `risk_level`: "Low" (0-30), "Medium" (31-50), "High" (51-75), "Critical" (76-100)
+- `risk_level`: "Low" (<30%), "Medium" (30-60%), "High" (60-80%), "Critical" (>=80%)
 - `confidence`: Model confidence (0-1)
 
 ---
@@ -368,6 +390,7 @@ assert 0 <= risk_score <= 100
 - **Node.js**: 18.0 or higher
 - **npm**: 9.0 or higher
 - **Git**: For version control
+- **Redis**: Optional (for caching; falls back gracefully if unavailable)
 
 ### Option 1: Docker (Recommended)
 
@@ -378,7 +401,7 @@ cd ews-retention-platform
 
 # 2. Create environment file
 cp .env.example .env
-# Edit .env with your Google Gemini API key
+# Edit .env with your API keys
 
 # 3. Build and run
 docker-compose up -d
@@ -404,15 +427,12 @@ source venv/bin/activate  # On Windows: venv\Scripts\activate
 # 3. Install dependencies
 pip install -r requirements.txt
 
-# 4. Set environment variables
-export GOOGLE_API_KEY="your-gemini-api-key"
-export DATABASE_URL="sqlite:///./sql_app.db"
+# 4. Set environment variables (see Configuration section)
+cp .env.example .env
+# Edit .env with your credentials
 
-# 5. Run database migrations (if applicable)
-# python -m alembic upgrade head
-
-# 6. Start backend server
-uvicorn backend.app.main:app --reload --host 0.0.0.0 --port 8000
+# 5. Start backend server
+uvicorn backend.main:app --reload --host 0.0.0.0 --port 8000
 ```
 
 #### Frontend Setup
@@ -439,12 +459,13 @@ npm start
 # 1. Place raw data files in data/raw/
 cp your-data-files/*.xlsx data/raw/
 
-# 2. Run ingestion pipeline
+# 2. Data is ingested automatically on backend startup
+# Or trigger manually:
 cd backend
-python -m backend.ingestion.pipeline
+python -m backend.services.core.data_ingestion
 
 # 3. Verify data loaded
-sqlite3 sql_app.db "SELECT COUNT(*) FROM dim_student;"
+sqlite3 backend/data/sql_app.db "SELECT COUNT(*) FROM dim_student;"
 ```
 
 ---
@@ -453,29 +474,49 @@ sqlite3 sql_app.db "SELECT COUNT(*) FROM dim_student;"
 
 ### Environment Variables
 
-Create `.env` file in project root:
+Create a `.env` file in the project root:
 
 ```bash
-# === Google Gemini API ===
-GOOGLE_API_KEY=your-api-key-here
+# === LLM Provider ===
+# Choose: "gemini" (default) or "claude"
+LLM_PROVIDER=gemini
+
+# Google Gemini
+GEMINI_API_KEY=your-gemini-api-key
+GEMINI_MODEL=gemini-pro
+
+# Anthropic Claude (alternative)
+CLAUDE_API_KEY=your-claude-api-key
+CLAUDE_MODEL=claude-3-opus-20240229
+
+LLM_TEMPERATURE=0.7
+LLM_MAX_TOKENS=1024
 
 # === Database ===
-DATABASE_URL=sqlite:///./sql_app.db
+DATABASE_URL=sqlite:///./backend/data/sql_app.db
+
+# === Security ===
+SECRET_KEY=your-secret-key-change-in-production
+ACCESS_TOKEN_EXPIRE_MINUTES=1440  # 24 hours
+
+# === Redis (optional) ===
+REDIS_URL=redis://localhost:6379/0
+CACHE_EXPIRE_SECONDS=3600
 
 # === ML Model ===
-MODEL_PATH=./backend/ml/models/xgboost_dropout_model.pkl
-DEFAULT_MODEL_NAME=xgboost_v2
+MODEL_TYPE=xgboost
+MODEL_VERSION=v1.0
 
-# === Risk Thresholds ===
-RISK_THRESHOLD_LOW=30.0
-RISK_THRESHOLD_MEDIUM=50.0
-RISK_THRESHOLD_HIGH=75.0
+# === Risk Thresholds (probabilities 0-1) ===
+THRESHOLD_NO_ACTION=0.30
+THRESHOLD_GENTLE=0.60
+THRESHOLD_MENTOR=0.80
+RISK_THRESHOLD_HIGH=0.7
+RISK_THRESHOLD_MEDIUM=0.4
 
-# === Intervention Triggers ===
-INTERVENTION_NO_ACTION=30.0
-INTERVENTION_GENTLE_REMINDER=50.0
-INTERVENTION_MENTOR_OUTREACH=75.0
-INTERVENTION_URGENT=100.0
+# === Intervention Settings ===
+INTERVENTION_COOLDOWN_DAYS=7
+RISK_SPIKE_THRESHOLD=0.15
 
 # === Signal Weights ===
 WEIGHT_ACADEMIC=0.30
@@ -485,17 +526,35 @@ WEIGHT_INTENT=0.15
 WEIGHT_RESPONSIVENESS=0.10
 
 # === Business Metrics ===
-AVERAGE_STUDENT_LTV=50000.0  # Lifetime value in USD
-COHORT_SIZE_TARGET=1000
+AVERAGE_STUDENT_LTV=12500.0
+TUITION_PER_SEMESTER=6250.0
+INTERVENTION_COST=350.0
+TARGET_RETENTION_RATE=0.95
+
+# === API ===
+API_HOST=0.0.0.0
+API_PORT=8000
+CORS_ORIGINS=http://localhost:3000
+
+# === Integration ===
+INTEGRATION_API_KEY=ews-integration-dev-key
+AI_ADVISOR_ORIGIN=http://localhost:8001
 
 # === Frontend ===
 REACT_APP_API_URL=http://localhost:8000/api/v1
+
+# === Scheduler ===
+SCHEDULER_ENABLED=true
+PREDICTION_UPDATE_INTERVAL=3600  # seconds
+
+# === Logging ===
+LOG_LEVEL=INFO
 ```
 
 ### Configuration Files
 
 1. **`backend/config.py`**: Centralized backend configuration
-2. **`frontend/src/config.js`**: Frontend constants
+2. **`frontend/src/config`**: Frontend constants directory
 3. **`data/DATA_MANIFEST.md`**: Data file catalog and validation rules
 
 ---
@@ -510,9 +569,17 @@ http://localhost:8000/api/v1
 
 ### Authentication
 
-Currently no authentication required. For production, implement:
-- JWT tokens via `/auth/login`
-- API key authentication for external integrations
+JWT-based authentication is implemented using `python-jose` and `passlib`.
+
+- **Login**: `POST /auth/login` → returns access token
+- **Token lifetime**: 24 hours (configurable via `ACCESS_TOKEN_EXPIRE_MINUTES`)
+- **Algorithm**: HS256
+
+For production deployments, set a strong `SECRET_KEY` environment variable.
+
+### Rate Limiting
+
+Built-in IP-based rate limiting: **100 requests per minute** per client IP. Exceeding the limit returns `HTTP 429 Too Many Requests`.
 
 ### Endpoints
 
@@ -525,10 +592,9 @@ Retrieve paginated list of students with risk scores.
 **Query Parameters**:
 - `skip` (int, default=0): Offset for pagination
 - `limit` (int, default=50, max=2000): Page size
-- `sort_by` (str, default="risk_score"): Sort field (risk_score, id, name, department)
+- `sort_by` (str, default="risk_score"): Sort field
 - `order` (str, default="desc"): Sort order (asc, desc)
-- `risk_min` (float, optional): Min risk score filter (0-100)
-- `risk_max` (float, optional): Max risk score filter (0-100)
+- `risk_min` / `risk_max` (float, optional): Risk score filter (0-100)
 
 **Response** (200 OK):
 ```json
@@ -541,7 +607,6 @@ Retrieve paginated list of students with risk scores.
       "department": "Engineering",
       "risk_score": 75.3,
       "risk_level": "high",
-      "risk_category": "high",
       "engagement_score": 24.7,
       "signal_breakdown": {
         "academic_signal_score": 0.68,
@@ -550,12 +615,8 @@ Retrieve paginated list of students with risk scores.
         "intent_signal_score": 0.55,
         "responsiveness_signal_score": 0.60
       },
-      "top_risk_factors": [
-        "Low engagement score",
-        "Declining attendance trend"
-      ],
-      "prediction_available": true,
-      "prediction_error": false
+      "top_risk_factors": ["Low engagement score", "Declining attendance trend"],
+      "prediction_available": true
     }
   ],
   "total": 1000,
@@ -566,302 +627,68 @@ Retrieve paginated list of students with risk scores.
 
 ##### GET `/students/{student_id}`
 
-Retrieve single student details.
-
-**Response** (200 OK):
-```json
-{
-  "id": "student@example.com",
-  "risk_score": 75.3,
-  "risk_level": "high",
-  "signal_breakdown": { ... },
-  "enrollment_data": [ ... ],
-  "intervention_history": [ ... ]
-}
-```
+Retrieve single student details including intervention history.
 
 ##### GET `/students/at-risk`
 
-Get students above risk threshold.
-
-**Query Parameters**:
-- `threshold` (float, default=70.0): Risk score threshold (0-100)
-
-**Response** (200 OK):
-```json
-{
-  "at_risk_students": [ ... ],
-  "count": 245,
-  "threshold": 70.0
-}
-```
+Get students above a risk threshold (default: 70.0).
 
 ##### GET `/students/overview`
 
-Dashboard summary statistics.
-
-**Response** (200 OK):
-```json
-{
-  "total_students": 5000,
-  "average_risk_score": 45.2,
-  "at_risk_count": 350,
-  "critical_count": 120,
-  "engagement_average": 67.8
-}
-```
+Dashboard summary statistics (total students, average risk, at-risk count, etc.)
 
 #### Business Intelligence APIs
 
-##### GET `/business/metrics/revenue-at-risk`
-
-Calculate revenue impact of at-risk students.
-
-**Response** (200 OK):
-```json
-{
-  "revenue_at_risk": 17500000.0,
-  "high_risk_count": 350,
-  "avg_student_ltv": 50000.0,
-  "retention_rate": 93.0
-}
-```
-
-##### GET `/business/cohort-analysis`
-
-Comparative cohort performance.
-
-**Response** (200 OK):
-```json
-{
-  "cohorts": [
-    {
-      "name": "2024-Fall",
-      "size": 1200,
-      "avg_risk": 42.5,
-      "retention_rate": 95.0
-    }
-  ]
-}
-```
+- `GET /business/metrics/revenue-at-risk` — Revenue impact of at-risk students
+- `GET /business/cohort-analysis` — Comparative cohort performance
 
 #### Decision APIs
 
-##### GET `/decisions/interventions/{student_id}`
-
-Get intervention recommendation for student.
-
-**Response** (200 OK):
-```json
-{
-  "student_id": "student@example.com",
-  "risk_score": 75.3,
-  "threshold_category": "high",
-  "action_type": "mentor_outreach",
-  "channels": ["email", "whatsapp", "in_app"],
-  "assigned_team": "academic_mentor",
-  "priority": "high",
-  "urgency": "medium",
-  "description": "Schedule 1-on-1 meeting with academic mentor within 48 hours"
-}
-```
+- `GET /decisions/interventions/{student_id}` — Intervention recommendation for a student
 
 #### AI Recommendation APIs
 
-##### POST `/recommendations/ai-advice`
-
-Get Gemini-powered personalized recommendations.
-
-**Request Body**:
-```json
-{
-  "student_id": "student@example.com",
-  "context": "struggling_with_assignments"
-}
-```
-
-**Response** (200 OK):
-```json
-{
-  "advice": "Based on John's recent performance...",
-  "recommended_actions": [
-    "Review foundational concepts in Module 3",
-    "Attend tutoring session on Friday 3 PM"
-  ],
-  "resources": [
-    {"title": "Math Fundamentals Video", "url": "..."}
-  ]
-}
-```
+- `POST /recommendations/ai-advice` — Gemini/Claude-powered personalized recommendations
 
 #### Advanced Features APIs
 
-##### GET `/features/advanced/{student_id}`
-
-Compute all 36+ advanced retention features for a student.
-
-**Query Parameters**:
-- `include_cohort` (bool, default=false): Include cohort-normalized features (faculty-only)
-- `cohort_id` (str, optional): Cohort identifier for normalization
-
-**Response** (200 OK):
-```json
-{
-  "student_id": "student@example.com",
-  "computation_timestamp": "2026-02-12T13:20:00",
-  "temporal_features": {
-    "engagement_decay_rate": {"value": 0.15, "risk_level": "medium"},
-    "academic_grade_trend_slope": {"value": -0.05, "risk_level": "high"}
-  },
-  "consistency_features": {
-    "login_regularity_score": {"value": 0.72, "risk_level": "low"}
-  },
-  "composite_indices": {
-    "retention_risk_index": {"score": 68.5, "category": "high"},
-    "disengagement_velocity_index": {"score": 45.2, "category": "medium"}
-  },
-  "summary": {
-    "total_features_computed": 33,
-    "high_risk_signals": 5,
-    "medium_risk_signals": 12,
-    "overall_risk_assessment": "medium"
-  }
-}
-```
-
-##### GET `/features/risk-summary/{student_id}`
-
-Get high-level risk summary only (faster, for dashboard display).
-
-**Response** (200 OK):
-```json
-{
-  "retention_risk_index": {...},
-  "key_risk_factors": ["Rapid engagement decline", "Irregular study routine"],
-  "timestamp": "2026-02-12T13:20:00"
-}
-```
+- `GET /features/advanced/{student_id}` — Compute 36+ advanced retention features
+- `GET /features/risk-summary/{student_id}` — High-level risk summary for dashboard display
 
 #### AI Academic Advisor APIs
 
-##### POST `/advisor/study-plan/{student_id}`
+- `POST /advisor/study-plan/{student_id}` — Generate personalized 4-week study plan
+- `POST /advisor/faculty-summary/{student_id}` — Faculty-appropriate student summary with talking points
+- `GET /advisor/context/{student_id}` — Advisor context and academic history
+- `POST /advisor/motivational-message/{student_id}` — Generate motivational message by risk level
 
-Generate personalized 4-week study plan (stubbed implementation).
+#### LLM APIs
 
-**Request Body** (optional):
-```json
-{
-  "preferences": {
-    "focus_area": "content_completion",
-    "available_hours_per_week": 15
-  }
-}
-```
+- `POST /llm/explain-risk-change` — Explain why a student's risk score changed
+- `POST /llm/student-advice` — Personalized advice for a student
+- `POST /llm/intervention-suggestions` — AI-powered intervention recommendations
+- `GET /llm/prioritize-students` — Priority queue of students needing intervention
+- `GET /llm/similar-students/{student_id}` — Find students with similar risk profiles
+- `POST /llm/what-if-simulation` — Simulate impact of interventions
+- `GET /llm/weekly-brief/{student_id}` — Weekly academic progress brief
 
-**Response** (200 OK):
-```json
-{
-  "success": true,
-  "student_id": "student@example.com",
-  "plan_duration_weeks": 4,
-  "plan": {
-    "weeks": [
-      {
-        "week": 1,
-        "focus": "content completion",
-        "goals": ["Complete 6 content modules", "Attempt 1 practice quiz"],
-        "estimated_hours": 10
-      }
-    ]
-  }
-}
-```
+#### Analytics APIs
 
-##### POST `/advisor/faculty-summary/{student_id}`
+- `GET /analytics/*` — Engagement trends, cohort analytics, signal distributions
 
-Generate faculty-appropriate student summary with talking points.
+#### Additional APIs
 
-**Query Parameters**:
-- `include_talking_points` (bool, default=true)
-
-**Response** (200 OK):
-```json
-{
-  "success": true,
-  "summary": {
-    "overview": "Student is enrolled in 4 courses...",
-    "engagement_level": "declining",
-    "key_concern": "Low content completion",
-    "talking_points": [
-      "Content completion is low - ask about study schedule challenges"
-    ]
-  }
-}
-```
-
-##### GET `/advisor/context/{student_id}`
-
-Retrieve advisor context including risk assessment and academic history.
-
-##### POST `/advisor/motivational-message/{student_id}`
-
-Generate motivational message based on student's risk level.
-
-**Query Parameters**:
-- `tone` (str, default="encouraging"): Message tone (encouraging, celebratory)
-
-#### LLM-Powered APIs
-
-##### POST `/llm/explain-risk-change`
-
-Explain why a student's risk score changed (stubbed LLM integration).
-
-**Request Body**:
-```json
-{
-  "student_id": "student@example.com",
-  "time_period": "recent"
-}
-```
-
-##### POST `/llm/student-advice`
-
-Get personalized advice for a student.
-
-##### POST `/llm/intervention-suggestions`
-
-Get AI-powered intervention recommendations.
-
-##### GET `/llm/prioritize-students`
-
-Get priority queue of students needing intervention.
-
-**Query Parameters**:
-- `limit` (int, default=20, max=100): Number of students to return
-
-##### GET `/llm/similar-students/{student_id}`
-
-Find students with similar risk profiles (for peer mentoring).
-
-##### POST `/llm/what-if-simulation`
-
-Run what-if scenarios to estimate impact of interventions.
-
-##### GET `/llm/weekly-brief/{student_id}`
-
-Generate weekly academic progress brief.
-
-#### Event Tracking APIs
-
-Endpoints available at `/events/*` for tracking student engagement events and behavioral data.
-
-#### Feedback APIs
-
-Endpoints available at `/feedback/*` for collecting and managing intervention feedback.
+- `GET/POST /events/*` — Student engagement event tracking
+- `GET/POST /feedback/*` — Intervention feedback collection
+- `GET /reports/*` — Report generation (PDF/CSV export)
+- `GET/POST /goals/*` — Student goal tracking
+- `GET /ml/*` — ML model status and retraining endpoints
+- `GET /predictions/*` — Raw prediction outputs
 
 ### OpenAPI Documentation
 
-Access interactive API docs: `http://localhost:8000/docs`
+Interactive API docs: `http://localhost:8000/docs`
+ReDoc: `http://localhost:8000/redoc`
 
 ---
 
@@ -877,6 +704,7 @@ Access interactive API docs: `http://localhost:8000/docs`
 | Student Portal | `/student-portal` | Student-facing self-service dashboard |
 | Faculty Tools | `/faculty-tools` | Faculty-specific interventions, rosters |
 | Insights | `/insights` | Analytics and deep-dive charts |
+| Analytics | `/analytics` | Engagement and trend analytics |
 | Business Analytics | `/business-analytics` | Revenue metrics, cohort analysis |
 | Business Intelligence | (Component) | Business intelligence components |
 | Institutional Insights | (Component) | System-wide insights |
@@ -918,31 +746,24 @@ App
 
 **Global State** (via Context API):
 - `StudentContext`: Cached student data, filters
-- `AuthContext`: User authentication (if enabled)
+- `AuthContext`: User authentication
 - `ThemeContext`: Dark/light mode toggle
 
-**Local State** (component-level):
-- Form inputs, modal visibility, sort/filter states
+**Local State**: Form inputs, modal visibility, sort/filter states
 
 ### Data Display Guidelines
 
-**✅ CRITICAL RULE**: Frontend displays backend data AS-IS, **NEVER** recomputes metrics
+**CRITICAL RULE**: Frontend displays backend data AS-IS, **NEVER** recomputes metrics.
 
-**Examples**:
 ```javascript
-// ✅ CORRECT: Use backend risk_score directly
+// CORRECT: Use backend risk_score directly
 <div>{student.risk_score.toFixed(1)}%</div>
 
-// ❌ WRONG: Do NOT recalculate
+// WRONG: Do NOT recalculate
 <div>{(100 - student.engagement).toFixed(1)}%</div>
 
-// ✅ CORRECT: Use backend signal_breakdown
+// CORRECT: Use backend signal_breakdown
 <SignalChart data={student.signal_breakdown} />
-
-// ❌ WRONG: Do NOT derive signals from raw scores
-const signals = {
-  academic: student.quiz_score / 100  // NEVER DO THIS
-};
 ```
 
 ---
@@ -951,36 +772,37 @@ const signals = {
 
 ### Model Training
 
-**Script**: `backend/ml/training/train.py`
+**Script**: `models/train_model.py`
 
 **Process**:
 1. Load historical data (7 years)
-2. Engineer 36 features
+2. Engineer 36 features (`models/feature_engineering.py`)
 3. Handle class imbalance with SMOTE
 4. Train XGBoost + RandomForest ensemble
 5. Evaluate with stratified K-fold CV
-6. Save model to `backend/ml/models/`
+6. Save model to `models/saved_models/`
 
 **Training Command**:
 ```bash
-cd backend
-python -m backend.ml.training.train --data data/historical_students.csv
+python models/train_model.py
 ```
 
-**Model Versioning**:
+**Saved Models**:
 ```
-backend/ml/models/
-├── xgboost_v1.pkl
-├── xgboost_v2.pkl  # Current
-└── randomforest_v1.pkl  # Fallback
+models/saved_models/
+├── xgboost_model.pkl    # Primary model
+└── random_forest.pkl    # Fallback model
 ```
+
+**Model loader**: `models/model_loader.py`
+**Prediction script**: `models/predict_model.py`
 
 ### Prediction Flow
 
 ```
 Student Data
     ↓
-Feature Engineering (create_features)
+Feature Engineering (feature_engineering.py)
     ↓
 Model Inference (model.predict_proba)
     ↓
@@ -993,8 +815,6 @@ Validation & Sanitization
 Final Result {risk_score, signal_breakdown, top_risk_factors}
 ```
 
-**Code**: `backend/ml/inference/predictor.py:predict_risk()`
-
 ### Model Evaluation Metrics
 
 | Metric | Value | Threshold |
@@ -1004,128 +824,54 @@ Final Result {risk_score, signal_breakdown, top_risk_factors}
 | Recall | 0.79 | >0.70 |
 | F1-Score | 0.80 | >0.75 |
 
-**Confusion Matrix** (validation set):
-```
-              Predicted
-           Retain | Dropout
-Actual ──────────┼─────────
-Retain     | 850  |  150
-Dropout    |  95  |  405
-```
-
 ---
 
 ## Advanced Features
 
-The platform includes an **Advanced Feature Orchestrator** that computes 36+ sophisticated retention prediction features across 7 categories, providing deep insights beyond the standard ML model.
+The platform includes an **Advanced Feature Orchestrator** (`backend/features/advanced_orchestrator.py`) that computes 36+ sophisticated retention prediction features across 8 categories.
 
-### Feature Orchestrator
-
-**Module**: `backend/features/advanced_orchestrator.py`
-
-The Advanced Feature Orchestrator aggregates signals from multiple dimensions to create a comprehensive student risk profile. These features are designed to capture subtle disengagement patterns and provide explainable insights for interventions.
-
-#### Feature Categories
+### Feature Categories
 
 **1. Temporal & Trend Features** (6 features)
-- **Engagement decay rate**: Velocity of engagement decline over time
-- **Academic grade trend slope**: Trajectory of academic performance
-- **Longest inactivity period**: Detection of concerning gaps in activity
-- Session frequency patterns, content progression velocity
+- Engagement decay rate, academic grade trend slope, longest inactivity period
 
 **2. Consistency & Habits** (5 features)
-- **Login regularity score**: Predictability of study routine
-- **Study streak tracking**: Consecutive days of active engagement
-- **Behavioral stability metrics**: Variance in daily/weekly patterns
-- Attendance consistency, assignment completion rhythm
+- Login regularity score, study streak tracking, behavioral stability metrics
 
 **3. Effort-Outcome Mismatch** (4 features)
-- **Time investment vs. performance correlation**: Efficiency indicators
-- Hours logged vs. grade outcomes
-- Content consumption vs. comprehension scores
-- Practice attempts vs. exam performance gap
+- Time investment vs. performance correlation, content consumption vs. comprehension scores
 
 **4. Engagement Depth** (4 features)
-- **Content interaction quality**: Beyond login counts
-- **Passive vs. active engagement ratio**: Viewing vs. participating
-- Discussion contribution depth
-- Resource utilization patterns
+- Content interaction quality, passive vs. active engagement ratio
 
 **5. Intent & Commitment** (3 features)
-- **Goal-setting behavior**: Forward-looking indicators
-- **Course progression patterns**: Completion trajectory
-- Voluntary engagement signals (office hours, extra resources)
+- Goal-setting behavior, course progression patterns, voluntary engagement signals
 
 **6. Responsiveness** (3 features)
-- **Communication response times**: Faculty/mentor message replies
-- **Ignored escalation tracking**: Unresponded urgent messages
-- Support ticket engagement
+- Communication response times, ignored escalation tracking, support ticket engagement
 
-**7. Cohort Normalization** (4 features)
-- **Peer-relative performance** (faculty-only, privacy-protected)
-- Comparative engagement metrics within same cohort/trimester
-- Standardized z-scores for fair comparison
-- Note: Not shown to students to prevent social comparison anxiety
+**7. Cohort Normalization** (4 features, faculty-only)
+- Peer-relative performance metrics (privacy-protected, not shown to students)
 
 **8. Composite Indices** (4 strategic indices)
-
-High-level aggregations for dashboard display:
-
 - **Retention Risk Index (RRI)**: Overall dropout probability (0-100)
 - **Disengagement Velocity Index (DVI)**: Rate of engagement decline
 - **Academic Instability Index (AII)**: Grade volatility and trend severity
 - **Routine Strength Index (RSI)**: Study habit consistency score
 
-### Usage Example
-
-```python
-from backend.features.advanced_orchestrator import compute_advanced_features
-
-# Compute all features for a student
-features = compute_advanced_features(db, 'student@example.com', cohort_id='T2_2026')
-
-# Access specific categories
-temporal = features['temporal_features']
-grade_trend = temporal['academic_grade_trend_slope']
-
-# Access composite indices
-rri = features['composite_indices']['retention_risk_index']
-dvi = features['composite_indices']['disengagement_velocity_index']
-
-# Get risk summary for dashboard
-from backend.features.advanced_orchestrator import AdvancedFeatureOrchestrator
-orchestrator = AdvancedFeatureOrchestrator()
-summary = orchestrator.compute_risk_summary(db, 'student@example.com')
-
-# Output:
-# {
-#   'retention_risk_index': {...},
-#   'key_risk_factors': ['Rapid engagement decline', 'Irregular study routine'],
-#   'timestamp': '2026-02-12T...'
-# }
-```
-
 ### Privacy & Ethics
 
-> [!WARNING]
-> **Cohort normalization features** are faculty-only and not shown to students. This prevents:
-> - Social comparison anxiety
-> - Competitive gaming of the system
-> - Privacy violations (indirect peer identification)
-
-**Testing**: Comprehensive test suite available in `backend/tests/test_advanced_features.py`
+> **Warning**: Cohort normalization features are faculty-only and not shown to students to prevent social comparison anxiety and gaming of the system.
 
 ---
-
 
 ## Risk Scoring Logic
 
 ### Scale Convention
 
-**IMPORTANT**: System uses **0-100 percentage scale** for risk scores, **0-1 for signal scores**
-
-- `risk_score`: 0-100 (percentage, for end-user display)
-- `signal_breakdown.*_signal_score`: 0-1 (probabilities, internal use)
+- `risk_score`: **0-100** (percentage, for end-user display)
+- `signal_breakdown.*_signal_score`: **0-1** (probabilities, internal use)
+- Intervention thresholds in `config.py`: **0.0-1.0** (probabilities)
 
 ### Computation Steps
 
@@ -1138,18 +884,14 @@ summary = orchestrator.compute_risk_summary(db, 'student@example.com')
 
 ### Multi-Layer Validation
 
-**Layer 1**: Clamp to bounds
 ```python
+# Layer 1: Clamp to bounds
 risk_score = max(0.0, min(100.0, risk_score))
-```
 
-**Layer 2**: Assert validation
-```python
+# Layer 2: Assert validation
 assert 0 <= risk_score <= 100, f"Invalid risk score: {risk_score}"
-```
 
-**Layer 3**: Check for NaN/Inf
-```python
+# Layer 3: Check for NaN/Inf
 if not np.isfinite(risk_score):
     risk_score = None  # Fail safely
 ```
@@ -1172,11 +914,14 @@ services:
     ports:
       - "8000:8000"
     environment:
-      - GOOGLE_API_KEY=${GOOGLE_API_KEY}
-      - DATABASE_URL=sqlite:///./sql_app.db
+      - GEMINI_API_KEY=${GEMINI_API_KEY}
+      - CLAUDE_API_KEY=${CLAUDE_API_KEY}
+      - LLM_PROVIDER=${LLM_PROVIDER:-gemini}
+      - SECRET_KEY=${SECRET_KEY}
+      - DATABASE_URL=sqlite:///./backend/data/sql_app.db
     volumes:
       - ./data:/app/data
-      - ./backend/ml/models:/app/ml/models
+      - ./models/saved_models:/app/models/saved_models
 
   frontend:
     build: ./frontend
@@ -1186,6 +931,11 @@ services:
       - REACT_APP_API_URL=http://backend:8000/api/v1
     depends_on:
       - backend
+
+  redis:  # Optional: for response caching
+    image: redis:7-alpine
+    ports:
+      - "6379:6379"
 
   nginx:  # Optional reverse proxy
     image: nginx:alpine
@@ -1202,12 +952,11 @@ docker-compose up -d --build
 
 ### Environment-Specific Configs
 
-1. **Development**: `.env.development`
-2. **Staging**: `.env.staging`
-3. **Production**: `.env.production`
-
-**Load specific env**:
 ```bash
+# Development
+docker-compose --env-file .env.development up -d
+
+# Production
 docker-compose --env-file .env.production up -d
 ```
 
@@ -1225,8 +974,14 @@ pytest tests/ -v --cov=backend --cov-report=html
 **Test Suite**:
 - `tests/test_risk_validation.py`: Risk score validation
 - `tests/test_risk_scoring.py`: Risk scorer logic
-- `tests/test_predictor.py`: ML prediction pipeline
-- `tests/test_api_students.py`: Student API endpoints
+- `tests/test_advanced_features.py`: Advanced feature orchestrator
+- `tests/test_validation_suite.py`: Comprehensive validation
+- `tests/test_llm_services.py`: LLM integration tests
+- `tests/test_canonical_implementation.py`: Reference implementation tests
+- `tests/test_integration_api.py`: API integration tests
+- `tests/test_ml/`: ML pipeline tests
+- `tests/test_api/`: API endpoint tests
+- `tests/test_services/`: Service layer tests
 
 ### Frontend Tests
 
@@ -1235,12 +990,23 @@ cd frontend
 npm test
 ```
 
-### Integration Tests
+### Additional Documentation
 
-Test complete data flow:
-```bash
-python backend/tests/integration/test_end_to_end.py
-```
+The `docs/` folder contains supplementary guides:
+
+| File | Purpose |
+|------|---------|
+| `API_CONTRACT.md` | API contract and schema definitions |
+| `API_MAPPING.md` | Frontend-to-backend API mapping |
+| `DATA_VALIDATION_ARCHITECTURE.md` | Data validation design |
+| `DEPLOYMENT_NOTES.md` | Deployment-specific notes |
+| `EXTENSIBILITY.md` | How to extend the platform |
+| `FACULTY_AI_GUIDE.md` | Faculty-facing AI features guide |
+| `LLM_ARCHITECTURE.md` | LLM integration architecture |
+| `llm_security_architecture.md` | LLM security considerations |
+| `SETUP.md` | Detailed setup walkthrough |
+| `STUDENT_AI_GUIDE.md` | Student-facing AI features guide |
+| `TESTING.md` | Testing strategy and guidelines |
 
 ---
 
@@ -1248,15 +1014,15 @@ python backend/tests/integration/test_end_to_end.py
 
 ### Backend Logs
 
-- **Location**: `backend/logs/app.log`
-- **Format**: JSON (for structured logging)
-- **Levels**: DEBUG, INFO, WARNING, ERROR, CRITICAL
+- **Location**: `backend/backend.log`
+- **Levels**: DEBUG, INFO, WARNING, ERROR, CRITICAL (configurable via `LOG_LEVEL`)
 
 **Key Events Logged**:
-- Prediction requests
-- Risk score calculations
+- Startup / shutdown lifecycle
+- Data ingestion results
+- Prediction requests and risk score calculations
 - Data validation failures
-- API errors
+- API errors and rate limit triggers
 
 ### Error Tracking
 
@@ -1267,29 +1033,37 @@ python backend/tests/integration/test_end_to_end.py
 
 ## Troubleshooting
 
-### Issue: "Failed to fetch student data: HTTP error! status: 422"
+### Issue: "HTTP error! status: 422"
 
-**Cause**: Backend API schema mismatch  
+**Cause**: Backend API schema mismatch
 **Solution**:
-1. Check backend logs: `tail -f backend/logs/app.log`
+1. Check backend logs: `tail -f backend/backend.log`
 2. Verify API response schema matches frontend expectations
-3. Ensure risk_score is 0-100, not 0-1
+3. Ensure `risk_score` is 0-100, not 0-1
 
 ### Issue: "Risk score validation failed: risk_score out of range"
 
-**Cause**: Risk score not properly converted to 0-100  
+**Cause**: Risk score not properly converted to 0-100
 **Solution**:
-1. Check `backend/ml/inference/predictor.py:220-230`
-2. Ensure `risk_probability * 100.0` conversion
-3. Verify `validate_and_clamp_risk_score()` is used
+1. Check `backend/ml/inference/predictor.py`
+2. Ensure `risk_probability * 100.0` conversion is applied
+3. Verify `validate_and_clamp_risk_score()` is called
 
 ### Issue: "Frontend shows 'N/A' for all students"
 
-**Cause**: Backend not returning expected fields  
+**Cause**: Backend not returning expected fields
 **Solution**:
 1. Check API response: `curl http://localhost:8000/api/v1/students/students?limit=1`
-2. Verify `risk_score`, `signal_breakdown`, `engagement_score` fields present
-3. Check frontend console for errors
+2. Verify `risk_score`, `signal_breakdown`, `engagement_score` fields are present
+3. Check browser console for errors
+
+### Issue: LLM recommendations not working
+
+**Cause**: Missing or invalid API key
+**Solution**:
+1. Verify `LLM_PROVIDER` is set (`gemini` or `claude`)
+2. Check `GEMINI_API_KEY` or `CLAUDE_API_KEY` is set in `.env`
+3. Inspect backend logs for LLM client errors
 
 ---
 
@@ -1314,7 +1088,7 @@ python backend/tests/integration/test_end_to_end.py
 
 ## License
 
-MIT License - see LICENSE file for details
+MIT License — see LICENSE file for details
 
 ---
 
@@ -1322,5 +1096,4 @@ MIT License - see LICENSE file for details
 
 For questions or support:
 - **Issues**: GitHub Issues
-- **Email**: support@example.com
-- **Documentation**: [docs.example.com](https://docs.example.com)
+- **Documentation**: See the `docs/` folder for detailed guides
