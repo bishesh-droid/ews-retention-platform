@@ -152,11 +152,19 @@ def engineer_features(raw_df, semester=None):
 
     student_features['is_dropout'] = student_features.apply(define_target, axis=1)
 
-    # Ensure at least 2 classes if possible (dummy fix for extreme small data)
-    if student_features['is_dropout'].nunique() == 1 or student_features['is_dropout'].mean() > 0.9 or student_features['is_dropout'].mean() < 0.1:
-        logger.warning("Target variable degenerate (all 0s or all 1s). Generating random targets for development testing.")
-        # Force random distribution for development
-        student_features['is_dropout'] = np.random.choice([0, 1], size=len(student_features), p=[0.8, 0.2])
+    # Warn if target distribution is degenerate — do NOT inject random labels,
+    # as that would corrupt model training. Caller should handle this case.
+    if student_features['is_dropout'].nunique() == 1:
+        logger.error(
+            "Target variable 'is_dropout' has only one class in the dataset. "
+            "All students map to the same label. Check thresholds or get more data."
+        )
+    elif student_features['is_dropout'].mean() > 0.9 or student_features['is_dropout'].mean() < 0.1:
+        logger.warning(
+            f"Target variable is heavily imbalanced "
+            f"(dropout rate={student_features['is_dropout'].mean():.1%}). "
+            "Consider adjusting thresholds or collecting more representative data."
+        )
 
     # --- 4. Handle Missing Values ---
     student_features.fillna(0, inplace=True)

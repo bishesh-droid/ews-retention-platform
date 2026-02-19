@@ -2,8 +2,20 @@ model:
   type: xgboost
   path: saved_models/xgboost_model.pkl
   features:
-    - academic_score
-    - engagement_score
+    - content_completed
+    - content_required
+    - quiz_completed
+    - total_quiz_attempts
+    - num_logins
+    - total_time_spent_seconds
+    - discussion_posts_created
+    - discussion_posts_read
+    - courses_enrolled
+    - content_completion_rate
+    - quiz_completion_rate
+    - avg_time_per_course
 training:
-  test_size: 0.2
+  test_size: 0.3
   random_state: 42
+  train_semester: "Trimester 1"
+  test_semester: "Trimester 2"

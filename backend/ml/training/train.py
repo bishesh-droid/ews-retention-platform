@@ -59,7 +59,6 @@ def train_and_save_model(data_path, model_dir=MODELS_DIR, use_xgboost=True):
             objective='binary:logistic',
             eval_metric='auc',
             random_state=42,
-            use_label_encoder=False
         )
         
         pipeline = Pipeline([
