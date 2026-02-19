@@ -56,7 +56,7 @@ The EWS Retention Platform is an **AI-driven Early Warning System** (v2.0.0) des
 graph TB
     A[Raw Data Files] -->|Ingestion Pipeline| B[Star Schema DB]
     B -->|Feature Engineering| C[36 ML Features]
-    C -->|XGBoost Model| D[Risk Predictions]
+    C -->|XGBoost / RF / LR Models| D[Risk Predictions]
     D -->|Signal Aggregation| E[Risk Scores 0-100]
     E -->|FastAPI v2| F[Backend API]
     F -->|REST| G[React Frontend]
@@ -91,7 +91,8 @@ graph TB
               v
 ┌─────────────────────────────────────────────────────────────┐
 │                    ML PREDICTION LAYER                       │
-│  - XGBoost Model - SMOTE Balancing - Feature Validation    │
+│  - XGBoost (primary) - RandomForest - LogisticRegression   │
+│  - SMOTE Balancing - Feature Validation                     │
 └────────────────────┬────────────────────────────────────────┘
                      │
                      v
@@ -215,9 +216,9 @@ graph TB
 | Framework | FastAPI | 0.104+ | High-performance async API |
 | ORM | SQLAlchemy | 2.0+ | Database abstraction |
 | Database | SQLite | 3.40+ | Data persistence (star schema) |
-| ML Framework | XGBoost | 2.0+ | Dropout prediction model |
-| ML Utils | scikit-learn | 1.3+ | Feature engineering, metrics |
-| Class Balancing | imbalanced-learn | 0.11+ | SMOTE oversampling |
+| ML Framework | XGBoost | 2.0+ | Primary dropout prediction model |
+| ML Baseline | scikit-learn (LR, RF) | 1.3+ | RandomForest fallback + Logistic Regression baseline |
+| Class Balancing | imbalanced-learn | 0.11+ | SMOTE oversampling (imblearn pipelines) |
 | Data Processing | pandas | 2.1+ | Data manipulation |
 | Validation | Pydantic | 2.0+ | API schema validation |
 | LLM (Primary) | google-generativeai | latest | Gemini API client |
@@ -309,26 +310,31 @@ Raw File (.xlsx)
 
 ### 3. Feature Engineering
 
-**36 ML Features** (see `backend/ml/features/feature_engineering.py`):
+The platform uses two feature engineering approaches depending on the data source:
 
-**7-Year Averages** (18 features):
-- `absrate_avg_1_7`: Average absence rate over 7 years
-- `mpa_avg_1_7`: Average MPA (metric performance average)
-- `mobility_avg_1_7`: Average mobility score
-- `q{1-4}mpa_avg_1_7`: Quarterly MPAs (4 × 7-year averages)
+**Backend Pipeline — 36 Historical Features** (`backend/ml/features/feature_engineering.py`):
 
-**3-Year Trends** (18 features):
-- `absrate_trend_5_7`: Slope of absence rate (years 5-7)
-- `mpa_trend_5_7`: Slope of MPA (years 5-7)
-- `q{1-4}mpa_trend_5_7`: Quarterly MPA trends
+Processes 7-year historical CSV records into per-student averages and 3-year trend slopes.
 
-**Computation** (example):
+- **Per-year averages**: `mpa_avg_1` … `mpa_avg_7`, `absrate_avg_1` … `absrate_avg_7`, `nsusp_avg_1` … `nsusp_avg_7`, `mobility_avg_1` … `mobility_avg_7`
+- **3-year trend slopes** (years 5–7, linear regression): `mpa_avg_trend_3yr`, `absrate_avg_trend_3yr`, `nsusp_avg_trend_3yr`, `mobility_avg_trend_3yr`
+
 ```python
-# 7-year average
-absrate_avg_1_7 = (absrate1 + absrate2 + ... + absrate7) / 7
+# 3-year trend (years 5-7, linear regression slope)
+from numpy.linalg import lstsq
+x = [5, 6, 7]; y = [absrate5, absrate6, absrate7]
+absrate_avg_trend_3yr = lstsq([[xi, 1] for xi in x], y)[0][0]
+```
 
-# 3-year trend (years 5-7)
-absrate_trend_5_7 = (absrate7 - absrate5) / 2  # Linear slope
+**Standalone Pipeline — 12 DB-Driven Features** (`models/feature_engineering.py`):
+
+Aggregates live `enrollments` and `courses` tables per student (see [ML Pipeline](#ml-pipeline) for full feature list).
+
+```python
+# Example derived ratios
+content_completion_rate = content_completed / content_required
+quiz_completion_rate    = quiz_completed / total_quiz_attempts
+avg_time_per_course     = total_time_spent_seconds / courses_enrolled
 ```
 
 ### 4. Signal Computation
@@ -770,43 +776,177 @@ App
 
 ## ML Pipeline
 
-### Model Training
+The platform runs two complementary ML pipelines: a **standalone models pipeline** for offline training against the live SQLite database, and a **backend ML pipeline** that integrates directly with the FastAPI service.
 
-**Script**: `models/train_model.py`
+---
+
+### Standalone Models Pipeline
+
+**Location**: `models/`
+
+**Configuration**: `models/config.yaml`
+
+```yaml
+model:
+  type: xgboost
+  path: saved_models/xgboost_model.pkl
+  features:
+    - content_completed
+    - content_required
+    - quiz_completed
+    - total_quiz_attempts
+    - num_logins
+    - total_time_spent_seconds
+    - discussion_posts_created
+    - discussion_posts_read
+    - courses_enrolled
+    - content_completion_rate
+    - quiz_completion_rate
+    - avg_time_per_course
+training:
+  test_size: 0.3
+  random_state: 42
+  train_semester: "Trimester 1"
+  test_semester: "Trimester 2"
+```
 
 **Process**:
-1. Load historical data (7 years)
-2. Engineer 36 features (`models/feature_engineering.py`)
-3. Handle class imbalance with SMOTE
-4. Train XGBoost + RandomForest ensemble
-5. Evaluate with stratified K-fold CV
-6. Save model to `models/saved_models/`
+1. Load data directly from `sql_app.db` via `models/feature_engineering.py`
+2. Aggregate enrollment records into 12 student-level features
+3. Engineer proxy dropout label (`is_dropout`) based on cohort percentile thresholds
+4. Split by semester: **Trimester 1 → train**, **Trimester 2 → test**
+5. Handle class imbalance with SMOTE
+6. Train XGBoost (primary) + RandomForest (fallback) ensemble
+7. Save models and feature importance to `models/saved_models/`
 
 **Training Command**:
 ```bash
 python models/train_model.py
 ```
 
-**Saved Models**:
+**Prediction Command**:
+```bash
+python models/predict_model.py <student_id>
+```
+
+**Saved Artifacts**:
 ```
 models/saved_models/
-├── xgboost_model.pkl    # Primary model
-└── random_forest.pkl    # Fallback model
+├── xgboost_model.pkl        # Primary model
+├── random_forest.pkl        # Fallback model
+└── feature_importance.json  # Top feature importances (JSON)
 ```
 
 **Model loader**: `models/model_loader.py`
-**Prediction script**: `models/predict_model.py`
 
-### Prediction Flow
+---
+
+### Backend ML Pipeline
+
+**Location**: `backend/ml/`
+
+**Training Script**: `backend/ml/training/train.py`
+
+**Process**:
+1. Load historical student data (CSV via `data_path` argument)
+2. Engineer 36 features from 7-year historical records (`backend/ml/features/feature_engineering.py`)
+3. Split 80/20 with stratification
+4. Train models via `imblearn` pipelines (StandardScaler → SMOTE → Classifier):
+   - **XGBoost** (primary, `retention_model_xgboost.joblib`)
+   - **Random Forest** (alternative, `retention_model.joblib`)
+   - **Logistic Regression** baseline for interpretability (`retention_model_logreg.joblib`)
+5. Evaluate each model and log classification report + AUC-ROC
+6. Export feature importance CSV (`feature_importance.csv`)
+7. Save all models to `backend/ml/models/saved/`
+
+**Training Command**:
+```bash
+python -m backend.ml.training.train
+```
+
+**Saved Artifacts**:
+```
+backend/ml/models/saved/
+├── retention_model_xgboost.joblib  # Primary XGBoost pipeline
+├── retention_model.joblib          # Random Forest pipeline
+├── retention_model_logreg.joblib   # Logistic Regression baseline
+└── feature_importance.csv          # Top feature importances (CSV)
+```
+
+---
+
+### Feature Engineering
+
+#### Standalone Pipeline — 12 DB-Driven Features
+
+Source: `models/feature_engineering.py` — aggregates live `enrollments` + `courses` tables.
+
+| Feature | Description |
+|---------|-------------|
+| `content_completed` | Total content items completed |
+| `content_required` | Total content items required |
+| `quiz_completed` | Total quizzes completed |
+| `total_quiz_attempts` | Total quiz attempts |
+| `num_logins` | Total login count |
+| `total_time_spent_seconds` | Total platform time (seconds) |
+| `discussion_posts_created` | Posts created in discussions |
+| `discussion_posts_read` | Posts read in discussions |
+| `courses_enrolled` | Number of courses enrolled |
+| `content_completion_rate` | `content_completed / content_required` |
+| `quiz_completion_rate` | `quiz_completed / total_quiz_attempts` |
+| `avg_time_per_course` | `total_time_spent_seconds / courses_enrolled` |
+
+**Dropout proxy label** (`is_dropout = 1`) if any condition is met:
+- `content_completion_rate` ≤ bottom 20th percentile of cohort
+- `avg_time_per_course` ≤ bottom 20th percentile of cohort
+- `num_logins` < 5
+
+#### Backend Pipeline — 36 Historical Features
+
+Source: `backend/ml/features/feature_engineering.py` — processes 7-year historical CSV data.
+
+**7-Year Averages** (per-year MPA, absence rate, suspensions, mobility):
+- `mpa_avg_1` … `mpa_avg_7`
+- `absrate_avg_1` … `absrate_avg_7`
+- `nsusp_avg_1` … `nsusp_avg_7`
+- `mobility_avg_1` … `mobility_avg_7`
+
+**3-Year Trend Slopes** (years 5–7, linear regression):
+- `mpa_avg_trend_3yr`
+- `absrate_avg_trend_3yr`
+- `nsusp_avg_trend_3yr`
+- `mobility_avg_trend_3yr`
+
+Target variable: `nograd` (no graduation flag from historical records).
+
+---
+
+### Prediction Flow (Standalone)
+
+```
+Student ID
+    ↓
+Load DB Data (feature_engineering.py)
+    ↓
+12 Student-Level Features
+    ↓
+XGBoost / RandomForest .predict_proba()
+    ↓
+Dropout Probability (0–1)
+    ↓
+JSON Output {student_id, predictions: {random_forest, xgboost}}
+```
+
+### Prediction Flow (Backend API)
 
 ```
 Student Data
     ↓
-Feature Engineering (feature_engineering.py)
+36 Historical Features (feature_engineering.py)
     ↓
-Model Inference (model.predict_proba)
+XGBoost Pipeline Inference
     ↓
-Probability (0-1) → Risk Score (0-100)
+Probability (0–1) → Risk Score (0–100)
     ↓
 Signal Computation (5 groups)
     ↓
