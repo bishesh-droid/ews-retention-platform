@@ -2,7 +2,7 @@
         EWS RETENTION PLATFORM - COMPLETE DOCKER DOCUMENTATION
 ================================================================================
 
-Last Updated: 2026-02-17
+Last Updated: 2026-02-24
 
 ================================================================================
 TABLE OF CONTENTS
@@ -259,8 +259,11 @@ for your environment.
 
 | Variable          | Default Value      | Description                          |
 |-------------------|--------------------|--------------------------------------|
+| `LLM_PROVIDER`    | `gemini`           | LLM backend: `gemini` or `claude`    |
 | `GEMINI_API_KEY`  | `your_api_key_here`| Google Gemini API key for AI features|
-| `GEMINI_MODEL`    | `gemini-pro`       | Model name for LLM calls             |
+| `GEMINI_MODEL`    | `gemini-pro`       | Gemini model name                    |
+| `CLAUDE_API_KEY`  | (empty)            | Anthropic API key (if using Claude)  |
+| `CLAUDE_MODEL`    | `claude-3-opus-20240229` | Anthropic model name          |
 | `LLM_TEMPERATURE` | `0.7`              | Creativity/randomness (0.0-1.0)      |
 | `LLM_MAX_TOKENS`  | `1024`             | Maximum response length in tokens    |
 
@@ -276,6 +279,30 @@ Used by: `backend/app/services/ai/advisor.py`, `backend/routes/llm.py`,
 | `DATABASE_URL` | `sqlite:///./backend/data/sql_app.db`  | SQLAlchemy connection|
 
 Used by: `backend/config.py`, `backend/database/connection.py`
+
+--------------------------------------------------------------------------------
+4.2a Security Configuration
+--------------------------------------------------------------------------------
+
+| Variable                     | Default Value         | Description               |
+|------------------------------|-----------------------|---------------------------|
+| `SECRET_KEY`                 | (dev default, warns)  | JWT signing key            |
+| `ACCESS_TOKEN_EXPIRE_MINUTES`| `1440` (24 h)         | JWT token lifetime         |
+| `INTEGRATION_API_KEY`        | (dev default, warns)  | External integration key   |
+| `AI_ADVISOR_ORIGIN`          | `http://localhost:8001` | CORS origin for advisor  |
+
+Used by: `backend/config.py`, `backend/core/security.py`, `backend/core/auth.py`
+
+--------------------------------------------------------------------------------
+4.2b Redis & Cache Configuration
+--------------------------------------------------------------------------------
+
+| Variable              | Default Value              | Description                 |
+|-----------------------|----------------------------|-----------------------------|
+| `REDIS_URL`           | `redis://localhost:6379/0` | Redis connection string      |
+| `CACHE_EXPIRE_SECONDS`| `3600`                     | Default cache TTL in seconds |
+
+Used by: `backend/core/redis_cache.py`
 
 --------------------------------------------------------------------------------
 4.3 API Configuration
@@ -401,14 +428,15 @@ The backend Python dependencies are organized by functional category:
 - `fastapi` - Modern async web framework
 - `uvicorn` - ASGI server for FastAPI
 - `python-multipart` - Form data parsing (file uploads)
-- `pydantic` - Data validation and serialization
+- `pydantic[email]` - Data validation and serialization (with email validation)
 
 **Authentication & Security**:
 - `python-jose[cryptography]` - JWT token creation and verification (HS256)
 - `passlib[bcrypt]` - Password hashing with bcrypt
 
 **AI / LLM Integration**:
-- `google-generativeai` - Google Gemini Pro API client
+- `google-genai` - Google Gemini API client (replaces `google-generativeai`)
+- `anthropic` - Anthropic Claude API client (new — enables dual LLM provider)
 
 **Caching**:
 - `redis` - Redis client for response caching
@@ -419,7 +447,7 @@ The backend Python dependencies are organized by functional category:
 - `openpyxl==3.1.5` - Excel file reading (pinned version for compatibility)
 
 **PDF Export**:
-- `fpdf` - PDF generation for report exports
+- `fpdf2` - PDF generation for report exports (upgraded from `fpdf`)
 
 
 ================================================================================
@@ -478,15 +506,32 @@ File: `frontend/package.json`
 To manage the EWS Retention Platform using Docker Compose, navigate to the
 project root directory where `docker-compose.yml` is located.
 
-**Initial Setup**:
+**Non-Docker Local Setup (setup.sh)**:
+
+A `setup.sh` bash script is provided for running the backend locally without
+Docker. It:
+1. Creates a Python virtual environment in `venv/` (skips if already exists)
+2. Activates the venv
+3. Installs all dependencies from `requirements.txt` using a custom TMPDIR
+   (`/home/duffer/tmp`) to avoid `/tmp` space exhaustion on smaller partitions
+
+```bash
+bash setup.sh
+source venv/bin/activate
+uvicorn backend.main:app --reload
+```
+
+**Initial Docker Setup**:
 
 1. Copy the environment configuration:
    ```bash
    cp .env.example .env
    ```
 
-2. Edit `.env` and set required values (at minimum, `GEMINI_API_KEY` for
-   AI features).
+2. Edit `.env` and set required values:
+   - `GEMINI_API_KEY` or `CLAUDE_API_KEY` (depending on `LLM_PROVIDER`)
+   - `SECRET_KEY` (strong random string for JWT signing)
+   - `INTEGRATION_API_KEY` (change from dev default before deploying)
 
 3. Ensure Dockerfiles exist (see Section 3 for templates).
 
@@ -563,3 +608,11 @@ code changes on the host are immediately available inside the containers:
 - `frontend/Dockerfile` (expected in `frontend/` directory): Not yet created.
   Should define the Node.js build and nginx serving environment for the
   React frontend.
+
+- `setup.sh`: Bash convenience script for local (non-Docker) development setup.
+  Creates and populates a virtual environment with all Python dependencies.
+
+- `test_endpoints.py`: Smoke-test script that exercises key API endpoints.
+  Run after startup to verify the server is responding correctly.
+
+- `test_students.json`: Student fixture data used by endpoint tests.

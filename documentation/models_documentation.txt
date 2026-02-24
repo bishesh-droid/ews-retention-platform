@@ -2,7 +2,7 @@
         EWS RETENTION PLATFORM - COMPLETE MODELS DOCUMENTATION
 ================================================================================
 
-Last Updated: 2026-02-18
+Last Updated: 2026-02-24
 
 ================================================================================
 TABLE OF CONTENTS
@@ -71,15 +71,20 @@ support .pkl files.
 ================================================================================
 
 models/
-  config.yaml               Model configuration (type, paths, training params)
-  feature_engineering.py    Data loading + feature creation from SQLite DB
-  train_model.py            Full training pipeline (RF + XGBoost, SMOTE, eval)
-  predict_model.py          CLI script to predict dropout risk for a student
-  model_loader.py           Thin joblib/pickle loader utility
+  config.yaml                        Model configuration (type, paths, training params)
+  feature_engineering.py             Data loading + feature creation from SQLite DB
+  train_model.py                     Full training pipeline (RF + XGBoost, SMOTE, eval)
+  predict_model.py                   CLI script to predict dropout risk for a student
+  model_loader.py                    Thin joblib/pickle loader utility
+  evaluation_confusion_matrix.png    Confusion matrix PNG from the most recent training run
   saved_models/
-    xgboost_model.pkl       Trained XGBoost classifier
-    random_forest.pkl       Trained Random Forest classifier
-    feature_importance.json XGBoost feature importances (JSON)
+    xgboost_model.pkl                Trained XGBoost classifier
+    random_forest.pkl                Trained Random Forest classifier
+    feature_importance.json          XGBoost feature importances (JSON; legacy format)
+
+backend/ml/models/saved/
+  feature_importance.csv             XGBoost feature importance scores in CSV format
+                                     (33 feature rows; generated during last training run)
 
 
 ================================================================================
@@ -491,13 +496,22 @@ TRAINING WORKFLOW:
      the ModelRegistry to look in models/saved_models/.
 
 INFERENCE WORKFLOW (backend):
-  The MLPredictor (backend/ml/inference/predictor.py) calls:
-    model = load_model()      (via ModelRegistry)
+  Two inference paths now exist:
+
+  Path A — MLPredictor (backend/ml/inference/predictor.py):
+    model = load_model()      (via ModelRegistry, looks for .joblib files)
     prediction = model.predict_proba(features_df)[:, 1][0]
     risk_score = prediction * 100
+    Computes 5 signal scores from engineered features (see backend doc §8.1).
 
-  The MLPredictor also computes 5 signal scores from the engineered features
-  (see backend documentation Section 8.1 for details).
+  Path B — MLService (backend/services/ml_service.py):
+    Loads .pkl files directly from models/saved_models/ via joblib.
+    Exposes predict_student(), predict_student_cached(), batch_predict().
+    Served via /api/v1/ml routes (ml_routes.py).
+    Returns: dropout_probability, risk_level, top_risk_factors, per-model probs.
+    Falls back to _fallback_heuristic() if no model file is present.
+
+  Both paths can coexist. Path B is preferred for the /api/v1/ml endpoints.
 
 FEATURE ALIGNMENT:
   The backend uses the same core features as the standalone models but
@@ -564,10 +578,19 @@ models/
   train_model.py              Full RF + XGBoost training pipeline
   predict_model.py            CLI prediction script for a single student
   model_loader.py             Minimal joblib-based model loading utility
+  evaluation_confusion_matrix.png  Confusion matrix from last training run
   saved_models/
     xgboost_model.pkl         Trained XGBoost binary classifier
     random_forest.pkl         Trained Random Forest binary classifier
     feature_importance.json   XGBoost feature importance scores (JSON)
+
+backend/ml/models/saved/
+  feature_importance.csv      XGBoost feature importance scores in CSV format
+                              (33 rows; generated during last training run)
+
+backend/services/
+  ml_service.py               MLService class wrapping both trained models
+                              (see backend documentation §8.5)
 
 
 ================================================================================

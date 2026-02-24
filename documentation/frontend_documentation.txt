@@ -2,7 +2,7 @@
         EWS RETENTION PLATFORM - COMPLETE FRONTEND DOCUMENTATION
 ================================================================================
 
-Last Updated: 2026-02-16
+Last Updated: 2026-02-24
 
 ================================================================================
 TABLE OF CONTENTS
@@ -529,9 +529,29 @@ METHODS:
 
 ---
 
-**12.3  hooks/index.js**
+**12.3  useDebounce (frontend/src/hooks/useDebounce.js)**
 
-Re-exports useStudentRisk and useIntervention for cleaner imports.
+A generic React hook that debounces a value by a configurable delay.
+
+HOOK: useDebounce(value, delay)
+
+  value   Any value to debounce (string, number, object, etc.)
+  delay   Delay in milliseconds before the debounced value updates
+
+RETURNED VALUE:
+  debouncedValue  The last stable value after the specified delay has elapsed
+                  without a new update.
+
+USAGE:
+  Used in search inputs (e.g. Students.jsx) to prevent excessive API calls
+  on every keypress. The debounced value is used as the search query trigger
+  instead of the raw, rapidly-changing input value.
+
+---
+
+**12.4  hooks/index.js**
+
+Re-exports useStudentRisk, useIntervention, and useDebounce for cleaner imports.
 
 
 ================================================================================
@@ -943,6 +963,7 @@ frontend/src/
     index.js                      Hook re-exports
     useStudentRisk.js             Risk score & categorisation hook
     useIntervention.js            Intervention lifecycle hook
+    useDebounce.js                Generic debounce hook for search inputs
 
   services/
     index.js                      Service re-exports

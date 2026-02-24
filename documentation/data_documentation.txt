@@ -2,7 +2,7 @@
         EWS RETENTION PLATFORM - COMPLETE DATA DOCUMENTATION
 ================================================================================
 
-Last Updated: 2026-02-17
+Last Updated: 2026-02-24
 
 ================================================================================
 TABLE OF CONTENTS
@@ -131,16 +131,28 @@ Raw Excel Files (data/raw/)
 - **Student Identifier**: Expected `email` or `learner_id`
 - **Processing Pipeline**: `data_ingestion.py` → `Enrollment` updates
 - **Refresh Frequency**: Weekly
-- **Status**: Needs validation
+- **Status**: Active
+- **Ingestion Function**: `_update_enrollments_from_latest(db)`
+
+#### `Learner usage week 5.xlsx` (and `Learner usage week 5 (1).xlsx`)
+- **Type**: Student-level weekly usage
+- **Purpose**: Detailed activity metrics for Week 5; replaces Week 3 as the
+  most recent usage snapshot
+- **Student Identifier**: Expected `email` or `learner_id`
+- **Processing Pipeline**: `data_ingestion.py` → `Enrollment` updates via
+  WEEK5_USAGE_PATH config alias
+- **Refresh Frequency**: Weekly
+- **Status**: Active — the `(1).xlsx` variant is a second export of the same data
 - **Ingestion Function**: `_update_enrollments_from_latest(db)`
 
 #### `Week 1-2 Student Engagement Analysis.xlsx`
 - **Type**: Student-level engagement summary
 - **Purpose**: Early engagement indicators for Weeks 1-2
 - **Student Identifier**: Expected `email`
-- **Processing Pipeline**: `data_ingestion.py` → `Enrollment` updates
+- **Processing Pipeline**: `data_ingestion.py` → `Enrollment` updates;
+  also referenced via WEEK12_ENGAGEMENT_PATH config alias
 - **Refresh Frequency**: Bi-weekly
-- **Status**: Needs validation
+- **Status**: Active
 - **Ingestion Function**: `_update_enrollments_from_latest(db)`
 
 
@@ -152,11 +164,13 @@ These files contain course-level aggregate data and are NOT used for
 student-level risk scoring or predictions.
 
 #### `B.S and M.Sc Live Summary Data C-1, Trimester 1.xlsx`
+#### `B.S and M.Sc Live Summary Data C-1, Trimester 1 (1).xlsx`
 - **Type**: Course-level aggregate
 - **Purpose**: Live session attendance counts by course and week
 - **Student Identifier**: None - This is aggregate data
 - **Data Grain**: Course x Faculty x Week
-- **Processing Pipeline**: Separate reporting pipeline (not student risk scoring)
+- **Processing Pipeline**: Separate reporting pipeline (not student risk scoring);
+  the `(1).xlsx` variant is the authoritative version referenced by LIVE_T1_PATH
 - **Expected Columns**: Course Name, Faculty, Week-1 through Week-13
   (attendance counts)
 - **Refresh Frequency**: Weekly during trimester
@@ -164,36 +178,43 @@ student-level risk scoring or predictions.
 - **IMPORTANT**: Do NOT attempt to join this with student-level data
 
 #### `B.S and M.Sc Summary Data Trimester 2.xlsx`
+#### `B.S and M.Sc Summary Data Trimester 2 (1).xlsx`
 - **Type**: Course-level aggregate
 - **Purpose**: Same as Trimester 1 but for Trimester 2
 - **Student Identifier**: None - This is aggregate data
 - **Data Grain**: Course x Faculty x Week (by date ranges)
-- **Processing Pipeline**: Separate reporting pipeline
+- **Processing Pipeline**: Separate reporting pipeline; the `(1).xlsx` variant
+  is referenced by LIVE_T2_PATH config alias
 - **Status**: Active - For reporting only
 - **IMPORTANT**: Do NOT attempt to join this with student-level data
 
 
 ================================================================================
-4. ARCHIVED DATA FILES
+4. ARCHIVED / SUPPLEMENTARY DATA FILES
 ================================================================================
 
-The following files have been moved to `data/archive/` as they are duplicate
-versions of the same data:
+The following files were previously marked for archiving but have been restored
+to `data/raw/` as of 2026-02-24 and are now included in the ingestion pipeline
+configuration as explicit data path constants (see config.py).
 
 #### `Graded Quiz 1 Status 9 feb.xlsx`
-- **Reason for Archive**: Older version of same quiz data
-- **Replaced By**: `graded quiz 1 10 feb complete.xlsx`
-- **Archive Date**: 2026-02-12
+- **Status**: Restored to data/raw/ — referenced by QUIZ_STATUS_9FEB_PATH
+- **Purpose**: Snapshot of quiz status exported on 9 Feb; earlier datapoint
+  compared to the 10 Feb exports
 
 #### `Graded quiz 1 10 feb 4_51 pm.xlsx`
-- **Reason for Archive**: Intermediate export, not final version
-- **Replaced By**: `graded quiz 1 10 feb complete.xlsx`
-- **Archive Date**: 2026-02-12
+- **Status**: Restored to data/raw/ — referenced by GRADED_QUIZ_10FEB_451PM_PATH
+  and also by the GRADED_QUIZ_COMPLETE_PATH alias
+- **Purpose**: Intermediate PM export on 10 Feb; used as primary quiz data path
 
 #### `graded quiz 1 10 feb 11_15 AM.xlsx`
-- **Reason for Archive**: Intermediate export, not final version
-- **Replaced By**: `graded quiz 1 10 feb complete.xlsx`
-- **Archive Date**: 2026-02-12
+- **Status**: Restored to data/raw/ — referenced by GRADED_QUIZ_10FEB_1115AM_PATH
+- **Purpose**: Morning snapshot on 10 Feb; earlier than the 4:51 PM version
+
+#### `_Trimester-1 2025 Attendance Quiz-Assignment-Exam 5Jan2025 (1).xlsx`
+- **Status**: Active — this `(1).xlsx` variant is the file now pointed to by
+  QUIZ_EXAM_DATA_PATH (the original without `(1)` is a backup copy)
+- **Purpose**: Comprehensive Trimester 1 academic record
 
 
 ================================================================================

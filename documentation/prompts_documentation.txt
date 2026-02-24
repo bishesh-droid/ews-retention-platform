@@ -2,7 +2,7 @@
         EWS RETENTION PLATFORM - COMPLETE PROMPTS DOCUMENTATION
 ================================================================================
 
-Last Updated: 2026-02-17
+Last Updated: 2026-02-24
 
 ================================================================================
 TABLE OF CONTENTS
@@ -28,8 +28,10 @@ TABLE OF CONTENTS
 ================================================================================
 
 The `prompts/` directory contains four text files that serve as dynamic
-templates for interacting with Large Language Models (LLMs), specifically
-Google Gemini Pro, within the EWS Retention Platform. These prompts are
+templates for interacting with Large Language Models (LLMs) within the EWS
+Retention Platform. The platform now supports dual LLM providers — Google
+Gemini Pro (default) and Anthropic Claude — selectable via the `LLM_PROVIDER`
+environment variable. The prompt templates themselves are provider-agnostic. These prompts are
 fundamental for generating context-aware and personalized advice, summaries,
 or messages tailored for different stakeholders (faculty, marketing, sales teams,
 and students themselves). They ensure that the LLM's responses are relevant,
@@ -293,11 +295,15 @@ Its `get_ai_advice()` function orchestrates the following workflow:
     )
     ```
 
-5.  **LLM Invocation**: Calls the Google Gemini Pro model:
-    ```python
-    model = genai.GenerativeModel('gemini-pro')
-    response = model.generate_content(formatted_prompt)
-    ```
+5.  **LLM Invocation**: Routes to the configured LLM provider:
+    - If `LLM_PROVIDER=gemini` (default):
+      ```python
+      model = genai.GenerativeModel('gemini-pro')
+      response = model.generate_content(formatted_prompt)
+      ```
+    - If `LLM_PROVIDER=claude`:
+      Uses the Anthropic client with CLAUDE_MODEL (default:
+      `claude-3-opus-20240229`) and the same formatted prompt.
     Configuration: temperature=0.7, max_tokens=1024 (from .env settings).
 
 6.  **Response Handling**: Returns the generated text from the LLM, or a

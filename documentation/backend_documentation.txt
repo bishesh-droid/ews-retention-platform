@@ -2,7 +2,7 @@
         EWS RETENTION PLATFORM - COMPLETE BACKEND DOCUMENTATION
 ================================================================================
 
-Last Updated: 2026-02-18 (Services directory fully documented)
+Last Updated: 2026-02-24
 
 ================================================================================
 TABLE OF CONTENTS
@@ -86,12 +86,17 @@ Framework:        FastAPI (Python async web framework)
 ORM:              SQLAlchemy with declarative base
 Database:         SQLite (default, configurable via DATABASE_URL)
 ML Models:        XGBoost, Random Forest (via joblib)
-AI/LLM:           Google Generative AI (Gemini Pro)
+AI/LLM:           Google Generative AI (Gemini Pro) or Anthropic Claude (dual-provider)
 Excel Parsing:    OpenPyXL (reads .xlsx files)
 Server:           Uvicorn (ASGI server)
 Validation:       Pydantic (FastAPI request/response models)
 Math:             NumPy (numerical operations, NaN handling)
 Environment:      python-dotenv (environment variable loading)
+Caching:          Redis (response caching via redis client)
+Logging:          Structured JSON logging (backend/core/logger.py)
+Security:         Centralized RBAC + input sanitization (backend/core/security.py)
+Auth:             python-jose (JWT HS256), passlib bcrypt (password hashing)
+HTTP Client:      anthropic SDK (Claude API), google-genai (Gemini API)
 
 
 ================================================================================
@@ -107,25 +112,36 @@ WHAT IT DOES:
     version 2.0.0
   - Configures a lifespan context manager that runs on startup and shutdown
   - On STARTUP:
-      1. Calls init_db() to create all database tables if they don't exist
-      2. Opens a database session
-      3. Calls ingest_all_data(db) to parse XLSX files and populate the
+      1. Logs startup message via sys_logger (structured JSON logger)
+      2. Calls init_db() to create all database tables if they don't exist
+      3. Opens a database session
+      4. Calls ingest_all_data(db) to parse XLSX files and populate the
          database (this is idempotent - skips if data already exists)
   - On SHUTDOWN:
-      Logs a shutdown message
+      Logs a shutdown message via sys_logger
   - Sets up CORS middleware allowing requests from configured origins
     (localhost:3000, localhost:8000, AI Advisor origin)
+  - Attaches a custom HTTP middleware (security_and_logging_middleware) that:
+      * Rate-limits requests at 100 per minute per IP address (returns HTTP 429
+        if exceeded), storing per-IP counters in an in-memory dict
+      * Logs every incoming request (method, path, client IP) via sys_logger
+      * Logs every completed response (status code, processing time in seconds)
+      * Catches unhandled exceptions and returns a structured 500 JSON response
   - Includes the api_router with prefix "/api/v1" which mounts ALL route
     modules (students, predictions, llm, events, features, decisions,
-    feedback, recommendations, advisor, business, integration)
-  - Provides a root endpoint GET / that returns a welcome message with
-    links to /docs and /redoc
+    feedback, recommendations, advisor, business, integration, ml)
+  - Provides a root endpoint GET / returning a welcome message with API version,
+    /docs and /redoc links
+  - Provides a GET /health endpoint (tag: "System") returning status, uptime,
+    and current server timestamp for monitoring
   - When run directly, starts Uvicorn on the configured host and port
     (default 0.0.0.0:8000) with hot reload enabled
 
 KEY FUNCTIONS:
-  lifespan(app)       - Async context manager for startup/shutdown lifecycle
-  read_root()         - GET / endpoint returning welcome JSON
+  lifespan(app)                       - Async context manager for startup/shutdown lifecycle
+  security_and_logging_middleware()   - HTTP middleware for rate limiting, request/response logging
+  read_root()                         - GET / endpoint returning welcome JSON
+  health_check()                      - GET /health endpoint returning system health status
 
 
 ================================================================================
@@ -185,10 +201,22 @@ environment variables with sensible defaults.
   TARGET_RETENTION_RATE       0.95     (95% target retention rate)
 
 --- LLM CONFIGURATION ---
+  LLM_PROVIDER                Default: "gemini" — set to "claude" to use Anthropic
   GEMINI_API_KEY              Google Generative AI API key (from env)
   GEMINI_MODEL                Default: "gemini-pro"
+  CLAUDE_API_KEY              Anthropic API key (from env; used when LLM_PROVIDER=claude)
+  CLAUDE_MODEL                Default: "claude-3-opus-20240229"
   LLM_TEMPERATURE             0.7
   LLM_MAX_TOKENS              1024
+
+--- REDIS & CACHE ---
+  REDIS_URL                   Default: "redis://localhost:6379/0"
+  CACHE_EXPIRE_SECONDS        Default: 3600 (1 hour)
+
+--- SECURITY ---
+  SECRET_KEY                  JWT signing key (warns if using insecure dev default)
+  ALGORITHM                   "HS256"
+  ACCESS_TOKEN_EXPIRE_MINUTES Default: 1440 (24 hours)
 
 --- INTEGRATION API ---
   INTEGRATION_API_KEY         Default: "ews-integration-dev-key"
@@ -201,15 +229,24 @@ environment variables with sensible defaults.
                               AI_ADVISOR_ORIGIN, plus any from CORS_ORIGINS env
 
 --- DATA INGESTION PATHS ---
-  ENGAGEMENT_DATA_PATH        data/raw/Engagement_Analysis.xlsx
-  QUIZ_EXAM_DATA_PATH         data/raw/_Trimester-1 2025 Attendance
-                              Quiz-Assignment-Exam 5Jan2025.xlsx
-  LIVE_ATTENDANCE_DATA_PATH   data/raw/B.S and M.Sc Live Summary Data
-                              C-1, Trimester 1.xlsx
-  LABELS_DATA_PATH            backend/data/labels.csv
-  WEEK3_USAGE_PATH            data/raw/Learner usage week 3.xlsx
-  GRADED_QUIZ_COMPLETE_PATH   data/raw/graded quiz 1 10 feb complete.xlsx
-  LIVE_T1_PATH / LIVE_T2_PATH Trimester 1 and 2 live summary data
+  ENGAGEMENT_DATA_PATH         data/raw/Engagement_Analysis.xlsx
+  QUIZ_EXAM_DATA_PATH          data/raw/_Trimester-1 2025 Attendance
+                               Quiz-Assignment-Exam 5Jan2025 (1).xlsx
+  LIVE_ATTENDANCE_DATA_PATH    data/raw/B.S and M.Sc Live Summary Data
+                               C-1, Trimester 1 (1).xlsx
+  LABELS_DATA_PATH             backend/data/labels.csv
+  LIVE_T1_PATH                 data/raw/B.S and M.Sc Live Summary Data C-1,
+                               Trimester 1 (1).xlsx
+  LIVE_T2_PATH                 data/raw/B.S and M.Sc Summary Data Trimester
+                               2 (1).xlsx
+  WEEK12_ENGAGEMENT_PATH       data/raw/Week 1-2 Student Engagement Analysis.xlsx
+  QUIZ_STATUS_9FEB_PATH        data/raw/Graded Quiz 1 Status 9 feb.xlsx
+  GRADED_QUIZ_10FEB_ORIG_PATH  data/raw/graded quiz 1 10 feb complete.xlsx
+  GRADED_QUIZ_10FEB_1115AM_PATH data/raw/graded quiz 1 10 feb 11_15 AM.xlsx
+  GRADED_QUIZ_10FEB_451PM_PATH data/raw/Graded quiz 1 10 feb 4_51 pm.xlsx
+  WEEK3_USAGE_PATH             data/raw/Learner usage week 3.xlsx
+  WEEK5_USAGE_PATH             data/raw/Learner usage week 5.xlsx
+  GRADED_QUIZ_COMPLETE_PATH    Alias for GRADED_QUIZ_10FEB_451PM_PATH
 
 --- LOGGING ---
   LOG_LEVEL                   Default: "INFO"
@@ -592,6 +629,7 @@ Route modules included:
   advisor.router          -> /api/v1/advisor (no prefix, uses /advisor)
   business.router         -> /api/v1/business (no prefix, uses /business)
   integration.router      -> /api/v1/integration
+  ml_routes.router        -> /api/v1/ml
 
 
 --------------------------------------------------------------------------------
@@ -1140,6 +1178,48 @@ Internal functions:
     calling StudentService.get_student_by_id() and restructuring
     the data into the integration contract format. Returns None if
     the student data cannot be retrieved.
+
+--------------------------------------------------------------------------------
+6.12  ML PREDICTION API (backend/routes/ml_routes.py)
+--------------------------------------------------------------------------------
+
+Prefix: /api/v1/ml
+
+This router exposes the MLService (backend/services/ml_service.py) which runs
+XGBoost and Random Forest predictions directly from the database via the
+models/ feature engineering pipeline.
+
+GET /predict/{student_id}
+  Returns a detailed dropout risk prediction for a single student.
+  Calls ml_service.predict_student_cached() (LRU-cached, maxsize=1024).
+  Response model: MLPredictionResponse
+    student_id              str
+    dropout_probability     float (0-1, average of loaded models)
+    risk_level              str ("Critical", "High", "Medium", "Low")
+    top_risk_factors        List[str] (heuristic flags from feature values)
+    predictions             dict  {"random_forest": {...}, "xgboost": {...}}
+    features                dict  (raw feature values used for inference)
+    error                   str   (populated only if prediction fails)
+  Returns HTTP 404 if student not found in processed data.
+
+POST /predict-batch
+  Async batch prediction for multiple students.
+  Request body: BatchPredictionRequest { student_ids: List[str] }
+  Runs ml_service.batch_predict() in a thread (asyncio.to_thread) to avoid
+  blocking the event loop.
+  Returns List[MLPredictionResponse] — failed/error predictions are filtered
+  out of the response list.
+
+GET /cohort-risk
+  Returns aggregate risk metrics for the full student cohort.
+  Currently returns mock data (placeholder for future DB aggregation):
+    average_risk: 0.45
+    high_risk_count: 120
+    total_students: 1500
+
+GET /trend-analysis
+  Returns risk trend over time.
+  Currently returns mock monthly trend array (placeholder).
 
 
 ================================================================================
@@ -1809,6 +1889,61 @@ get_safe_default_prediction() -> Dict
 validate_student_data(student_data) -> bool
   Validates raw input data before feature engineering.
 
+--------------------------------------------------------------------------------
+8.5  ML SERVICE (backend/services/ml_service.py)
+--------------------------------------------------------------------------------
+
+Class: MLService
+
+A high-level service that wraps the trained XGBoost and Random Forest models
+from models/saved_models/ and exposes per-student and batch prediction methods.
+Used by ml_routes.py.
+
+Constructor:
+  Calls load_models() on instantiation. Loads rf_model and xgb_model from:
+    models/saved_models/random_forest.pkl
+    models/saved_models/xgboost_model.pkl
+  Logs a warning if a model file is absent (does NOT raise an exception;
+  falls back to heuristic predictions gracefully).
+
+Methods:
+
+  load_models()
+    Loads both .pkl files via joblib. Logs success or warnings.
+
+  predict_student(student_id: str) -> dict
+    Loads the full DataFrame from the SQLite database via
+    models/feature_engineering.load_data_from_db() and engineer_features().
+    Filters to the target student, builds a feature matrix with 12 columns:
+      content_completed, content_required, quiz_completed, total_quiz_attempts,
+      num_logins, total_time_spent_seconds, discussion_posts_created,
+      discussion_posts_read, courses_enrolled, content_completion_rate,
+      quiz_completion_rate, avg_time_per_course
+    Runs inference via rf_model.predict_proba() and xgb_model.predict_proba().
+    Computes dropout_probability as the average probability across loaded models.
+    Assigns risk_level: "Critical" (>0.75), "High" (>0.5), "Medium" (>0.3), "Low".
+    Appends heuristic top_risk_factors (Low Content Completion, Low Login Activity,
+    Low Quiz Performance) based on feature thresholds.
+    Falls back to _fallback_heuristic() if no ML model is loaded.
+    Returns a dict with: student_id, predictions, features, top_risk_factors,
+    dropout_probability, risk_level.
+
+  _fallback_heuristic(student_row) -> dict
+    Used when no ML model is available. Starts at risk=0.5 and adds penalty
+    increments for critically low content completion, logins, or quiz scores.
+    Returns {"probability": float, "risk_class": int, "factors": List[str]}.
+
+  predict_student_cached(student_id: str) -> dict
+    LRU-cached wrapper (maxsize=1024) around predict_student().
+    Enables repeated API calls for the same student to be served from cache.
+
+  batch_predict(student_ids: List[str]) -> List[dict]
+    Iterates over a list of IDs and calls predict_student_cached() for each.
+    Returns a list of prediction dicts.
+
+Module-level singleton:
+  ml_service = MLService()   (instantiated once at import time)
+
 
 ================================================================================
 9. ADVANCED FEATURE ENGINEERING MODULES
@@ -2227,6 +2362,46 @@ defaults.py:
   - Missing dates default to None
   - Missing boolean flags default based on context
 
+10.5  VALIDATED ETL PIPELINE (backend/ingestion/validated_pipeline.py)
+
+Class: ValidatedEWSPipeline
+
+An enhanced ingestion pipeline that enforces an 8-layer validation
+architecture before writing any record to the canonical star-schema tables.
+
+Constructor Parameters:
+  data_dir    (str, default "data/raw")  - Source directory for raw files
+  strict_mode (bool, default True)       - Halt on schema drift or rejection
+
+Validation Layers:
+  Layer 1  File-level validation (FileValidator): format, size, encoding checks.
+           Rejected files are logged; in strict mode, any rejection halts the run.
+  Layer 2  Schema inference / enforcement: existing schemas loaded from disk;
+           new schemas inferred via SchemaInferenceEngine and saved for future runs.
+  Layer 3  Schema drift detection: new / missing columns vs. saved schema version.
+  Layer 4  Row-level validation (RowValidator, NumericGuard, TimestampGuard,
+           RequiredFieldValidator): per-row integrity checks.
+  Layer 5  Excel error detection (e.g. #N/A, #VALUE! cells caught via RowValidator).
+  Layer 6  Normalisation (headers lowercased/stripped via FileValidator.normalize_header).
+  Layer 7  Write to canonical tables with provenance tracking (DataLineage).
+  Layer 8  Quarantine: invalid rows written to QuarantineManager and exported
+           to a per-file quarantine report CSV.
+
+Key Methods:
+  run()                            - Execute the full validated pipeline; returns bool
+  _get_data_files()                - Discover all .xlsx and .csv files in data_dir
+  _process_file_with_validation()  - Per-file orchestration across all layers
+  _get_or_create_schema()          - Load or infer DataSchema; detect drift
+  _validate_row()                  - Composite row validation (schema + integrity + Excel errors)
+  _ingest_valid_data()             - Route validated rows to canonical table methods
+  _ingest_student_data()           - Write to DimStudent (upsert by email)
+  _ingest_engagement_data()        - Write to FactEngagement (TODO: pending impl)
+  _ingest_academic_data()          - Write to FactAcademicPerformance (TODO: pending impl)
+
+Usage:
+  pipeline = ValidatedEWSPipeline(strict_mode=True)
+  success = pipeline.run()
+
 
 ================================================================================
 11. AUTHENTICATION & DEPENDENCIES
@@ -2408,13 +2583,91 @@ ERROR HANDLING:
 
 
 ================================================================================
-14. FILE INDEX
+14. CORE UTILITIES (backend/core/)
+================================================================================
+
+The backend/core/ directory holds cross-cutting infrastructure utilities
+used by main.py and any service that needs structured logging or security
+primitives.
+
+--------------------------------------------------------------------------------
+14.1  STRUCTURED JSON LOGGER (backend/core/logger.py)
+--------------------------------------------------------------------------------
+
+Class: JSONFormatter(logging.Formatter)
+
+  Custom log formatter that emits every log record as a single-line JSON
+  object. Consumed by both a FileHandler (backend/backend.log) and a
+  StreamHandler (stdout).
+
+  JSON fields emitted per record:
+    timestamp   ISO 8601 UTC string ("2026-02-24T12:00:00.000Z")
+    level       Log level name ("INFO", "WARNING", "ERROR", etc.)
+    name        Logger name (e.g. "ews_platform")
+    module      Python module name
+    funcName    Function that emitted the log
+    message     The formatted log message
+    exc_info    Exception traceback string (only if record.exc_info is set)
+
+Function: setup_logger(name: str) -> logging.Logger
+
+  Creates and configures a named logger with the JSONFormatter. Guards
+  against duplicate handler registration (safe to call multiple times with
+  the same name). Log level read from config.LOG_LEVEL; log file path from
+  config.LOG_FILE (backend/backend.log).
+
+Module-level singleton:
+  sys_logger = setup_logger("ews_platform")
+
+  Imported and used directly in main.py for startup, shutdown, middleware
+  logging, and all services that import from backend.core.logger.
+
+--------------------------------------------------------------------------------
+14.2  SECURITY MANAGER (backend/core/security.py)
+--------------------------------------------------------------------------------
+
+Class: SecurityManager
+
+  Centralised security and validation utilities. Instantiated once at module
+  level as security_manager and imported into main.py.
+
+  Methods:
+
+  sanitize_input(data: str) -> str
+    Strips HTML/script tags from string input via regex (re.sub).
+    Returns the original value unchanged if data is falsy.
+    Use at any request boundary where user-supplied strings are received.
+
+  enforce_role(user_role: str, allowed_roles: List[str])
+    Raises HTTP 403 (Forbidden) if user_role is not in allowed_roles.
+    Implements role-based access control (RBAC) for protected endpoints.
+
+  validate_pagination(skip: int, limit: int)
+    Raises HTTP 400 if skip < 0 or if limit is outside the range [1, 1000].
+    Apply via Depends() on any paginated endpoint.
+
+Module-level singleton:
+  security_manager = SecurityManager()
+
+
+================================================================================
+15. FILE INDEX
 ================================================================================
 
 backend/
-  main.py                                   Application entry point
-  config.py                                 Centralized configuration
+  main.py                                   Application entry point (v2.0.0,
+                                            rate limiting, /health endpoint)
+  config.py                                 Centralized configuration (dual LLM,
+                                            Redis, security, expanded data paths)
   database.py                               ORM models & DB connection
+
+  core/
+    logger.py                               Structured JSON logger (JSONFormatter,
+                                            setup_logger, sys_logger singleton)
+    security.py                             Security manager (RBAC, input sanitization,
+                                            pagination validation)
+    auth.py                                 JWT authentication utilities
+    redis_cache.py                          Redis caching helpers
 
   app/
     api/
@@ -2437,13 +2690,16 @@ backend/
       student_service.py                     Student data orchestration
       feature_engineering.py                 11 engagement feature calculations
       risk_scoring.py                        Weighted risk scoring engine
+      ml_service.py                          MLService wrapper (XGBoost + RF + fallback
+                                             heuristic, LRU-cached predictions)
 
       core/
         decision_engine.py                   Intervention threshold logic
         data_ingestion.py                    XLSX parsing & DB population
 
       ai/
-        advisor.py                           Google Gemini AI integration
+        advisor.py                           Google Gemini / Anthropic Claude integration
+        faculty_summary.py                   Faculty summary generation service
 
     models/                                  Pydantic schemas
     schemas/                                 Request/response schemas
@@ -2480,7 +2736,8 @@ backend/
 
   ingestion/
     pipeline.py                              ETL orchestrator
-    validated_pipeline.py                    Validation-aware pipeline
+    validated_pipeline.py                    8-layer validation pipeline
+                                             (ValidatedEWSPipeline class)
     transformers.py                          Type coercion utilities
     validators.py                            Data validators
     row_validators.py                        Per-row validation
@@ -2489,6 +2746,28 @@ backend/
     error_logger.py                          Error tracking
     quarantine.py                            Invalid record handling
     defaults.py                              Default values
+
+  routes/
+    ml_routes.py                             ML prediction endpoints (/api/v1/ml)
+    auth.py                                  Auth endpoints (/api/v1/auth)
+    students.py                              Student endpoints (role-based)
+    admin_v1.py                              Admin endpoints
+    student_v1.py                            Student-role endpoints
+    retention_v1.py                          Retention management endpoints
+    faculty_v1.py                            Faculty-role endpoints
+    predictions.py                           Prediction endpoints
+    decisions.py                             Decision engine endpoints
+    feedback.py                              Feedback endpoints
+    features.py                              Feature endpoints
+    business.py                              Business intelligence endpoints
+    llm.py                                   LLM endpoints
+    advisor.py                               AI advisor endpoints
+    events.py                                Event endpoints
+    goals.py                                 Goals endpoints
+    analytics.py                             Analytics endpoints
+    recommendations.py                       Recommendation endpoints
+    reports.py                               Report generation endpoints
+    integration.py                           External integration endpoints
 
   tests/
     test_advanced_features.py                Advanced feature tests
@@ -2502,6 +2781,22 @@ backend/
   data/
     sql_app.db                               SQLite database
     labels.csv                               Student labels
+
+models/
+  config.yaml                                ML model configuration
+  feature_engineering.py                     Data loading + feature engineering
+  saved_models/
+    xgboost_model.pkl                        Trained XGBoost classifier
+    random_forest.pkl                        Trained Random Forest classifier
+  evaluation_confusion_matrix.png            Confusion matrix from last training run
+  ml/models/saved/
+    feature_importance.csv                   Feature importance scores from XGBoost
+
+setup.sh                                     Bash setup script: creates venv,
+                                             activates it, and installs requirements.txt
+                                             (uses /home/duffer/tmp to avoid /tmp space issues)
+test_endpoints.py                            Endpoint smoke-test script
+test_students.json                           Test student fixture data
 
 
 ================================================================================
