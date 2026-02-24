@@ -80,10 +80,6 @@ const Interventions = () => {
     const prevStep = () => setModalStep(modalStep - 1);
 
     const handleAssign = () => {
-        console.log('Assigning intervention:', {
-            students: selectedStudents,
-            intervention: selectedIntervention,
-        });
         setShowModal(false);
     };
 

@@ -48,7 +48,6 @@ const RiskFactors = () => {
 
     const confirmApplyChanges = () => {
         // In a real app, this would call an API to update the risk model
-        console.log('Updating risk model with new weights:', weights);
         setShowConfirmModal(false);
         setPendingWeights(null);
     };

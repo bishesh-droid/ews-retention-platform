@@ -4,6 +4,8 @@ import { FaDollarSign, FaExclamationCircle } from 'react-icons/fa';
 import axios from 'axios';
 import { motion } from 'framer-motion';
 
+const API_BASE = process.env.REACT_APP_API_URL || 'http://localhost:8000/api/v1';
+
 /**
  * RevenueRiskTranslator - Converts academic risk to business impact
  * Sales/retention team view
@@ -20,7 +22,7 @@ function RevenueRiskTranslator() {
         setLoading(true);
 
         try {
-            const response = await axios.get('http://localhost:8000/api/llm/revenue-risk-translation');
+            const response = await axios.get(`${API_BASE}/llm/revenue-risk-translation`);
             setRevenueData(response.data);
         } catch (err) {
             console.error('Error fetching revenue risk:', err);

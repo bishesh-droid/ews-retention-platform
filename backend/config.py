@@ -79,7 +79,14 @@ LLM_TEMPERATURE = float(os.getenv("LLM_TEMPERATURE", "0.7"))
 LLM_MAX_TOKENS = int(os.getenv("LLM_MAX_TOKENS", "1024"))
 
 # ========== Integration API ==========
-INTEGRATION_API_KEY = os.getenv("INTEGRATION_API_KEY", "ews-integration-dev-key")
+_DEFAULT_INTEGRATION_KEY = "ews-integration-dev-key"
+INTEGRATION_API_KEY = os.getenv("INTEGRATION_API_KEY", _DEFAULT_INTEGRATION_KEY)
+if INTEGRATION_API_KEY == _DEFAULT_INTEGRATION_KEY:
+    import warnings
+    warnings.warn(
+        "INTEGRATION_API_KEY is using the insecure default dev key. Set INTEGRATION_API_KEY before deploying.",
+        stacklevel=1,
+    )
 AI_ADVISOR_ORIGIN = os.getenv("AI_ADVISOR_ORIGIN", "http://localhost:8001")
 
 # ========== API Configuration ==========
@@ -128,7 +135,14 @@ WEEK5_USAGE_PATH          = RAW_DATA_DIR / "Learner usage week 5.xlsx"
 GRADED_QUIZ_COMPLETE_PATH = GRADED_QUIZ_10FEB_451PM_PATH
 
 # ========== Security ==========
-SECRET_KEY = os.getenv("SECRET_KEY", "your-secret-key-for-dev-only")
+_DEFAULT_SECRET_KEY = "your-secret-key-for-dev-only"
+SECRET_KEY = os.getenv("SECRET_KEY", _DEFAULT_SECRET_KEY)
+if SECRET_KEY == _DEFAULT_SECRET_KEY:
+    import warnings
+    warnings.warn(
+        "SECRET_KEY is using the insecure default. Set a strong SECRET_KEY environment variable before deploying.",
+        stacklevel=1,
+    )
 ALGORITHM = "HS256"
 ACCESS_TOKEN_EXPIRE_MINUTES = int(os.getenv("ACCESS_TOKEN_EXPIRE_MINUTES", "1440"))  # 24 hours
 

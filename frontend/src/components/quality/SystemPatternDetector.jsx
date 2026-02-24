@@ -4,6 +4,8 @@ import { FaLightbulb, FaExclamationTriangle, FaChartBar } from 'react-icons/fa';
 import axios from 'axios';
 import { motion } from 'framer-motion';
 
+const API_BASE = process.env.REACT_APP_API_URL || 'http://localhost:8000/api/v1';
+
 /**
  * SystemPatternDetector - Displays LLM-discovered institutional insights
  * Admin-facing blind spot detection
@@ -20,7 +22,7 @@ function SystemPatternDetector() {
         setLoading(true);
 
         try {
-            const response = await axios.get('http://localhost:8000/api/llm/institutional-insights');
+            const response = await axios.get(`${API_BASE}/llm/institutional-insights`);
             const allInsights = [
                 ...(response.data.systemic_issues || []),
                 ...(response.data.blind_spots || [])

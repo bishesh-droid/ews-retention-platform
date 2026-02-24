@@ -3,6 +3,8 @@ import { Card, Button, Spinner, Alert } from 'react-bootstrap';
 import { FaChartLine, FaInfoCircle, FaChevronDown, FaChevronUp } from 'react-icons/fa';
 import axios from 'axios';
 
+const API_BASE = process.env.REACT_APP_API_URL || 'http://localhost:8000/api/v1';
+
 /**
  * RiskChangeExplainer - Explains why a student's risk score changed
  * Student-facing component with empathetic, non-alarming tone
@@ -24,7 +26,7 @@ function RiskChangeExplainer({ studentId }) {
         setError(null);
 
         try {
-            const response = await axios.post('http://localhost:8000/api/llm/explain-risk-change', {
+            const response = await axios.post(`${API_BASE}/llm/explain-risk-change`, {
                 student_id: studentId,
                 time_period: 'recent'
             });

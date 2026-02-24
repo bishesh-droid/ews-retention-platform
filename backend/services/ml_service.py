@@ -136,6 +136,7 @@ class MLService:
                 result["top_risk_factors"] = factors
 
             if not self.rf_model and not self.xgb_model:
+                 logger.warning("No ML models loaded for student %s; using heuristic fallback prediction.", student_row.index[0] if not student_row.empty else "unknown")
                  fallback = self._fallback_heuristic(student_row)
                  result["predictions"]["heuristic_fallback"] = {"probability": fallback["probability"], "risk_class": fallback["risk_class"]}
                  result["top_risk_factors"] = fallback["factors"]

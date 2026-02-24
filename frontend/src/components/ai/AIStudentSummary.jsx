@@ -3,6 +3,8 @@ import { Card, Button, Spinner, Badge } from 'react-bootstrap';
 import { FaRobot, FaChevronDown, FaChevronUp } from 'react-icons/fa';
 import axios from 'axios';
 
+const API_BASE = process.env.REACT_APP_API_URL || 'http://localhost:8000/api/v1';
+
 /**
  * AIStudentSummary - One-click AI-generated student summary for faculty
  * Saves time by providing instant insights
@@ -16,7 +18,7 @@ function AIStudentSummary({ studentId, riskCategory }) {
         setLoading(true);
 
         try {
-            const response = await axios.post('http://localhost:8000/api/llm/faculty-summary', {
+            const response = await axios.post(`${API_BASE}/llm/faculty-summary`, {
                 student_id: studentId,
                 for_role: 'faculty'
             });

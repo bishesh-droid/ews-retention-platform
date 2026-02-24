@@ -3,6 +3,8 @@ import { Card, ListGroup, Badge, Spinner } from 'react-bootstrap';
 import { FaBullseye, FaCheckCircle, FaCircle } from 'react-icons/fa';
 import axios from 'axios';
 
+const API_BASE = process.env.REACT_APP_API_URL || 'http://localhost:8000/api/v1';
+
 /**
  * MicroGoalsSuggester - AI-generated personalized micro-goals
  * Shows achievable weekly goals with rationale
@@ -21,7 +23,7 @@ function MicroGoalsSuggester({ studentId }) {
         setLoading(true);
 
         try {
-            const response = await axios.post('http://localhost:8000/api/llm/student-advice', {
+            const response = await axios.post(`${API_BASE}/llm/student-advice`, {
                 student_id: studentId,
                 question: 'Suggest 3 specific, achievable micro-goals for me this week to improve my academic standing.'
             });

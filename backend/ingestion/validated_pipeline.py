@@ -297,13 +297,13 @@ class ValidatedEWSPipeline:
     
     def _ingest_engagement_data(self, df: pd.DataFrame, source_file: str):
         """Ingest engagement/attendance data"""
-        # Similar to existing implementation but with provenance
-        pass
-    
+        # TODO: Implement engagement ingestion with provenance tracking
+        self.logger.warning("_ingest_engagement_data is not yet implemented; skipping %s", source_file)
+
     def _ingest_academic_data(self, df: pd.DataFrame, source_file: str):
         """Ingest academic performance data"""
-        # Similar to existing implementation but with provenance
-        pass
+        # TODO: Implement academic data ingestion with provenance tracking
+        self.logger.warning("_ingest_academic_data is not yet implemented; skipping %s", source_file)
 
 
 def main():

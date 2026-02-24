@@ -31,6 +31,13 @@ from backend.database.models import (
     Goal,
     RiskSnapshot,
     AuditLog,
+    DimStudent,
+    DimCourse,
+    FactAcademicPerformance,
+    FactEngagement,
+    FactConsistency,
+    FactIntentResponsiveness,
+    DataLineage,
 )
 
 __all__ = [
@@ -61,4 +68,11 @@ __all__ = [
     "Goal",
     "RiskSnapshot",
     "AuditLog",
+    "DimStudent",
+    "DimCourse",
+    "FactAcademicPerformance",
+    "FactEngagement",
+    "FactConsistency",
+    "FactIntentResponsiveness",
+    "DataLineage",
 ]

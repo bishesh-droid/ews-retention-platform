@@ -203,8 +203,9 @@ Keep the tone professional, supportive, and focused on helping the student succe
                 # Clean up markers
                 text = text.lstrip(':').strip()
                 return text if text else None
-        except Exception:
-            pass
+        except Exception as e:
+            import logging
+            logging.getLogger(__name__).debug("Failed to extract section '%s': %s", section, e)
         return None
 
     def _extract_list(self, response: str, section: str) -> List[str]:

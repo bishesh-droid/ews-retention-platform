@@ -51,7 +51,6 @@ const StudentPortal = () => {
     };
 
     const handleRunSimulation = (scenarios) => {
-        console.log('Running simulation with:', scenarios);
         return Promise.resolve({
             newScore: 85,
             delta: 10,
