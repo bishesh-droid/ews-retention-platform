@@ -261,13 +261,21 @@ graph TB
 
 **Source**: Excel/CSV files placed in `data/raw/`
 
-**Key Input Files** (configured in `backend/config.py`):
-- `Engagement_Analysis.xlsx`
-- `_Trimester-1 2025 Attendance Quiz-Assignment-Exam 5Jan2025.xlsx`
-- `B.S and M.Sc Live Summary Data C-1, Trimester 1.xlsx`
-- `Learner usage week 3.xlsx`
-- `graded quiz 1 10 feb complete.xlsx`
-- `B.S and M.Sc Summary Data Trimester 2.xlsx`
+**Key Input Files** (configured in `backend/config.py`, placed in `data/raw/`):
+
+| File | Description |
+|------|-------------|
+| `Engagement_Analysis.xlsx` | Primary learner usage dump (students, courses, enrollments) |
+| `_Trimester-1 2025 Attendance Quiz-Assignment-Exam 5Jan2025 (1).xlsx` | T1 attendance, quiz, assignment, and exam records |
+| `B.S and M.Sc Live Summary Data C-1, Trimester 1 (1).xlsx` | Live session attendance — Trimester 1 |
+| `B.S and M.Sc Summary Data Trimester 2 (1).xlsx` | Live session attendance — Trimester 2 |
+| `Week 1-2 Student Engagement Analysis.xlsx` | Early engagement snapshot (weeks 1–2) |
+| `Graded Quiz 1 Status 9 feb.xlsx` | Quiz 1 status snapshot (9 Feb) |
+| `graded quiz 1 10 feb complete.xlsx` | Quiz 1 full export (10 Feb, original) |
+| `graded quiz 1 10 feb 11_15 AM.xlsx` | Quiz 1 snapshot — 10 Feb 11:15 AM |
+| `Graded quiz 1 10 feb 4_51 pm.xlsx` | Quiz 1 snapshot — 10 Feb 4:51 PM (latest, used as canonical) |
+| `Learner usage week 3.xlsx` | Platform usage dump — week 3 |
+| `Learner usage week 5.xlsx` | Platform usage dump — week 5 |
 
 **Process Flow**:
 ```
@@ -295,18 +303,28 @@ Raw File (.xlsx)
 
 **Database location**: `backend/data/sql_app.db`
 
+**Canonical models**: `backend/database/models/canonical.py`
+
 **Dimension Tables**:
-- `dim_student`: Student master (id, name, email, department, program)
-- `dim_course`: Course catalog (id, name, instructor, credits)
+
+| Table | Key Columns |
+|-------|-------------|
+| `dim_students` | `student_id` (email PK), `org_defined_id`, `student_bits_id`, `student_name`, `program` (BS/MSc), `cohort`, `trimester`, `enrollment_status`, `is_new_student` |
+| `dim_courses` | `course_id` (PK), `course_code`, `course_name`, `department`, `trimester`, `program`, `faculty_name` |
 
 **Fact Tables**:
-- `fact_engagement`: Daily student activity (logins, content views, time spent)
-- `fact_academic_performance`: Assessment scores (quizzes, exams, assignments)
-- `fact_consistency`: Behavioral volatility metrics
-- `fact_intent_responsiveness`: Goal-setting, communication response times
+
+| Table | Key Columns |
+|-------|-------------|
+| `fact_academic_performance` | `student_id`, `course_id`, `assessment_type`, `max_score`, `scored`, `percentage`, `submitted`, `late_submission`, `data_snapshot_date`, `source_file` |
+| `fact_engagement` | `student_id`, `metric_date`, `metric_week`, `live_sessions_attended`, `attendance_percentage`, `total_time_minutes`, `login_count`, `days_active`, `content_items_viewed`, `data_snapshot_date` |
+| `fact_consistency` | `student_id`, `weeks_with_attendance`, `attendance_streak_current`, `attendance_streak_max`, `attendance_variance`, `weeks_with_login`, `avg_logins_per_week`, `engagement_trend`, `week_over_week_change` |
+| `fact_intent_responsiveness` | `student_id`, `hours_before_deadline`, `attempt_count`, `welcome_email_opened`, `response_time_hours`, `no_login_days`, `zero_participation_weeks`, `message_type`, `message_priority` |
+
+All fact tables include a `data_snapshot_date` column for temporal versioning — enabling point-in-time analysis as new data snapshots are loaded.
 
 **Data Lineage**:
-- `data_lineage`: ETL metadata (file, timestamp, row counts, errors)
+- `data_lineage`: ETL audit trail (source file, sheet name, target table, records processed/inserted/updated/skipped/errored, processing duration)
 
 ### 3. Feature Engineering
 
@@ -418,7 +436,21 @@ docker-compose up -d
 # API Docs: http://localhost:8000/docs
 ```
 
-### Option 2: Manual Setup
+### Option 2: Script-Assisted Setup
+
+A convenience script handles virtual environment creation and dependency installation:
+
+```bash
+# From project root
+bash setup.sh
+
+# Then activate the environment
+source venv/bin/activate
+```
+
+> **Note**: `setup.sh` uses `/home/duffer/tmp` as `TMPDIR` to avoid `/tmp` space issues on constrained systems. Adjust the path in the script if needed for your environment.
+
+### Option 3: Manual Setup
 
 #### Backend Setup
 
@@ -471,7 +503,7 @@ cd backend
 python -m backend.services.core.data_ingestion
 
 # 3. Verify data loaded
-sqlite3 backend/data/sql_app.db "SELECT COUNT(*) FROM dim_student;"
+sqlite3 backend/data/sql_app.db "SELECT COUNT(*) FROM dim_students;"
 ```
 
 ---
@@ -559,9 +591,11 @@ LOG_LEVEL=INFO
 
 ### Configuration Files
 
-1. **`backend/config.py`**: Centralized backend configuration
-2. **`frontend/src/config`**: Frontend constants directory
-3. **`data/DATA_MANIFEST.md`**: Data file catalog and validation rules
+1. **`backend/config.py`**: Centralized backend configuration (paths, thresholds, LLM, scheduler)
+2. **`backend/core/logger.py`**: Centralized structured logger (`sys_logger`) used across all backend modules
+3. **`backend/core/security.py`**: Security manager (JWT helpers, password hashing via `passlib`)
+4. **`frontend/src/config`**: Frontend constants directory
+5. **`data/DATA_MANIFEST.md`**: Data file catalog and validation rules
 
 ---
 
@@ -870,8 +904,10 @@ backend/ml/models/saved/
 ├── retention_model_xgboost.joblib  # Primary XGBoost pipeline
 ├── retention_model.joblib          # Random Forest pipeline
 ├── retention_model_logreg.joblib   # Logistic Regression baseline
-└── feature_importance.csv          # Top feature importances (CSV)
+└── feature_importance.csv          # Top feature importances (CSV, auto-generated after training)
 ```
+
+The top driver from the trained model is `absrate_avg_3` (year-3 absence rate, importance ≈ 0.452), followed by `absrate_avg_6` (≈ 0.123). Absence rate across years consistently dominates over GPA and mobility features.
 
 ---
 
