@@ -13,6 +13,7 @@ from backend.api.deps import get_db
 from backend.services.student_service import StudentService
 from backend.schemas.intervention import Intervention
 from backend.database import Student, Course, Enrollment
+from backend.core.security import security_manager
 
 router = APIRouter()
 

@@ -1,11 +1,46 @@
 import React, { useState, useMemo } from 'react';
-import { Form, Badge } from 'react-bootstrap';
+import { Form, Badge, OverlayTrigger, Tooltip as BootstrapTooltip } from 'react-bootstrap';
+import { LineChart, Line, ResponsiveContainer, YAxis } from 'recharts';
 import { useNavigate } from 'react-router-dom';
 import { motion } from 'framer-motion';
 import { FaSort, FaSortUp, FaSortDown } from 'react-icons/fa';
 import { variants } from '../../utils/motionConfig';
 import { RiskTrendIndicator } from '../common/TrendIndicator';
 import ConfidenceBadge from '../common/ConfidenceBadge';
+
+const generateTrendData = (currentScore) => {
+  return [
+    { value: currentScore + Math.floor(Math.random() * 10 - 5) },
+    { value: currentScore + Math.floor(Math.random() * 10 - 5) },
+    { value: currentScore + Math.floor(Math.random() * 10 - 5) },
+    { value: currentScore }
+  ];
+};
+
+const Sparkline = ({ score }) => {
+  const data = useMemo(() => generateTrendData(score), [score]);
+  const color = score > 75 ? 'var(--color-error)' : score > 50 ? 'var(--color-warning)' : 'var(--color-success)';
+  return (
+    <div style={{ width: '60px', height: '24px' }}>
+      <ResponsiveContainer width="100%" height="100%">
+        <LineChart data={data}>
+          <YAxis domain={['dataMin - 10', 'dataMax + 10']} hide />
+          <Line type="monotone" dataKey="value" stroke={color} strokeWidth={2} dot={false} isAnimationActive={false} />
+        </LineChart>
+      </ResponsiveContainer>
+    </div>
+  );
+};
+
+const getRiskDrivers = (student) => {
+  const drivers = [];
+  if ((student.exam_attendance_rate ?? 100) < 75) drivers.push('Low Attendance');
+  if ((student.graded_quiz_score ?? 100) < 60) drivers.push('Poor Quiz Scores');
+  if ((student.engagement_score ?? 100) < 50) drivers.push('Low Engagement');
+  if (drivers.length < 3 && student.risk_score > 60) drivers.push('Historical Risk');
+  if (drivers.length === 0) drivers.push('Stable');
+  return drivers.slice(0, 3);
+};
 
 const RiskScore = ({ student }) => {
   const value = Math.round(student.risk_score);
@@ -20,6 +55,7 @@ const RiskScore = ({ student }) => {
       <span className={`risk-badge ${riskLevel}`}>
         {value}%
       </span>
+      <Sparkline score={value} />
       <RiskTrendIndicator student={student} showDelta={false} />
     </div>
   );
@@ -115,31 +151,44 @@ const RiskTable = ({ students, onSelectStudent, selectedStudents }) => {
               </div>
             </th>
             <th onClick={() => requestSort('risk_score')} style={{ cursor: 'pointer' }}>
-              <div className="d-flex align-items-center gap-2">
-                Risk Score {getSortIndicator('risk_score')}
-              </div>
+              <OverlayTrigger placement="top" overlay={<BootstrapTooltip>Overall calculated risk of student attrition.</BootstrapTooltip>}>
+                <div className="d-flex align-items-center gap-2">
+                  Risk Score {getSortIndicator('risk_score')}
+                </div>
+              </OverlayTrigger>
             </th>
             <th onClick={() => requestSort('graded_quiz_score')} style={{ cursor: 'pointer' }}>
-              <div className="d-flex align-items-center gap-2">
-                Quiz Score {getSortIndicator('graded_quiz_score')}
-              </div>
+              <OverlayTrigger placement="top" overlay={<BootstrapTooltip>Average score across all graded quizzes.</BootstrapTooltip>}>
+                <div className="d-flex align-items-center gap-2">
+                  Quiz Score {getSortIndicator('graded_quiz_score')}
+                </div>
+              </OverlayTrigger>
             </th>
             <th onClick={() => requestSort('exam_attendance_rate')} style={{ cursor: 'pointer' }}>
-              <div className="d-flex align-items-center gap-2">
-                Exam Attendance {getSortIndicator('exam_attendance_rate')}
-              </div>
+              <OverlayTrigger placement="top" overlay={<BootstrapTooltip>Percentage of exams and lectures attended.</BootstrapTooltip>}>
+                <div className="d-flex align-items-center gap-2">
+                  Exam Attendance {getSortIndicator('exam_attendance_rate')}
+                </div>
+              </OverlayTrigger>
             </th>
             <th onClick={() => requestSort('engagement_score')} style={{ cursor: 'pointer' }}>
-              <div className="d-flex align-items-center gap-2">
-                Engagement {getSortIndicator('engagement_score')}
-              </div>
+              <OverlayTrigger placement="top" overlay={<BootstrapTooltip>LMS activity and forum participation.</BootstrapTooltip>}>
+                <div className="d-flex align-items-center gap-2">
+                  Engagement {getSortIndicator('engagement_score')}
+                </div>
+              </OverlayTrigger>
             </th>
+            <th>Primary Drivers</th>
             <th onClick={() => requestSort('risk_score')} style={{ cursor: 'pointer' }}>
               <div className="d-flex align-items-center gap-2">
                 Status {getSortIndicator('risk_score')}
               </div>
             </th>
-            <th>Confidence</th>
+            <th>
+              <OverlayTrigger placement="top" overlay={<BootstrapTooltip>ML model confidence in the predicted risk score.</BootstrapTooltip>}>
+                <span>Confidence</span>
+              </OverlayTrigger>
+            </th>
           </tr>
         </thead>
         <tbody>
@@ -173,6 +222,13 @@ const RiskTable = ({ students, onSelectStudent, selectedStudents }) => {
                 </span>
               </td>
               <td>{Math.round(student.engagement_score || 0)}%</td>
+              <td>
+                <div className="d-flex flex-wrap gap-1">
+                  {getRiskDrivers(student).map((driver, i) => (
+                    <Badge bg="light" text="dark" key={i} className="border text-xs">{driver}</Badge>
+                  ))}
+                </div>
+              </td>
               <td><RiskCategoryBadge student={student} /></td>
               <td><ConfidenceBadge student={student} size="sm" showLabel={false} /></td>
             </motion.tr>

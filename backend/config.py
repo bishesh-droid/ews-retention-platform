@@ -100,14 +100,32 @@ if additional_origins:
 
 # ========== Data Ingestion ==========
 RAW_DATA_DIR = BASE_DIR / "data" / "raw"
-ENGAGEMENT_DATA_PATH = RAW_DATA_DIR / "Engagement_Analysis.xlsx"
-QUIZ_EXAM_DATA_PATH = RAW_DATA_DIR / "_Trimester-1 2025 Attendance Quiz-Assignment-Exam 5Jan2025.xlsx"
-LIVE_ATTENDANCE_DATA_PATH = RAW_DATA_DIR / "B.S and M.Sc Live Summary Data C-1, Trimester 1.xlsx"
-LABELS_DATA_PATH = DATA_DIR / "labels.csv"
-WEEK3_USAGE_PATH = RAW_DATA_DIR / "Learner usage week 3.xlsx"
-GRADED_QUIZ_COMPLETE_PATH = RAW_DATA_DIR / "graded quiz 1 10 feb complete.xlsx"
-LIVE_T1_PATH = RAW_DATA_DIR / "B.S and M.Sc Live Summary Data C-1, Trimester 1.xlsx"
-LIVE_T2_PATH = RAW_DATA_DIR / "B.S and M.Sc Summary Data Trimester 2.xlsx"
+
+# --- Core academic records ---
+ENGAGEMENT_DATA_PATH    = RAW_DATA_DIR / "Engagement_Analysis.xlsx"
+QUIZ_EXAM_DATA_PATH     = RAW_DATA_DIR / "_Trimester-1 2025 Attendance Quiz-Assignment-Exam 5Jan2025 (1).xlsx"
+LABELS_DATA_PATH        = DATA_DIR / "labels.csv"
+
+# --- Live session attendance ---
+LIVE_ATTENDANCE_DATA_PATH = RAW_DATA_DIR / "B.S and M.Sc Live Summary Data C-1, Trimester 1 (1).xlsx"
+LIVE_T1_PATH              = RAW_DATA_DIR / "B.S and M.Sc Live Summary Data C-1, Trimester 1 (1).xlsx"
+LIVE_T2_PATH              = RAW_DATA_DIR / "B.S and M.Sc Summary Data Trimester 2 (1).xlsx"
+
+# --- Engagement snapshots (all used together for max-merge enrichment) ---
+# Trimester 1 (earliest snapshot, week 1-2 period)
+WEEK12_ENGAGEMENT_PATH    = RAW_DATA_DIR / "Week 1-2 Student Engagement Analysis.xlsx"
+# Graded Quiz 1 status export — 9 Feb
+QUIZ_STATUS_9FEB_PATH     = RAW_DATA_DIR / "Graded Quiz 1 Status 9 feb.xlsx"
+# Learner usage exports — 10 Feb (three progressive snapshots)
+GRADED_QUIZ_10FEB_ORIG_PATH  = RAW_DATA_DIR / "graded quiz 1 10 feb complete.xlsx"
+GRADED_QUIZ_10FEB_1115AM_PATH = RAW_DATA_DIR / "graded quiz 1 10 feb 11_15 AM.xlsx"
+GRADED_QUIZ_10FEB_451PM_PATH  = RAW_DATA_DIR / "Graded quiz 1 10 feb 4_51 pm.xlsx"
+# Weekly usage dumps
+WEEK3_USAGE_PATH          = RAW_DATA_DIR / "Learner usage week 3.xlsx"
+WEEK5_USAGE_PATH          = RAW_DATA_DIR / "Learner usage week 5.xlsx"
+
+# Alias kept for any external references
+GRADED_QUIZ_COMPLETE_PATH = GRADED_QUIZ_10FEB_451PM_PATH
 
 # ========== Security ==========
 SECRET_KEY = os.getenv("SECRET_KEY", "your-secret-key-for-dev-only")
@@ -121,6 +139,9 @@ CACHE_EXPIRE_SECONDS = int(os.getenv("CACHE_EXPIRE_SECONDS", "3600"))
 # ========== Logging ==========
 LOG_LEVEL = os.getenv("LOG_LEVEL", "INFO")
 LOG_FILE = BACKEND_DIR / "backend.log"
+
+# ========== Sample / Training Data ==========
+SAMPLE_DATA_PATH = BASE_DIR / "frontend" / "public" / "data" / "student_data_test.csv"
 
 # ========== Feature Engineering ==========
 FEATURE_COLUMNS_REQUIRED = [

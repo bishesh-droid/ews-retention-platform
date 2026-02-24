@@ -259,10 +259,10 @@ class DimStudent(Base):
     org_defined_id = Column(String(50), index=True)
     student_bits_id = Column(String(50))
     student_name = Column(String(255))
-    program = Column(String(10))  # BS or MSc
-    cohort = Column(String(20))
+    program = Column(String(10), index=True)  # BS or MSc
+    cohort = Column(String(20), index=True)
     trimester = Column(Integer)
-    enrollment_status = Column(String(20))
+    enrollment_status = Column(String(20), index=True)
     is_new_student = Column(Boolean)
     created_at = Column(DateTime, default=datetime.utcnow)
     updated_at = Column(DateTime, default=datetime.utcnow, onupdate=datetime.utcnow)
@@ -288,7 +288,7 @@ class FactAcademicPerformance(Base):
     student_id = Column(String(255), ForeignKey("dim_students.student_id"), nullable=False, index=True)
     course_id = Column(String(50), ForeignKey("dim_courses.course_id"))
     trimester = Column(String(20))
-    assessment_type = Column(String(50))  # Quiz, Assignment, Exam
+    assessment_type = Column(String(50), index=True)  # Quiz, Assignment, Exam
     assessment_name = Column(String(100))
     assessment_date = Column(Date)
     max_score = Column(Float)
@@ -307,9 +307,9 @@ class FactEngagement(Base):
     
     engagement_id = Column(Integer, primary_key=True, autoincrement=True)
     student_id = Column(String(255), ForeignKey("dim_students.student_id"), nullable=False, index=True)
-    course_id = Column(String(50), ForeignKey("dim_courses.course_id"))
+    course_id = Column(String(50), ForeignKey("dim_courses.course_id"), index=True)
     metric_date = Column(Date, index=True)
-    metric_week = Column(Integer)
+    metric_week = Column(Integer, index=True)
     
     # Attendance
     live_sessions_scheduled = Column(Integer)

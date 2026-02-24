@@ -13,7 +13,9 @@ from sqlalchemy.orm import Session
 
 from backend.config import (
     ENGAGEMENT_DATA_PATH, QUIZ_EXAM_DATA_PATH,
-    GRADED_QUIZ_COMPLETE_PATH, WEEK3_USAGE_PATH,
+    WEEK12_ENGAGEMENT_PATH, QUIZ_STATUS_9FEB_PATH,
+    GRADED_QUIZ_10FEB_ORIG_PATH, GRADED_QUIZ_10FEB_1115AM_PATH, GRADED_QUIZ_10FEB_451PM_PATH,
+    WEEK3_USAGE_PATH, WEEK5_USAGE_PATH,
 )
 from backend.database import (
     Student, Course, Enrollment,
@@ -543,145 +545,225 @@ def _ingest_exam_defaulters(db: Session, wb):
 
 def _update_enrollments_from_latest(db: Session):
     """
-    Update enrollment records with richer data from the latest XLSX files:
-    1. graded quiz 1 10 feb complete.xlsx - has full engagement metrics
-    2. Learner usage week 3.xlsx - has week 3 data with discussions/assignments
+    Merge engagement data from ALL available snapshot files in chronological order.
+
+    Strategy:
+    - Counter fields (content, quizzes, logins, time): always keep the max value seen.
+    - Date/string fields: overwrite with the latest non-null value.
+
+    Sources processed (oldest → newest):
+    1. Week 1-2 Student Engagement Analysis  (T1 snapshot, weeks 1-2)
+    2. Graded Quiz 1 Status 9 Feb            (Feb 9 data dump, course matched by name)
+    3. graded quiz 1 10 feb complete         (Feb 10, original export)
+    4. graded quiz 1 10 feb 11:15 AM         (Feb 10, 11:15 AM export)
+    5. Graded quiz 1 10 feb 4:51 PM          (Feb 10, 4:51 PM export)
+    6. Learner usage week 3                  (week 3 snapshot)
+    7. Learner usage week 5                  (week 5 snapshot — most recent)
     """
-    # --- Update from graded quiz complete (most recent full data) ---
-    path = str(GRADED_QUIZ_COMPLETE_PATH)
-    if not GRADED_QUIZ_COMPLETE_PATH.exists():
-        logger.warning(f"File not found: {path}")
-    else:
-        logger.info(f"Updating enrollments from {path}...")
-        wb = openpyxl.load_workbook(path, read_only=True, data_only=True)
+    # Counter fields: always take the highest value seen across all snapshots.
+    COUNTER_FIELDS = {
+        'content_completed', 'content_required', 'checklist_completed',
+        'quiz_completed', 'total_quiz_attempts', 'discussion_posts_created',
+        'discussion_post_replies', 'discussion_posts_read',
+        'num_assignment_submissions', 'total_time_spent_seconds', 'num_logins',
+    }
+
+    # Build course name → course_id map for files that lack a course code column.
+    course_name_to_id = {c.name.lower(): c.id for c in db.query(Course).all()}
+
+    # Each source entry:
+    #   path         – Path object
+    #   sheet        – sheet name to read
+    #   course_col   – column index of course_code (None if not available)
+    #   cname_col    – column index of course_name (used only when course_col is None)
+    #   user_col     – column index of username/email
+    #   min_cols     – minimum row length to skip malformed rows
+    #   fields       – {enrollment_attr: column_index} for every metric
+    sources = [
+        {
+            'label':     'Week 1-2 T1 engagement',
+            'path':      WEEK12_ENGAGEMENT_PATH,
+            'sheet':     'Learner Usage main dump',
+            'course_col': 0, 'user_col': 6, 'min_cols': 30,
+            'fields': {
+                'content_completed': 12, 'content_required': 14,
+                'checklist_completed': 16, 'quiz_completed': 18, 'total_quiz_attempts': 19,
+                'discussion_posts_created': 20, 'discussion_post_replies': 21,
+                'discussion_posts_read': 22, 'last_discussion_post_date': 23,
+                'num_assignment_submissions': 24, 'last_assignment_submission_date': 25,
+                'total_time_spent_seconds': 26, 'last_visited_date': 27,
+                'last_system_login': 28, 'num_logins': 29,
+                'last_quiz_attempt_date': 31, 'last_scorm_completion_date': 32,
+                'last_scorm_visit_date': 33,
+            },
+        },
+        {
+            'label':      'Graded Quiz Status 9 Feb (data dump)',
+            'path':       QUIZ_STATUS_9FEB_PATH,
+            'sheet':      'Data Dump - Learner Usage',
+            'course_col': None, 'cname_col': 0, 'user_col': 3, 'min_cols': 22,
+            'fields': {
+                'content_completed': 7, 'content_required': 8,
+                'checklist_completed': 9, 'quiz_completed': 10, 'total_quiz_attempts': 11,
+                'discussion_posts_created': 12, 'discussion_post_replies': 13,
+                'discussion_posts_read': 14, 'last_discussion_post_date': 15,
+                'num_assignment_submissions': 16, 'last_assignment_submission_date': 17,
+                'total_time_spent_seconds': 18, 'last_visited_date': 19,
+                'last_system_login': 20, 'num_logins': 21,
+                'last_quiz_attempt_date': 23, 'last_scorm_completion_date': 24,
+            },
+        },
+        {
+            'label':     'Graded Quiz (Feb 10, original complete)',
+            'path':      GRADED_QUIZ_10FEB_ORIG_PATH,
+            'sheet':     'Learner Usage-02-11-2026T10-14-',
+            'course_col': 1, 'user_col': 7, 'min_cols': 29,
+            'fields': {
+                'content_completed': 14, 'content_required': 15,
+                'checklist_completed': 16, 'quiz_completed': 17, 'total_quiz_attempts': 18,
+                'discussion_posts_created': 19, 'discussion_post_replies': 20,
+                'discussion_posts_read': 21, 'last_discussion_post_date': 22,
+                'num_assignment_submissions': 23, 'last_assignment_submission_date': 24,
+                'total_time_spent_seconds': 25, 'last_visited_date': 26,
+                'last_system_login': 27, 'num_logins': 28,
+                'last_quiz_attempt_date': 30, 'last_scorm_completion_date': 31,
+                'last_scorm_visit_date': 32,
+            },
+        },
+        {
+            'label':     'Graded Quiz (Feb 10, 11:15 AM)',
+            'path':      GRADED_QUIZ_10FEB_1115AM_PATH,
+            'sheet':     'Learner Usage-02-10-2026T11-12-',
+            'course_col': 1, 'user_col': 9, 'min_cols': 31,
+            'fields': {
+                'content_completed': 16, 'content_required': 17,
+                'checklist_completed': 18, 'quiz_completed': 19, 'total_quiz_attempts': 20,
+                'discussion_posts_created': 21, 'discussion_post_replies': 22,
+                'discussion_posts_read': 23, 'last_discussion_post_date': 24,
+                'num_assignment_submissions': 25, 'last_assignment_submission_date': 26,
+                'total_time_spent_seconds': 27, 'last_visited_date': 28,
+                'last_system_login': 29, 'num_logins': 30,
+                'last_quiz_attempt_date': 32, 'last_scorm_completion_date': 33,
+                'last_scorm_visit_date': 34,
+            },
+        },
+        {
+            'label':     'Graded Quiz (Feb 10, 4:51 PM)',
+            'path':      GRADED_QUIZ_10FEB_451PM_PATH,
+            'sheet':     'Learner Usage',
+            'course_col': 1, 'user_col': 8, 'min_cols': 26,
+            'fields': {
+                'content_completed': 11, 'content_required': 12,
+                'checklist_completed': 13, 'quiz_completed': 14, 'total_quiz_attempts': 15,
+                'discussion_posts_created': 16, 'discussion_post_replies': 17,
+                'discussion_posts_read': 18, 'last_discussion_post_date': 19,
+                'num_assignment_submissions': 20, 'last_assignment_submission_date': 21,
+                'total_time_spent_seconds': 22, 'last_visited_date': 23,
+                'last_system_login': 24, 'num_logins': 25,
+                'last_quiz_attempt_date': 27, 'last_scorm_completion_date': 28,
+                'last_scorm_visit_date': 29,
+            },
+        },
+        {
+            'label':     'Learner usage week 3',
+            'path':      WEEK3_USAGE_PATH,
+            'sheet':     'Learner Usage',
+            'course_col': 0, 'user_col': 4, 'min_cols': 32,
+            'fields': {
+                'content_completed': 10,
+                'checklist_completed': 19, 'quiz_completed': 20, 'total_quiz_attempts': 21,
+                'discussion_posts_created': 22, 'discussion_post_replies': 23,
+                'discussion_posts_read': 24, 'last_discussion_post_date': 25,
+                'num_assignment_submissions': 26, 'last_assignment_submission_date': 27,
+                'total_time_spent_seconds': 28, 'last_visited_date': 29,
+                'last_system_login': 30, 'num_logins': 31,
+                'last_quiz_attempt_date': 33, 'last_scorm_completion_date': 34,
+                'last_scorm_visit_date': 35,
+            },
+        },
+        {
+            'label':     'Learner usage week 5',
+            'path':      WEEK5_USAGE_PATH,
+            'sheet':     'Main Dump',
+            'course_col': 1, 'user_col': 9, 'min_cols': 31,
+            'fields': {
+                'content_completed': 16, 'content_required': 17,
+                'checklist_completed': 18, 'quiz_completed': 19, 'total_quiz_attempts': 20,
+                'discussion_posts_created': 21, 'discussion_post_replies': 22,
+                'discussion_posts_read': 23, 'last_discussion_post_date': 24,
+                'num_assignment_submissions': 25, 'last_assignment_submission_date': 26,
+                'total_time_spent_seconds': 27, 'last_visited_date': 28,
+                'last_system_login': 29, 'num_logins': 30,
+                'last_quiz_attempt_date': 32, 'last_scorm_completion_date': 33,
+                'last_scorm_visit_date': 34,
+            },
+        },
+    ]
+
+    for src in sources:
+        path = src['path']
+        if not path.exists():
+            logger.warning(f"Skipping (not found): {path.name}")
+            continue
+
+        logger.info(f"Merging [{src['label']}] from {path.name}...")
+        wb = openpyxl.load_workbook(str(path), read_only=True, data_only=True)
         try:
-            ws = wb['Learner Usage-02-11-2026T10-14-']
-            updated = 0
-            for i, row in enumerate(ws.iter_rows(values_only=True)):
-                if i == 0:
-                    continue
-                vals = list(row)
-                if len(vals) < 29 or vals[7] is None:
-                    continue
-
-                course_code = str(vals[1]).strip() if vals[1] else ''
-                username = str(vals[7]).strip() if vals[7] else ''
-                if not username or not course_code:
-                    continue
-
-                # Find matching enrollment
-                enrollment = db.query(Enrollment).filter(
-                    Enrollment.student_id == username,
-                    Enrollment.course_id == course_code,
-                ).first()
-
-                if not enrollment:
-                    continue
-
-                # Update with richer data
-                enrollment.content_completed = _safe_int(vals[14])
-                enrollment.content_required = _safe_int(vals[15])
-                enrollment.checklist_completed = _safe_int(vals[16])
-                enrollment.quiz_completed = _safe_int(vals[17])
-                enrollment.total_quiz_attempts = _safe_int(vals[18])
-                enrollment.discussion_posts_created = _safe_int(vals[19])
-                enrollment.discussion_post_replies = _safe_int(vals[20])
-                enrollment.discussion_posts_read = _safe_int(vals[21])
-                enrollment.last_discussion_post_date = str(vals[22]) if vals[22] else None
-                enrollment.num_assignment_submissions = _safe_int(vals[23])
-                enrollment.last_assignment_submission_date = str(vals[24]) if vals[24] else None
-                enrollment.total_time_spent_seconds = _safe_int(vals[25])
-                enrollment.last_visited_date = str(vals[26]) if vals[26] else None
-                enrollment.last_system_login = str(vals[27]) if vals[27] else None
-                enrollment.num_logins = _safe_int(vals[28])
-                if len(vals) > 30:
-                    enrollment.last_quiz_attempt_date = str(vals[30]) if vals[30] else None
-                if len(vals) > 31:
-                    enrollment.last_scorm_completion_date = str(vals[31]) if vals[31] else None
-                if len(vals) > 32:
-                    enrollment.last_scorm_visit_date = str(vals[32]) if vals[32] else None
-                updated += 1
-
-            db.flush()
-            logger.info(f"  Updated {updated} enrollment records from graded quiz complete.")
-        except KeyError as e:
-            logger.warning(f"Sheet not found in graded quiz complete: {e}")
-        finally:
+            ws = wb[src['sheet']]
+        except KeyError:
+            logger.warning(f"  Sheet '{src['sheet']}' not found in {path.name}")
             wb.close()
+            continue
 
-    # --- Update from Week 3 usage (adds discussion/assignment data for more courses) ---
-    path = str(WEEK3_USAGE_PATH)
-    if not WEEK3_USAGE_PATH.exists():
-        logger.warning(f"File not found: {path}")
-    else:
-        logger.info(f"Updating enrollments from {path}...")
-        wb = openpyxl.load_workbook(path, read_only=True, data_only=True)
-        try:
-            ws = wb['Learner Usage']
-            updated = 0
-            for i, row in enumerate(ws.iter_rows(values_only=True)):
-                if i == 0:
+        updated = 0
+        for i, row in enumerate(ws.iter_rows(values_only=True)):
+            if i == 0:
+                continue  # header row
+            vals = list(row)
+            if len(vals) < src['min_cols'] or vals[src['user_col']] is None:
+                continue
+
+            username = str(vals[src['user_col']]).strip()
+            if not username:
+                continue
+
+            # Resolve course_id — either directly from a code column or via name lookup
+            if src.get('course_col') is not None:
+                course_id = str(vals[src['course_col']]).strip() if vals[src['course_col']] else ''
+            else:
+                cname_raw = vals[src.get('cname_col', 0)]
+                course_name = str(cname_raw).strip().lower() if cname_raw else ''
+                course_id = course_name_to_id.get(course_name, '')
+
+            if not course_id:
+                continue
+
+            enrollment = db.query(Enrollment).filter(
+                Enrollment.student_id == username,
+                Enrollment.course_id == course_id,
+            ).first()
+
+            if not enrollment:
+                continue
+
+            # Merge each field
+            for field, col in src['fields'].items():
+                if col >= len(vals) or vals[col] is None:
                     continue
-                vals = list(row)
-                if len(vals) < 32 or vals[4] is None:
-                    continue
+                raw = vals[col]
+                if field in COUNTER_FIELDS:
+                    new_val = _safe_int(raw)
+                    if new_val > (getattr(enrollment, field) or 0):
+                        setattr(enrollment, field, new_val)
+                else:
+                    # Date / string — most recent non-null value wins
+                    setattr(enrollment, field, str(raw))
 
-                course_code = str(vals[0]).strip() if vals[0] else ''
-                username = str(vals[4]).strip() if vals[4] else ''
-                if not username or not course_code:
-                    continue
+            updated += 1
 
-                # Find matching enrollment
-                enrollment = db.query(Enrollment).filter(
-                    Enrollment.student_id == username,
-                    Enrollment.course_id == course_code,
-                ).first()
-
-                if not enrollment:
-                    continue
-
-                # Only update if the week 3 data has more content
-                w3_completed = _safe_int(vals[10])
-                if w3_completed > (enrollment.content_completed or 0):
-                    enrollment.content_completed = w3_completed
-
-                # Update engagement fields if they're empty
-                if not enrollment.checklist_completed:
-                    enrollment.checklist_completed = _safe_int(vals[19])
-                if not enrollment.quiz_completed:
-                    enrollment.quiz_completed = _safe_int(vals[20])
-                if not enrollment.total_quiz_attempts:
-                    enrollment.total_quiz_attempts = _safe_int(vals[21])
-                if not enrollment.discussion_posts_created:
-                    enrollment.discussion_posts_created = _safe_int(vals[22])
-                if not enrollment.discussion_post_replies:
-                    enrollment.discussion_post_replies = _safe_int(vals[23])
-                if not enrollment.discussion_posts_read:
-                    enrollment.discussion_posts_read = _safe_int(vals[24])
-                if not enrollment.num_assignment_submissions:
-                    enrollment.num_assignment_submissions = _safe_int(vals[26])
-                # Update time spent if week 3 has higher
-                w3_time = _safe_int(vals[28])
-                if w3_time > (enrollment.total_time_spent_seconds or 0):
-                    enrollment.total_time_spent_seconds = w3_time
-                # Update login count if higher
-                w3_logins = _safe_int(vals[31])
-                if w3_logins > (enrollment.num_logins or 0):
-                    enrollment.num_logins = w3_logins
-
-                if vals[29]:
-                    enrollment.last_visited_date = str(vals[29])
-                if vals[30]:
-                    enrollment.last_system_login = str(vals[30])
-
-                updated += 1
-
-            db.flush()
-            logger.info(f"  Updated {updated} enrollment records from week 3 usage.")
-        except KeyError as e:
-            logger.warning(f"Sheet not found in week 3 usage: {e}")
-        finally:
-            wb.close()
+        db.flush()
+        logger.info(f"  -> {updated} enrollments updated.")
+        wb.close()
 
 
 # ---- Helpers ----

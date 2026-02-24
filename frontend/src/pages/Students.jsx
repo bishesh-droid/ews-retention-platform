@@ -8,6 +8,7 @@ import StudentDrawer from '../components/student/StudentDrawer';
 import Skeleton from '../components/common/Skeleton';
 import { useStudentData } from '../context/StudentContext';
 import { variants } from '../utils/motionConfig';
+import useDebounce from '../hooks/useDebounce';
 
 const Students = () => {
   const { students, loading, error } = useStudentData();
@@ -34,8 +35,10 @@ const Students = () => {
     return [...depts].sort();
   }, [students]);
 
+  const debouncedSearchTerm = useDebounce(searchTerm, 300);
+
   const filteredStudents = useMemo(() => {
-    const term = searchTerm.toLowerCase();
+    const term = debouncedSearchTerm.toLowerCase();
     return students
       .filter(student => {
         const riskScore = Number(student.risk_score);

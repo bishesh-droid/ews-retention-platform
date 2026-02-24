@@ -43,46 +43,32 @@
   --letter-spacing-wider: 0.05em;
   
   /* ========================================
-     COLOR SYSTEM BY USER TYPE
+     COLOR SYSTEM (SEMANTIC)
      ======================================== */
   
-  /* BITS Pilani Brand Colors */
-  --bits-cobalt: #2B2B88;             /* Cosmic Cobalt - Primary */
-  --bits-sky-blue: #5CCAE8;           /* Crayola's Sky Blue */
-  --bits-gold: #B78A2D;               /* University of California Gold */
-  --bits-gold-light: #FFE275;         /* Shandy - Light Gold */
-  --bits-red: #CF2027;                /* Fire Engine Red */
-
-  /* Student-Facing Colors (Calm, Encouraging) */
-  --student-primary: #5CCAE8;         /* BITS Sky Blue */
-  --student-success: #10B981;         /* Encouraging green */
-  --student-warning: #B78A2D;         /* BITS Gold (not alarming) */
-  --student-neutral: #6B7280;         /* Soft gray */
-  --student-bg: #F9FAFB;              /* Light background */
-
-  /* Faculty Colors (Analytical, Clear) */
-  --faculty-primary: #2B2B88;         /* BITS Cosmic Cobalt */
-  --faculty-secondary: #475569;       /* Professional gray */
-  --faculty-accent: #B78A2D;          /* BITS Gold accent */
-  --faculty-bg: #F8FAFC;              /* Clean background */
-
-  /* Business Colors (Professional, Financial) */
-  --business-primary: #2B2B88;        /* BITS Cosmic Cobalt */
-  --business-revenue: #CF2027;        /* BITS Red */
-  --business-growth: #059669;         /* Growth green */
-  --business-warning: #B78A2D;        /* BITS Gold */
-  --business-bg: #FFFFFF;             /* Pure white */
-
-  /* Institutional Colors (Authority, Trust) */
-  --institutional-primary: #1E1E5F;   /* Deep BITS Cobalt */
-  --institutional-accent: #5CCAE8;    /* BITS Sky Blue */
-  --institutional-bg: #F1F5F9;        /* Subtle background */
-
-  /* Universal Semantic Colors */
+  /* Semantic Colors */
+  /* Blue */
+  --color-primary: #3B82F6;
+  --color-primary-dark: #2563EB;
+  --color-primary-light: #EFF6FF;
+  
+  /* Green */
   --color-success: #10B981;
-  --color-warning: #B78A2D;
-  --color-error: #CF2027;
-  --color-info: #5CCAE8;
+  --color-success-dark: #059669;
+  --color-success-light: #ECFDF5;
+  
+  /* Orange/Yellow */
+  --color-warning: #F59E0B;
+  --color-warning-dark: #D97706;
+  --color-warning-light: #FFFBEB;
+  
+  /* Red */
+  --color-error: #EF4444;
+  --color-error-dark: #DC2626;
+  --color-error-light: #FEF2F2;
+
+  /* Info/Blue */
+  --color-info: #3B82F6;
   
   /* Neutral Palette */
   --gray-50: #F9FAFB;
@@ -100,13 +86,23 @@
      SPACING SYSTEM
      ======================================== */
   
-  --space-xs: 4px;
-  --space-sm: 8px;
-  --space-md: 16px;
-  --space-lg: 24px;
-  --space-xl: 32px;
-  --space-2xl: 48px;
-  --space-3xl: 64px;
+  --space-0: 0px;
+  --space-1: 8px;     /* xs */
+  --space-2: 16px;    /* sm */
+  --space-3: 24px;    /* md */
+  --space-4: 32px;    /* lg */
+  --space-5: 40px;    /* xl */
+  --space-6: 48px;    /* 2xl */
+  --space-8: 64px;    /* 3xl */
+  
+  /* Compatibility aliases */
+  --space-xs: var(--space-1);
+  --space-sm: var(--space-2);
+  --space-md: var(--space-3);
+  --space-lg: var(--space-4);
+  --space-xl: var(--space-5);
+  --space-2xl: var(--space-6);
+  --space-3xl: var(--space-8);
   
   /* ========================================
      BORDER & RADIUS

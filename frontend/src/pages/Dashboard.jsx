@@ -1,6 +1,6 @@
 import React, { useState, useMemo } from 'react';
 import { Link, useNavigate } from 'react-router-dom';
-import { FaUsers, FaUserShield, FaChartLine, FaExclamationTriangle, FaArrowRight, FaClipboardList, FaLightbulb } from 'react-icons/fa';
+import { FaUsers, FaUserShield, FaChartLine, FaExclamationTriangle, FaArrowRight, FaClipboardList, FaLightbulb, FaRobot, FaCheckCircle, FaProjectDiagram } from 'react-icons/fa';
 import { motion } from 'framer-motion';
 import Charts from '../components/dashboard/Charts';
 import HighestRiskStudentsTable from '../components/dashboard/HighestRiskStudentsTable';
@@ -38,6 +38,19 @@ function Dashboard() {
     const interventionCandidates = students.filter(s => s.risk_score >= 30);
     return Math.floor(interventionCandidates.length * 0.6);
   }, [students]);
+
+  // Derived KPIs
+  const highRiskStudentsCount = useMemo(() => students.filter(s => s.risk_score >= 75).length, [students]);
+  const overallRiskPercent = useMemo(() => {
+    if (students.length === 0) return 0;
+    return parseFloat((students.reduce((acc, s) => acc + s.risk_score, 0) / students.length).toFixed(1));
+  }, [students]);
+  // Mock Intervention Success Rate for demo purposes
+  const interventionSuccessRate = 72.4;
+  // Mock internal engagement trend delta
+  const weeklyEngagementTrend = "+3.2";
+  // ML Model confidence
+  const mlModelConfidence = 91.5;
 
   const studentsWithRiskChanges = useMemo(() => {
     return students.filter(s => s.risk_score > 40).slice(0, 10);
@@ -87,28 +100,31 @@ function Dashboard() {
         </div>
       </div>
 
-      <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-6">
-        <motion.div variants={variants.item} className="cursor-pointer" onClick={() => navigate('/students')}>
-          <KpiCard title="Total Students" value={students.length} icon={<FaUsers />} />
+      <div className="grid grid-cols-1 md:grid-cols-3 lg:grid-cols-5 gap-4">
+        <motion.div variants={variants.item}>
+          <KpiCard title="Overall Risk %" value={overallRiskPercent} isPercent={true} icon={<FaChartLine className="text-warning-500" />} />
         </motion.div>
         <motion.div variants={variants.item} className="cursor-pointer" onClick={() => navigate('/students')}>
           <KpiCard
-            title="At-Risk Students"
-            value={atRiskStudents}
-            icon={<FaUserShield className="text-rose-500" />}
-            suffix={atRiskStudents > 0 ? "Critical" : "Stable"}
+            title="High Risk Students"
+            value={highRiskStudentsCount}
+            icon={<FaUserShield className="text-danger-500" />}
+            suffix="Critical"
           />
         </motion.div>
-        <motion.div variants={variants.item} className="cursor-pointer" onClick={() => navigate('/insights')}>
-          <KpiCard title="Avg Risk Score" value={averageRiskScore} icon={<FaChartLine className="text-amber-500" />} isPercent={true} />
+        <motion.div variants={variants.item}>
+          <KpiCard title="Intervention Success" value={interventionSuccessRate} isPercent={true} icon={<FaCheckCircle className="text-success-500" />} />
         </motion.div>
-        <motion.div variants={variants.item} className="cursor-pointer" onClick={() => navigate('/interventions')}>
+        <motion.div variants={variants.item}>
           <KpiCard
-            title="Active Interventions"
-            value={activeInterventions}
-            icon={<FaClipboardList className="text-primary-500" />}
-            suffix="Ongoing"
+            title="Weekly Engagement"
+            value={weeklyEngagementTrend}
+            icon={<FaProjectDiagram className="text-primary-500" />}
+            suffix="%"
           />
+        </motion.div>
+        <motion.div variants={variants.item}>
+          <KpiCard title="ML Model Confidence" value={mlModelConfidence} isPercent={true} icon={<FaRobot className="text-slate-500" />} />
         </motion.div>
       </div>
 

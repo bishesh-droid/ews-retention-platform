@@ -155,7 +155,7 @@ def train_and_save_model(data_path, model_dir=MODELS_DIR, use_xgboost=True):
 
 
 if __name__ == '__main__':
-    from config import SAMPLE_DATA_PATH
+    from backend.config import SAMPLE_DATA_PATH
     raw_data_path = SAMPLE_DATA_PATH
     
     # Check for alternative data paths

@@ -1,6 +1,6 @@
 import os
 try:
-    import google.generativeai as genai
+    from google import genai
     GENAI_AVAILABLE = True
 except ImportError:
     genai = None
@@ -23,8 +23,7 @@ gemini_client = None
 claude_client = None
 
 if LLM_PROVIDER == "gemini" and GENAI_AVAILABLE and GEMINI_API_KEY:
-    genai.configure(api_key=GEMINI_API_KEY)
-    # gemini_client will be initialized per request, or we can use a global model directly
+    gemini_client = genai.Client(api_key=GEMINI_API_KEY)
 elif LLM_PROVIDER == "claude" and ANTHROPIC_AVAILABLE and CLAUDE_API_KEY:
     claude_client = Anthropic(api_key=CLAUDE_API_KEY)
 
@@ -59,12 +58,9 @@ def get_ai_advice(student: Student, prompt_name: str) -> str:
             if not GEMINI_API_KEY:
                 return "Error: GEMINI_API_KEY environment variable not set"
             
-            model = genai.GenerativeModel(GEMINI_MODEL)
-            response = model.generate_content(
-                [
-                    system_message,
-                    formatted_prompt
-                ]
+            response = gemini_client.models.generate_content(
+                model=GEMINI_MODEL,
+                contents=f"{system_message}\n\n{formatted_prompt}"
             )
             return response.text
         elif LLM_PROVIDER == "claude":

@@ -6,11 +6,11 @@ scikit-learn
 seaborn
 matplotlib
 imbalanced-learn
-google-generativeai
+google-genai
 xgboost
 python-multipart
 python-dotenv
-pydantic
+pydantic[email]
 joblib
 schedule
 numpy
@@ -18,5 +18,5 @@ openpyxl==3.1.5
 python-jose[cryptography]
 passlib[bcrypt]
 redis
-fpdf
+fpdf2
 anthropic
