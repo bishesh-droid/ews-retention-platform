@@ -6,21 +6,21 @@
 @import './design-system.css';
 
 :root {
-  /* Core Brand Colors - BITS Pilani Inspired */
-  --primary-color: #2B2B88;
-  /* Cosmic Cobalt - BITS Pilani Primary */
-  --primary-hover: #1E1E5F;
-  /* Darker Cobalt */
-  --primary-light: #5CCAE8;
-  /* Crayola's Sky Blue */
+  /* Core Brand Colors - Lumivance */
+  --primary-color: #7C3AED;
+  /* Lumivance Violet */
+  --primary-hover: #6D28D9;
+  /* Deeper Violet */
+  --primary-light: #C4B5FD;
+  /* Soft Lavender */
 
-  /* BITS Pilani Accent Colors */
-  --accent-gold: #B78A2D;
-  /* University of California Gold */
-  --accent-gold-light: #FFE275;
-  /* Shandy - Light Gold */
-  --accent-red: #CF2027;
-  /* Fire Engine Red */
+  /* Lumivance Accent Colors */
+  --accent-gold: #F59E0B;
+  /* Warm Amber - Radiance */
+  --accent-gold-light: #FDE68A;
+  /* Light Amber Glow */
+  --accent-red: #EF4444;
+  /* Alert Red */
 
   /* Semantic Risk Colors */
   --high-risk-color: #DC3545;
@@ -31,50 +31,50 @@
   /* Green */
   --neutral-risk-color: #6C757D;
   /* Gray */
-  
-  /* AI & Ethics Colors - BITS Pilani Theme */
-  --ai-primary: #B78A2D; /* BITS Gold for AI distinction */
-  --ai-light: #FFE275;
-  --ai-bg-glass: rgba(183, 138, 45, 0.05);
-  --ai-border: rgba(183, 138, 45, 0.2);
+
+  /* AI & Ethics Colors - Lumivance Theme */
+  --ai-primary: #F59E0B; /* Warm Amber for AI distinction */
+  --ai-light: #FDE68A;
+  --ai-bg-glass: rgba(245, 158, 11, 0.05);
+  --ai-border: rgba(245, 158, 11, 0.2);
   --confidence-high: #10B981;
-  --confidence-medium: #B78A2D;
-  --confidence-low: #CF2027;
+  --confidence-medium: #F59E0B;
+  --confidence-low: #EF4444;
 
   /* Gradients */
-  --gradient-primary: linear-gradient(135deg, var(--primary-color) 0%, var(--primary-light) 100%);
+  --gradient-primary: linear-gradient(135deg, #7C3AED 0%, #C4B5FD 100%);
   --gradient-gold: linear-gradient(135deg, var(--accent-gold) 0%, var(--accent-gold-light) 100%);
-  --gradient-glow: radial-gradient(circle at 50% -20%, rgba(43, 43, 136, 0.15), transparent 70%);
+  --gradient-glow: radial-gradient(circle at 50% -20%, rgba(139, 92, 246, 0.18), transparent 70%);
   --gradient-glass: linear-gradient(180deg, rgba(255, 255, 255, 0.95) 0%, rgba(255, 255, 255, 0.7) 100%);
 
-  /* Backgrounds & Surfaces (Light Theme) */
-  --bg-color: #F5F7FA;
-  /* Light Gray Background */
-  --surface-color: #FFFFFF;
-  /* White Surface */
-  --surface-hover: #F8F9FA;
-  /* Slightly Gray on Hover */
-  --glass-bg: rgba(255, 255, 255, 0.95);
-  /* Light Glass */
-  --glass-border: rgba(0, 0, 0, 0.1);
+  /* Backgrounds & Surfaces (Dark — Lumivance) */
+  --bg-color: #0B0714;
+  /* Deep Void */
+  --surface-color: #130D23;
+  /* Dark Violet Surface */
+  --surface-hover: #1A1035;
+  /* Elevated Hover */
+  --glass-bg: rgba(19, 13, 35, 0.95);
+  /* Dark Glass */
+  --glass-border: rgba(139, 92, 246, 0.15);
 
   /* Typography */
-  --font-sans: 'Outfit', -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
-  --text-primary: #212529;
-  /* Dark Text */
-  --text-secondary: #495057;
-  /* Medium Gray Text */
-  --text-muted: #6C757D;
-  /* Light Gray Text */
+  --font-sans: 'Inter', -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
+  --text-primary: #EDE9FE;
+  /* Near-White Violet */
+  --text-secondary: #C4B5FD;
+  /* Soft Lavender */
+  --text-muted: #B8AADA;
+  /* Muted Violet - readable on dark */
 
   /* Borders & Shadows */
-  --border-color: #DEE2E6;
+  --border-color: rgba(139, 92, 246, 0.18);
   --border-width: 1px;
   --shadow-sm: 0 1px 2px 0 rgba(0, 0, 0, 0.05);
   --shadow-md: 0 4px 6px -1px rgba(0, 0, 0, 0.1);
   --shadow-lg: 0 20px 25px -5px rgba(0, 0, 0, 0.15);
-  --shadow-glow: 0 0 20px rgba(43, 43, 136, 0.25);
-  --shadow-gold: 0 0 15px rgba(183, 138, 45, 0.3);
+  --shadow-glow: 0 0 20px rgba(139, 92, 246, 0.3);
+  --shadow-gold: 0 0 15px rgba(245, 158, 11, 0.3);
 
   /* Spacing */
   --header-height: 72px;
@@ -83,6 +83,45 @@
   --border-radius-md: 8px;
   --border-radius-lg: 12px;
   --border-radius-xl: 16px;
+
+  /* Bootstrap 5 CSS variable overrides — forces dark-theme text everywhere */
+  --bs-body-color:            #DDD6FE;
+  --bs-body-color-rgb:        221, 214, 254;
+  --bs-body-bg:               #0B0714;
+  --bs-secondary-color:       #A899CF;
+  --bs-tertiary-color:        #8B7DB8;
+  --bs-emphasis-color:        #EDE9FE;
+  --bs-link-color:            #A78BFA;
+  --bs-link-hover-color:      #C4B5FD;
+  --bs-border-color:          rgba(139, 92, 246, 0.18);
+  --bs-card-bg:               #130D23;
+  --bs-card-color:            #DDD6FE;
+  --bs-card-border-color:     rgba(139, 92, 246, 0.18);
+  --bs-card-cap-bg:           rgba(139, 92, 246, 0.05);
+  --bs-card-cap-color:        #EDE9FE;
+  --bs-list-group-bg:         #130D23;
+  --bs-list-group-color:      #DDD6FE;
+  --bs-list-group-border-color: rgba(139, 92, 246, 0.18);
+  --bs-modal-bg:              #130D23;
+  --bs-modal-color:           #DDD6FE;
+  --bs-dropdown-bg:           #130D23;
+  --bs-dropdown-color:        #DDD6FE;
+  --bs-dropdown-link-color:   #C4B5FD;
+  --bs-input-bg:              #1A1035;
+  --bs-input-color:           #EDE9FE;
+  --bs-table-bg:              transparent;
+  --bs-table-color:           #DDD6FE;
+  --bs-table-striped-bg:      rgba(139, 92, 246, 0.04);
+  --bs-table-hover-bg:        rgba(139, 92, 246, 0.08);
+
+  /* Context-specific colors */
+  --faculty-primary: #C4B5FD;
+  --faculty-accent: #F59E0B;
+  --student-primary: #10B981;
+  --student-success: #10B981;
+  --student-warning: #F59E0B;
+  --business-primary: #8B5CF6;
+  --institutional-primary: #C4B5FD;
 }
 
 /* Global Reset & Base */
@@ -99,6 +138,19 @@ body {
   background-color: var(--bg-color);
   color: var(--text-primary);
   transition: background-color var(--transition-normal), color var(--transition-normal);
+}
+
+/* Force readable text on all plain elements inside Bootstrap cards/panels */
+.card, .card-body, .glass-panel,
+.modal-content, .modal-body,
+.list-group, .list-group-item {
+  color: var(--text-primary) !important;
+}
+
+.card p, .card li, .card span, .card small,
+.card-body p, .card-body li, .card-body span, .card-body small,
+.glass-panel p, .glass-panel li, .glass-panel span, .glass-panel small {
+  color: inherit;
 }
 
 /* Typography */
@@ -122,12 +174,13 @@ h6,
 
 a {
   color: var(--primary-color);
-  text-decoration: none;
+  text-decoration: none !important;
   transition: color var(--transition-fast);
 }
 
 a:hover {
   color: var(--primary-hover);
+  text-decoration: none !important;
 }
 
 /* Utilities */
@@ -230,8 +283,8 @@ a:hover {
 }
 
 .modern-table thead th {
-  color: var(--text-muted);
-  /* Darker gray for labels */
+  color: #C4B5FD;
+  /* Column headers */
   font-weight: 600;
   text-transform: uppercase;
   font-size: 0.75rem;
@@ -252,17 +305,16 @@ a:hover {
 }
 
 .modern-table tbody tr:hover {
-  background-color: rgba(43, 43, 136, 0.08);
-  /* Faint BITS Pilani cobalt overlay */
+  background-color: rgba(139, 92, 246, 0.06);
+  /* Faint Lumivance violet overlay */
 }
 
 .modern-table td {
   padding: 1rem;
   vertical-align: middle;
   border: none;
-  /* Removed borders for cleaner look */
-  border-bottom: 1px solid rgba(255, 255, 255, 0.05);
-  /* Very subtle separator */
+  color: #DDD6FE;
+  border-bottom: 1px solid rgba(139, 92, 246, 0.1);
 }
 
 .modern-table td:first-child {
@@ -340,8 +392,113 @@ a:hover {
 /* Tooltip Customization */
 .custom-tooltip {
   font-size: 0.85rem;
-  background: rgba(30, 41, 59, 0.95);
+  background: rgba(19, 13, 35, 0.98);
   backdrop-filter: blur(4px);
-  border: 1px solid rgba(255, 255, 255, 0.1);
-  box-shadow: 0 10px 15px -3px rgba(0, 0, 0, 0.1);
+  border: 1px solid rgba(139, 92, 246, 0.25);
+  box-shadow: 0 10px 15px -3px rgba(0, 0, 0, 0.4);
 }
+
+/* ========================================
+   LUMIVANCE DARK THEME — Global Overrides
+   ======================================== */
+
+/* Base */
+body { background-color: var(--bg-color); color: var(--text-primary); }
+
+/* Tailwind background overrides */
+.bg-white                          { background-color: #130D23 !important; }
+.bg-slate-50                       { background-color: #1A1035 !important; }
+.bg-slate-100                      { background-color: #201448 !important; }
+.bg-slate-200                      { background-color: #2D1F60 !important; }
+.bg-primary-50                     { background-color: rgba(139, 92, 246, 0.1) !important; }
+.bg-primary-100                    { background-color: rgba(139, 92, 246, 0.15) !important; }
+
+/* Tailwind text overrides */
+.text-slate-900                    { color: #F0EEFF !important; }
+.text-slate-800                    { color: #EDE9FE !important; }
+.text-slate-700                    { color: #DDD6FE !important; }
+.text-slate-600                    { color: #C4B5FD !important; }
+.text-slate-500                    { color: #A899CF !important; }
+.text-slate-400                    { color: #8B7DB8 !important; }
+.text-slate-300                    { color: #6B5E8E !important; }
+.placeholder-slate-400::placeholder { color: #7B6FA0 !important; }
+
+/* Tailwind border overrides */
+.border-slate-50                   { border-color: rgba(139, 92, 246, 0.08) !important; }
+.border-slate-100                  { border-color: rgba(139, 92, 246, 0.15) !important; }
+.border-slate-200                  { border-color: rgba(139, 92, 246, 0.22) !important; }
+.border-primary-50                 { border-color: rgba(139, 92, 246, 0.1) !important; }
+.border-primary-100                { border-color: rgba(139, 92, 246, 0.2) !important; }
+.border-primary-200                { border-color: rgba(139, 92, 246, 0.3) !important; }
+.divide-slate-50 > * + *           { border-color: rgba(139, 92, 246, 0.1) !important; }
+
+/* Tailwind hover state overrides */
+.hover\:bg-white:hover             { background-color: #1A1035 !important; }
+.hover\:bg-slate-50:hover          { background-color: #130D23 !important; }
+.hover\:bg-slate-100:hover         { background-color: #1A1035 !important; }
+.hover\:bg-slate-200:hover         { background-color: #251850 !important; }
+.hover\:bg-rose-50:hover           { background-color: rgba(239, 68, 68, 0.08) !important; }
+.group:hover .group-hover\:bg-white { background-color: #1A1035 !important; }
+.group:hover .group-hover\:border-primary-200 { border-color: rgba(139, 92, 246, 0.35) !important; }
+
+/* Focus-within overrides */
+.focus-within\:bg-white:focus-within { background-color: #1A1035 !important; }
+
+/* Form inputs — global dark */
+input, textarea, select {
+  background-color: #1A1035 !important;
+  color: #EDE9FE !important;
+  border-color: rgba(139, 92, 246, 0.2) !important;
+}
+input::placeholder, textarea::placeholder { color: #6B5E8E !important; }
+
+/* Bootstrap overrides */
+.bg-light                          { background-color: #1A1035 !important; }
+.bg-secondary                      { background-color: #251850 !important; }
+.text-dark                         { color: #F0EEFF !important; }
+.text-body                         { color: #DDD6FE !important; }
+.text-muted                        { color: #C4B5FD !important; }
+.text-secondary                    { color: #DDD6FE !important; }
+.text-black                        { color: #F0EEFF !important; }
+.border-top, .border-bottom, .border { border-color: rgba(139, 92, 246, 0.18) !important; }
+
+/* Bootstrap Modal, Dropdown, List Group */
+.modal-content, .dropdown-menu, .list-group-item {
+  background-color: #130D23 !important;
+  color: #EDE9FE !important;
+  border-color: rgba(139, 92, 246, 0.18) !important;
+}
+.modal-header, .modal-footer       { border-color: rgba(139, 92, 246, 0.18) !important; }
+.dropdown-item                     { color: #C4B5FD !important; }
+.dropdown-item:hover, .dropdown-item:focus { background-color: #1A1035 !important; }
+
+/* Bootstrap Badge bg overrides for opacity variants on dark */
+.badge.bg-secondary                { background-color: #251850 !important; color: #C4B5FD !important; }
+
+/* Scrollbar */
+::-webkit-scrollbar                { width: 5px; height: 5px; }
+::-webkit-scrollbar-thumb          { background: rgba(139, 92, 246, 0.55); border-radius: 999px; }
+::-webkit-scrollbar-thumb:hover    { background: rgba(139, 92, 246, 0.8); }
+::-webkit-scrollbar-track          { background: rgba(139, 92, 246, 0.06); border-radius: 999px; }
+
+/* Bootstrap Nav Tabs — dark theme */
+.nav-tabs                          { border-bottom-color: rgba(139, 92, 246, 0.2) !important; }
+.nav-tabs .nav-link                { color: #8B7DB8 !important; background: transparent !important; border-color: transparent !important; }
+.nav-tabs .nav-link:hover          { color: #C4B5FD !important; border-color: rgba(139,92,246,0.2) rgba(139,92,246,0.2) transparent !important; }
+.nav-tabs .nav-link.active         { color: #EDE9FE !important; background-color: #130D23 !important; border-color: rgba(139,92,246,0.3) rgba(139,92,246,0.3) #130D23 !important; }
+.nav-pills .nav-link               { color: #8B7DB8 !important; }
+.nav-pills .nav-link.active        { background-color: #7C3AED !important; color: #fff !important; }
+
+/* Bootstrap Table dark */
+.table                             { color: #C4B5FD !important; border-color: rgba(139,92,246,0.15) !important; }
+.table > :not(caption) > * > *     { background-color: #130D23 !important; border-bottom-color: rgba(139,92,246,0.12) !important; }
+.table-striped > tbody > tr:nth-of-type(odd) > * { background-color: #1A1035 !important; }
+.table-hover > tbody > tr:hover > * { background-color: #1A1035 !important; }
+.table thead th                    { color: #8B7DB8 !important; border-bottom-color: rgba(139,92,246,0.2) !important; }
+
+/* Bootstrap form controls */
+.form-control, .form-select        { background-color: #1A1035 !important; color: #EDE9FE !important; border-color: rgba(139,92,246,0.25) !important; }
+.form-control::placeholder         { color: #6B5E8E !important; }
+.form-control:focus, .form-select:focus { border-color: #8B5CF6 !important; box-shadow: 0 0 0 3px rgba(139,92,246,0.2) !important; background-color: #201448 !important; }
+.form-label                        { color: #C4B5FD !important; }
+.form-check-label                  { color: #A899CF !important; }

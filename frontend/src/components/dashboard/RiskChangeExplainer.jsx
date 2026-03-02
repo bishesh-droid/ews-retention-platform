@@ -48,14 +48,14 @@ const RiskChangeExplainer = ({ students, limit = 5 }) => {
 
     if (changedStudents.length === 0) {
         return (
-            <div className="bg-white p-6 rounded-3xl border border-slate-100 shadow-soft">
+            <div className="p-6 rounded-3xl" style={{ backgroundColor: '#130D23', border: '1px solid rgba(139,92,246,0.2)' }}>
                 <div className="flex items-center gap-3 mb-4">
-                    <div className="w-10 h-10 rounded-xl bg-slate-50 text-slate-400 flex items-center justify-center">
+                    <div className="w-10 h-10 rounded-xl flex items-center justify-center" style={{ backgroundColor: '#1A1035', color: '#8B7DB8' }}>
                         <FaInfoCircle size={18} />
                     </div>
-                    <h3 className="text-lg font-display font-bold text-slate-900">Risk Changes</h3>
+                    <h3 className="text-lg font-display font-bold" style={{ color: '#F0EEFF' }}>Risk Changes</h3>
                 </div>
-                <p className="text-slate-400 text-sm italic">
+                <p className="text-sm italic" style={{ color: '#A899CF' }}>
                     No significant risk changes detected in the current period.
                 </p>
             </div>
@@ -63,12 +63,12 @@ const RiskChangeExplainer = ({ students, limit = 5 }) => {
     }
 
     return (
-        <div className="bg-white p-6 rounded-3xl border border-slate-100 shadow-soft h-full flex flex-col">
+        <div className="p-6 rounded-3xl h-full flex flex-col" style={{ backgroundColor: '#130D23', border: '1px solid rgba(139,92,246,0.2)' }}>
             <div className="flex items-center gap-3 mb-8">
-                <div className="w-10 h-10 rounded-xl bg-primary-50 text-primary-500 flex items-center justify-center">
+                <div className="w-10 h-10 rounded-xl flex items-center justify-center" style={{ backgroundColor: 'rgba(139,92,246,0.15)', color: '#A78BFA' }}>
                     <FaInfoCircle size={18} />
                 </div>
-                <h3 className="text-lg font-display font-bold text-slate-900">Dynamic Risk Audit</h3>
+                <h3 className="text-lg font-display font-bold" style={{ color: '#F0EEFF' }}>Dynamic Risk Audit</h3>
             </div>
 
             <div className="space-y-4 flex-grow">
@@ -80,11 +80,11 @@ const RiskChangeExplainer = ({ students, limit = 5 }) => {
                         transition={{ delay: idx * 0.1 }}
                     >
                         <Link to={`/students/${student.id}`} className="block group">
-                            <div className="p-4 rounded-2xl bg-slate-50 border border-slate-100 group-hover:bg-white group-hover:border-primary-100 group-hover:shadow-md transition-all duration-200">
+                            <div className="p-4 rounded-2xl transition-all duration-200" style={{ backgroundColor: '#1A1035', border: '1px solid rgba(139,92,246,0.15)' }}>
                                 <div className="flex justify-between items-start mb-3">
                                     <div>
-                                        <p className="text-sm font-bold text-slate-900 leading-none mb-1">Student #{student.id}</p>
-                                        <p className="text-[10px] text-slate-400 font-medium uppercase tracking-wider">{student.explanation}</p>
+                                        <p className="text-sm font-bold leading-none mb-1" style={{ color: '#EDE9FE' }}>Student #{student.id}</p>
+                                        <p className="text-[10px] font-medium uppercase tracking-wider" style={{ color: '#8B7DB8' }}>{student.explanation}</p>
                                     </div>
                                     <RiskChangeIndicator
                                         previous={student.previousRisk}
@@ -112,7 +112,7 @@ const RiskChangeExplainer = ({ students, limit = 5 }) => {
                 ))}
             </div>
 
-            <div className="mt-8 pt-6 border-t border-slate-50">
+            <div className="mt-8 pt-6" style={{ borderTop: '1px solid rgba(139,92,246,0.15)' }}>
                 <Link to="/insights" className="text-xs font-bold text-primary-500 hover:text-primary-600 transition-colors flex items-center justify-center gap-2">
                     Advanced Movement Analytics <FaChevronRight size={8} />
                 </Link>

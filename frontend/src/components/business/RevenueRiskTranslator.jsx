@@ -51,7 +51,7 @@ function RevenueRiskTranslator() {
         );
     }
 
-    if (!revenueData || revenueData.error) {
+    if (!revenueData || revenueData.error || !revenueData.revenue_impact) {
         return (
             <Card className="glass-panel border-0 shadow-sm h-100">
                 <Card.Body className="p-4">

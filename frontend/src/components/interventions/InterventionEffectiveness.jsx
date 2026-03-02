@@ -115,7 +115,6 @@ const InterventionEffectiveness = ({ historicalData }) => {
                         fontSize: 'var(--font-size-small)',
                         border: 'var(--border-width-thin) solid var(--gray-300)',
                         borderRadius: 'var(--radius-md)',
-                        background: 'white',
                         cursor: 'pointer'
                     }}
                 >
@@ -133,7 +132,6 @@ const InterventionEffectiveness = ({ historicalData }) => {
                         fontSize: 'var(--font-size-small)',
                         border: 'var(--border-width-thin) solid var(--gray-300)',
                         borderRadius: 'var(--radius-md)',
-                        background: 'white',
                         cursor: 'pointer'
                     }}
                 >
@@ -163,7 +161,7 @@ const InterventionCard = ({ rank, intervention, rankColor }) => (
     <div style={{
         display: 'flex',
         padding: 'var(--space-lg)',
-        background: 'white',
+        background: 'var(--surface-color)',
         border: 'var(--border-width-thin) solid var(--gray-200)',
         borderRadius: 'var(--radius-md)',
         marginBottom: 'var(--space-md)',

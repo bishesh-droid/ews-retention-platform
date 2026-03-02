@@ -1,4 +1,5 @@
 import React, { useMemo } from 'react';
+import { motion } from 'framer-motion';
 import {
   PieChart, Pie, Cell, Tooltip, Legend, ResponsiveContainer,
   LineChart, Line, XAxis, YAxis, CartesianGrid,
@@ -42,17 +43,42 @@ const Charts = ({ students, onRiskFilterChange, riskFilter }) => {
   }, [students]);
 
   const pieData = useMemo(() => [
-    { name: 'High Risk', value: riskDistribution.high, color: 'var(--color-error)' },
-    { name: 'Medium Risk', value: riskDistribution.medium, color: 'var(--color-warning)' },
-    { name: 'Low Risk', value: riskDistribution.low, color: '#FBBF24' }, // Amber
-    { name: 'Very Low Risk', value: riskDistribution.veryLow, color: 'var(--color-success)' },
+    { name: 'High Risk',     value: riskDistribution.high,    color: '#E879F9' }, // fuchsia — danger in violet family
+    { name: 'Medium Risk',  value: riskDistribution.medium,  color: '#FBBF24' }, // amber — brand accent
+    { name: 'Low Risk',     value: riskDistribution.low,     color: '#A78BFA' }, // violet-400 — on-theme
+    { name: 'Very Low Risk',value: riskDistribution.veryLow, color: '#6EE7B7' }, // muted emerald — safe
   ], [riskDistribution]);
 
+  const cardStyle = {
+    backgroundColor: '#130D23',
+    border: '1px solid rgba(139,92,246,0.18)',
+    borderRadius: '16px',
+    padding: '20px',
+    cursor: 'default',
+  };
+
+  const hoverProps = {
+    whileHover: { y: -5, boxShadow: '0 0 28px rgba(139,92,246,0.2), 0 8px 32px rgba(0,0,0,0.4)', borderColor: 'rgba(139,92,246,0.45)' },
+    transition: { duration: 0.2 },
+  };
+
+  const titleStyle = {
+    fontSize: '13px',
+    fontWeight: '700',
+    color: '#C4B5FD',
+    textAlign: 'center',
+    marginBottom: '16px',
+  };
+
+  const gridStroke = 'rgba(139,92,246,0.12)';
+  const tickStyle = { fontSize: 11, fill: '#6B5E8E' };
+  const tooltipStyle = { backgroundColor: '#1A1035', border: '1px solid rgba(139,92,246,0.3)', borderRadius: '10px', color: '#EDE9FE' };
+
   return (
-    <div className="grid grid-cols-1 md:grid-cols-2 gap-8">
+    <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
       {/* 1. Risk Distribution Chart */}
-      <div className="bg-slate-50 p-4 rounded-xl border border-slate-100">
-        <h4 className="text-sm font-bold text-slate-700 mb-4 text-center">Risk Distribution</h4>
+      <motion.div style={cardStyle} {...hoverProps}>
+        <h4 style={titleStyle}>Risk Distribution</h4>
         <ResponsiveContainer width="100%" height={250}>
           <PieChart>
             <Pie
@@ -75,61 +101,60 @@ const Charts = ({ students, onRiskFilterChange, riskFilter }) => {
                 />
               ))}
             </Pie>
-            <Tooltip />
-            <Legend verticalAlign="bottom" height={36} />
+            <Legend verticalAlign="bottom" height={36} wrapperStyle={{ color: '#8B7DB8', fontSize: '12px' }} />
           </PieChart>
         </ResponsiveContainer>
-      </div>
+      </motion.div>
 
-      {/* 2. Engagement Heatmap / Trend */}
-      <div className="bg-slate-50 p-4 rounded-xl border border-slate-100">
-        <h4 className="text-sm font-bold text-slate-700 mb-4 text-center">Engagement Trend (Cohort Avg)</h4>
+      {/* 2. Engagement Trend */}
+      <motion.div style={cardStyle} {...hoverProps}>
+        <h4 style={titleStyle}>Engagement Trend (Cohort Avg)</h4>
         <ResponsiveContainer width="100%" height={250}>
           <AreaChart data={engagementData} margin={{ top: 10, right: 10, left: -20, bottom: 0 }}>
             <defs>
               <linearGradient id="colorScore" x1="0" y1="0" x2="0" y2="1">
-                <stop offset="5%" stopColor="var(--color-primary)" stopOpacity={0.8} />
-                <stop offset="95%" stopColor="var(--color-primary)" stopOpacity={0} />
+                <stop offset="5%" stopColor="#8B5CF6" stopOpacity={0.5} />
+                <stop offset="95%" stopColor="#8B5CF6" stopOpacity={0} />
               </linearGradient>
             </defs>
-            <CartesianGrid strokeDasharray="3 3" vertical={false} stroke="#E5E7EB" />
-            <XAxis dataKey="name" tick={{ fontSize: 12, fill: '#6B7280' }} axisLine={false} tickLine={false} />
-            <YAxis tick={{ fontSize: 12, fill: '#6B7280' }} axisLine={false} tickLine={false} />
-            <Tooltip />
-            <Area type="monotone" dataKey="score" stroke="var(--color-primary)" fillOpacity={1} fill="url(#colorScore)" strokeWidth={3} />
+            <CartesianGrid strokeDasharray="3 3" vertical={false} stroke={gridStroke} />
+            <XAxis dataKey="name" tick={tickStyle} axisLine={false} tickLine={false} />
+            <YAxis tick={tickStyle} axisLine={false} tickLine={false} />
+            <Tooltip contentStyle={tooltipStyle} />
+            <Area type="monotone" dataKey="score" stroke="#8B5CF6" fillOpacity={1} fill="url(#colorScore)" strokeWidth={2.5} />
           </AreaChart>
         </ResponsiveContainer>
-      </div>
+      </motion.div>
 
       {/* 3. Risk Trend Over Time */}
-      <div className="bg-slate-50 p-4 rounded-xl border border-slate-100">
-        <h4 className="text-sm font-bold text-slate-700 mb-4 text-center">Risk Trend Over Time</h4>
+      <motion.div style={cardStyle} {...hoverProps}>
+        <h4 style={titleStyle}>Risk Trend Over Time</h4>
         <ResponsiveContainer width="100%" height={250}>
           <LineChart data={riskTrendData} margin={{ top: 10, right: 10, left: -20, bottom: 0 }}>
-            <CartesianGrid strokeDasharray="3 3" vertical={false} stroke="#E5E7EB" />
-            <XAxis dataKey="name" tick={{ fontSize: 12, fill: '#6B7280' }} axisLine={false} tickLine={false} />
-            <YAxis tick={{ fontSize: 12, fill: '#6B7280' }} axisLine={false} tickLine={false} />
-            <Tooltip />
-            <Line type="monotone" dataKey="avgRisk" stroke="var(--color-warning)" strokeWidth={3} dot={{ strokeWidth: 2, r: 4 }} activeDot={{ r: 6 }} />
+            <CartesianGrid strokeDasharray="3 3" vertical={false} stroke={gridStroke} />
+            <XAxis dataKey="name" tick={tickStyle} axisLine={false} tickLine={false} />
+            <YAxis tick={tickStyle} axisLine={false} tickLine={false} />
+            <Tooltip contentStyle={tooltipStyle} />
+            <Line type="monotone" dataKey="avgRisk" stroke="#F59E0B" strokeWidth={2.5} dot={{ strokeWidth: 2, r: 4, fill: '#F59E0B' }} activeDot={{ r: 6 }} />
           </LineChart>
         </ResponsiveContainer>
-      </div>
+      </motion.div>
 
-      {/* 4. Intervention Success Graph */}
-      <div className="bg-slate-50 p-4 rounded-xl border border-slate-100">
-        <h4 className="text-sm font-bold text-slate-700 mb-4 text-center">Intervention Success Rates</h4>
+      {/* 4. Intervention Success Rates */}
+      <motion.div style={cardStyle} {...hoverProps}>
+        <h4 style={titleStyle}>Intervention Success Rates</h4>
         <ResponsiveContainer width="100%" height={250}>
           <BarChart data={interventionData} margin={{ top: 10, right: 10, left: -20, bottom: 0 }}>
-            <CartesianGrid strokeDasharray="3 3" vertical={false} stroke="#E5E7EB" />
-            <XAxis dataKey="name" tick={{ fontSize: 12, fill: '#6B7280' }} axisLine={false} tickLine={false} />
-            <YAxis tick={{ fontSize: 12, fill: '#6B7280' }} axisLine={false} tickLine={false} />
-            <Tooltip cursor={{ fill: '#F3F4F6' }} />
-            <Legend verticalAlign="top" height={36} />
-            <Bar dataKey="success" stackId="a" fill="var(--color-success)" name="Success %" barSize={30} radius={[0, 0, 4, 4]} />
-            <Bar dataKey="failure" stackId="a" fill="#E5E7EB" name="Failure %" radius={[4, 4, 0, 0]} />
+            <CartesianGrid strokeDasharray="3 3" vertical={false} stroke={gridStroke} />
+            <XAxis dataKey="name" tick={tickStyle} axisLine={false} tickLine={false} />
+            <YAxis tick={tickStyle} axisLine={false} tickLine={false} />
+            <Tooltip contentStyle={tooltipStyle} cursor={{ fill: 'rgba(139,92,246,0.06)' }} />
+            <Legend verticalAlign="top" height={36} wrapperStyle={{ color: '#8B7DB8', fontSize: '12px' }} />
+            <Bar dataKey="success" stackId="a" fill="#10B981" name="Success %" barSize={30} radius={[0, 0, 4, 4]} />
+            <Bar dataKey="failure" stackId="a" fill="rgba(239,68,68,0.5)" name="Failure %" radius={[4, 4, 0, 0]} />
           </BarChart>
         </ResponsiveContainer>
-      </div>
+      </motion.div>
     </div>
   );
 };

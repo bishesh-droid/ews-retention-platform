@@ -129,9 +129,8 @@ const RiskTable = ({ students, onSelectStudent, selectedStudents }) => {
     return <FaSort className="text-muted opacity-50" />;
   };
 
-  const handleRowClick = (studentId, target) => {
-    if (target.type === 'checkbox') return;
-    navigate(`/students/${studentId}`);
+  const handleRowClick = (studentId) => {
+    onSelectStudent(studentId);
   };
 
   return (
@@ -192,24 +191,29 @@ const RiskTable = ({ students, onSelectStudent, selectedStudents }) => {
           </tr>
         </thead>
         <tbody>
-          {sortedStudents.map((student, index) => (
+          {sortedStudents.map((student, index) => {
+            const isSelected = selectedStudents.includes(student.id);
+            return (
             <motion.tr
               key={student.id}
-              onClick={(e) => handleRowClick(student.id, e.target)}
-              style={{ cursor: 'pointer' }}
+              onClick={() => handleRowClick(student.id)}
+              style={{
+                cursor: 'pointer',
+                backgroundColor: isSelected ? 'rgba(139,92,246,0.15)' : undefined,
+                outline: isSelected ? '1px solid rgba(139,92,246,0.5)' : 'none',
+              }}
               variants={variants.item}
-              whileHover={{ backgroundColor: 'var(--surface-hover)' }}
-              transition={{ type: 'tween', duration: 0.2 }}
+              whileHover={{ backgroundColor: isSelected ? 'rgba(139,92,246,0.2)' : 'rgba(139,92,246,0.06)' }}
+              transition={{ type: 'tween', duration: 0.15 }}
             >
-              <td>
+              <td onClick={(e) => e.stopPropagation()}>
                 <Form.Check
                   type="checkbox"
-                  checked={selectedStudents.includes(student.id)}
+                  checked={isSelected}
                   onChange={() => onSelectStudent(student.id)}
-                  onClick={(e) => e.stopPropagation()}
                 />
               </td>
-              <td className="fw-medium">{student.name || student.id}</td>
+              <td className="fw-medium" style={{ color: '#EDE9FE' }}>{student.name || student.id}</td>
               <td><RiskScore student={student} /></td>
               <td>
                 <span className={getQuizScore(student) < 40 ? 'text-danger fw-bold' : ''}>
@@ -225,14 +229,22 @@ const RiskTable = ({ students, onSelectStudent, selectedStudents }) => {
               <td>
                 <div className="d-flex flex-wrap gap-1">
                   {getRiskDrivers(student).map((driver, i) => (
-                    <Badge bg="light" text="dark" key={i} className="border text-xs">{driver}</Badge>
+                    <span key={i} style={{
+                      fontSize: '11px', fontWeight: 600, padding: '2px 8px',
+                      borderRadius: '6px', backgroundColor: 'rgba(139,92,246,0.18)',
+                      color: '#C4B5FD', border: '1px solid rgba(139,92,246,0.3)',
+                      whiteSpace: 'nowrap'
+                    }}>{driver}</span>
                   ))}
                 </div>
               </td>
               <td><RiskCategoryBadge student={student} /></td>
-              <td><ConfidenceBadge student={student} size="sm" showLabel={false} /></td>
+              <td onClick={(e) => e.stopPropagation()}>
+                <ConfidenceBadge student={student} size="sm" showLabel={false} />
+              </td>
             </motion.tr>
-          ))}
+            );
+          })}
         </tbody>
       </table>
     </div>

@@ -132,7 +132,7 @@ const CourseRiskAnalysis = ({ courseData }) => {
                             key={course.id}
                             style={{
                                 padding: 'var(--space-lg)',
-                                background: 'white',
+                                background: 'var(--surface-color)',
                                 border: `var(--border-width-medium) solid ${riskLevel.color}`,
                                 borderLeft: `6px solid ${riskLevel.color}`,
                                 borderRadius: 'var(--radius-md)',

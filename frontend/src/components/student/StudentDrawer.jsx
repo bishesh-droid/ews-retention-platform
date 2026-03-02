@@ -73,10 +73,10 @@ const StudentDrawer = ({ show, onHide, student }) => {
         plugins: {
             legend: { display: false },
             tooltip: {
-                backgroundColor: 'var(--surface-color)',
-                titleColor: 'var(--text-primary)',
-                bodyColor: 'var(--text-secondary)',
-                borderColor: 'var(--border-color)',
+                backgroundColor: '#130D23',
+                titleColor: '#EDE9FE',
+                bodyColor: '#B8AADA',
+                borderColor: 'rgba(139,92,246,0.18)',
                 borderWidth: 1,
             },
         },
@@ -84,8 +84,8 @@ const StudentDrawer = ({ show, onHide, student }) => {
             y: {
                 beginAtZero: true,
                 max: 100,
-                grid: { color: 'var(--border-color)' },
-                ticks: { color: 'var(--text-muted)' },
+                grid: { color: 'rgba(139,92,246,0.18)' },
+                ticks: { color: '#B8AADA' },
             },
             x: {
                 grid: { display: false },

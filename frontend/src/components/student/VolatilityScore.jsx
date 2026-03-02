@@ -124,7 +124,7 @@ const VolatilityScore = ({ studentId, engagementHistory }) => {
                             justifyContent: 'space-between',
                             alignItems: 'center',
                             padding: 'var(--space-sm) var(--space-md)',
-                            background: 'white',
+                            background: 'var(--surface-color)',
                             border: 'var(--border-width-thin) solid var(--gray-200)',
                             borderRadius: 'var(--radius-sm)',
                             marginBottom: 'var(--space-xs)'

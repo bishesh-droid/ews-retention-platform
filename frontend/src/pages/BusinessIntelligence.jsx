@@ -56,12 +56,6 @@ const BusinessIntelligence = () => {
                     </Col>
                 </Row>
 
-                {/* AI Attribution */}
-                <div className="mt-5 pt-4 border-top text-center">
-                    <small className="text-muted">
-                        💰 AI translates academic risk into executive-friendly business metrics
-                    </small>
-                </div>
             </Container>
         </motion.div>
     );

@@ -49,9 +49,9 @@ const MicroGoalsStreaks = ({ goals, streaks }) => {
     };
 
     return (
-        <div className="premium-card student-context" style={{ marginBottom: 'var(--space-lg)' }}>
-            <div className="card-header" style={{ fontSize: 'var(--font-size-h3)', fontWeight: 'var(--font-weight-semibold)' }}>
-                Your Goals & Streaks
+        <div style={{ backgroundColor: '#130D23', border: '1px solid rgba(139,92,246,0.18)', borderRadius: '16px', padding: '20px', marginBottom: '20px' }}>
+            <div style={{ fontSize: '16px', fontWeight: 700, color: '#EDE9FE', marginBottom: '16px' }}>
+                Your Goals &amp; Streaks
             </div>
 
             {/* Streaks Section - Display typography, extrabold weight, vibrant color */}
@@ -74,9 +74,9 @@ const MicroGoalsStreaks = ({ goals, streaks }) => {
                 </div>
             )}
 
-            {/* Micro-Goals - Body typography, regular weight */}
+            {/* Micro-Goals */}
             <div>
-                <div style={{ fontSize: 'var(--font-size-small)', fontWeight: 'var(--font-weight-semibold)', color: 'var(--gray-600)', marginBottom: 'var(--space-sm)', textTransform: 'uppercase', letterSpacing: 'var(--letter-spacing-wider)' }}>
+                <div style={{ fontSize: '11px', fontWeight: 700, color: '#8B7DB8', marginBottom: '10px', textTransform: 'uppercase', letterSpacing: '0.12em' }}>
                     This Week's Goals
                 </div>
 
@@ -126,66 +126,46 @@ const GoalItem = ({ goal, onClick }) => {
         <div
             onClick={onClick}
             style={{
-                padding: 'var(--space-md)',
-                background: isComplete ? 'var(--gray-100)' : 'white',
-                border: `var(--border-width-thin) solid ${isComplete ? 'var(--student-success)' : 'var(--gray-200)'}`,
-                borderRadius: 'var(--radius-md)',
-                marginBottom: 'var(--space-sm)',
+                padding: '12px 14px',
+                backgroundColor: isComplete ? 'rgba(16,185,129,0.08)' : '#1A1035',
+                border: `1px solid ${isComplete ? 'rgba(16,185,129,0.35)' : 'rgba(139,92,246,0.2)'}`,
+                borderRadius: '12px',
+                marginBottom: '8px',
                 cursor: isComplete && !goal.completed ? 'pointer' : 'default',
-                transition: 'all var(--transition-fast)'
+                transition: 'all 0.2s ease'
             }}
         >
-            <div style={{ display: 'flex', alignItems: 'flex-start', justifyContent: 'space-between', marginBottom: 'var(--space-sm)' }}>
-                {/* Goal Text - Body, regular weight */}
+            <div style={{ display: 'flex', alignItems: 'flex-start', justifyContent: 'space-between', marginBottom: '8px' }}>
                 <div style={{
-                    fontSize: 'var(--font-size-body)',
-                    fontWeight: 'var(--font-weight-regular)',
-                    color: isComplete ? 'var(--gray-600)' : 'var(--gray-800)',
+                    fontSize: '13px',
+                    fontWeight: 500,
+                    color: isComplete ? '#6B7280' : '#DDD6FE',
                     textDecoration: isComplete ? 'line-through' : 'none',
                     flex: 1
                 }}>
                     {goal.text}
                 </div>
-
-                {/* Achievement Badge - Caption, semibold, uppercase */}
                 {isComplete && (
                     <div style={{
-                        fontSize: 'var(--font-size-caption)',
-                        fontWeight: 'var(--font-weight-semibold)',
-                        textTransform: 'uppercase',
-                        color: 'var(--student-success)',
-                        background: 'rgba(16, 185, 129, 0.1)',
-                        padding: '2px 8px',
-                        borderRadius: 'var(--radius-sm)'
+                        fontSize: '10px', fontWeight: 700, textTransform: 'uppercase',
+                        color: '#10B981', background: 'rgba(16,185,129,0.15)',
+                        padding: '2px 8px', borderRadius: '6px', marginLeft: '8px', flexShrink: 0
                     }}>
                         ✓ Done
                     </div>
                 )}
             </div>
 
-            {/* Progress Bar */}
             {!isComplete && (
                 <>
-                    <div style={{
-                        width: '100%',
-                        height: '6px',
-                        background: 'var(--gray-200)',
-                        borderRadius: 'var(--radius-full)',
-                        overflow: 'hidden'
-                    }}>
+                    <div style={{ width: '100%', height: '5px', backgroundColor: 'rgba(139,92,246,0.15)', borderRadius: '99px', overflow: 'hidden' }}>
                         <div style={{
-                            width: `${progressPercentage}%`,
-                            height: '100%',
-                            background: 'var(--student-primary)',
-                            transition: 'width var(--transition-normal)'
+                            width: `${progressPercentage}%`, height: '100%',
+                            background: 'linear-gradient(90deg, #7C3AED, #A78BFA)',
+                            borderRadius: '99px', transition: 'width 0.4s ease'
                         }} />
                     </div>
-                    <div style={{
-                        fontSize: 'var(--font-size-caption)',
-                        color: 'var(--gray-600)',
-                        marginTop: 'var(--space-xs)',
-                        fontFamily: 'var(--font-family-mono)'
-                    }}>
+                    <div style={{ fontSize: '11px', color: '#8B7DB8', marginTop: '5px', fontFamily: 'monospace' }}>
                         {goal.progress} / {goal.target}
                     </div>
                 </>

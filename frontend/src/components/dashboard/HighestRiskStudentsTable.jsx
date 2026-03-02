@@ -45,7 +45,7 @@ const HighestRiskStudentsTable = ({ students }) => {
     <div className="overflow-x-auto -mx-8 px-8">
       <table className="w-full text-left border-separate border-spacing-y-2">
         <thead>
-          <tr className="text-slate-400 text-[10px] font-bold uppercase tracking-widest">
+          <tr className="text-[10px] font-bold uppercase tracking-widest" style={{ color: '#8B7DB8' }}>
             <th className="px-4 py-2">Student</th>
             <th className="px-4 py-2 flex items-center gap-1">
               Risk Score
@@ -65,19 +65,19 @@ const HighestRiskStudentsTable = ({ students }) => {
                 initial={{ opacity: 0, y: 10 }}
                 animate={{ opacity: 1, y: 0 }}
                 transition={{ delay: index * 0.1 }}
-                className="group bg-slate-50 hover:bg-white hover:shadow-soft transition-all duration-200"
+                className="group transition-all duration-200" style={{ backgroundColor: '#1A1035' }}
               >
                 <td className="px-4 py-4 rounded-l-2xl border-y border-l border-transparent group-hover:border-slate-100">
-                  <span className="font-bold text-slate-900">{student.name || `Student #${student.id}`}</span>
+                  <span className="font-bold" style={{ color: '#EDE9FE' }}>{student.name || `Student #${student.id}`}</span>
                 </td>
                 <td className="px-4 py-4 border-y border-transparent group-hover:border-slate-100">
                   <RiskScore value={student.risk_score} />
                 </td>
-                <td className="px-4 py-4 border-y border-transparent group-hover:border-slate-100 italic text-slate-900 text-sm">
+                <td className="px-4 py-4 border-y border-transparent italic text-sm" style={{ color: '#C4B5FD' }}>
                   {primaryRiskFactor}
                 </td>
                 <td className="px-4 py-4 border-y border-transparent group-hover:border-slate-100">
-                  <span className="text-sm text-slate-500">{getIntervention(primaryRiskFactor)}</span>
+                  <span className="text-sm" style={{ color: '#A899CF' }}>{getIntervention(primaryRiskFactor)}</span>
                 </td>
                 <td className="px-4 py-4 rounded-r-2xl border-y border-r border-transparent group-hover:border-slate-100 text-right">
                   <Link

@@ -60,7 +60,7 @@ const RiskBreakdownChart = ({ student, variant = 'full' }) => {
                 display: variant === 'full',
                 position: 'bottom',
                 labels: {
-                    color: 'var(--text-primary)',
+                    color: '#EDE9FE',
                     padding: 10,
                     font: { size: 11 }
                 }

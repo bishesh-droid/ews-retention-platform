@@ -49,12 +49,6 @@ const InstitutionalInsights = () => {
                     </Col>
                 </Row>
 
-                {/* AI Attribution */}
-                <div className="mt-5 pt-4 border-top text-center">
-                    <small className="text-muted">
-                        🔍 AI pattern discovery reveals systemic issues you wouldn't think to query manually
-                    </small>
-                </div>
             </Container>
         </motion.div>
     );

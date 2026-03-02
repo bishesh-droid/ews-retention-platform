@@ -130,7 +130,7 @@ function Dashboard() {
 
       <div className="grid grid-cols-1 lg:grid-cols-12 gap-8">
         <div className="lg:col-span-8 space-y-8">
-          <motion.div variants={variants.item} className="bg-white p-8 rounded-3xl border border-slate-100 shadow-soft">
+          <motion.div variants={variants.item}>
             <div className="flex justify-between items-center mb-8">
               <h3 className="text-xl font-display font-bold text-slate-900">Risk Analysis</h3>
               <span className="text-xs font-bold text-slate-400 bg-slate-100 px-3 py-1 rounded-full uppercase tracking-wider">Interactive</span>
@@ -156,45 +156,55 @@ function Dashboard() {
         </div>
 
         <div className="lg:col-span-4 space-y-8">
-          <motion.div variants={variants.item} className="bg-white p-6 rounded-3xl border border-slate-100 shadow-soft border-l-4 border-l-rose-500">
+          <motion.div variants={variants.item}>
             <div className="flex items-center gap-3 mb-6">
-              <div className="w-10 h-10 rounded-xl bg-rose-50 text-rose-500 flex items-center justify-center">
+              <div className="w-10 h-10 rounded-xl flex items-center justify-center" style={{ backgroundColor: 'rgba(239,68,68,0.15)', color: '#F87171' }}>
                 <FaExclamationTriangle size={18} />
               </div>
-              <h3 className="text-lg font-display font-bold text-slate-900">Critical Warnings</h3>
+              <h3 className="text-lg font-display font-bold" style={{ color: '#EDE9FE' }}>Critical Warnings</h3>
             </div>
 
             <div className="space-y-4">
               {warnings.map(warning => (
-                <Link to={`/students/${warning.id}`} key={warning.id} className="block group">
-                  <div className="p-4 rounded-2xl bg-slate-50 border border-slate-100 group-hover:bg-white group-hover:border-primary-200 transition-all duration-200 group-hover:shadow-md">
+                <Link to={`/students/${warning.id}`} key={warning.id} style={{ textDecoration: 'none', display: 'block' }}>
+                  <div
+                    className="p-4 rounded-2xl transition-all duration-200 cursor-pointer"
+                    style={{ backgroundColor: '#1A1035', border: '1px solid rgba(139,92,246,0.2)' }}
+                    onMouseEnter={e => { e.currentTarget.style.borderColor = 'rgba(139,92,246,0.5)'; e.currentTarget.style.backgroundColor = '#211445'; }}
+                    onMouseLeave={e => { e.currentTarget.style.borderColor = 'rgba(139,92,246,0.2)'; e.currentTarget.style.backgroundColor = '#1A1035'; }}
+                  >
                     <div className="flex justify-between items-center mb-2">
-                      <span className="font-bold text-slate-900">Student #{warning.id}</span>
-                      <span className="text-[10px] font-bold text-rose-500 bg-rose-50 px-2 py-0.5 rounded-full uppercase">Priority</span>
+                      <span className="font-bold text-sm" style={{ color: '#EDE9FE' }}>Student #{warning.id}</span>
+                      <span className="text-[10px] font-bold px-2 py-0.5 rounded-full uppercase" style={{ color: '#F87171', backgroundColor: 'rgba(239,68,68,0.15)' }}>Priority</span>
                     </div>
-                    <p className="text-sm text-slate-500 line-clamp-2 mb-2">{warning.message}</p>
+                    <p className="text-sm line-clamp-2 mb-2" style={{ color: '#A899CF' }}>{warning.message}</p>
                     <div className="flex items-center justify-between">
-                      <span className="text-xs font-bold text-rose-600">Risk: {warning.riskScore}%</span>
-                      <FaArrowRight size={12} className="text-slate-300 group-hover:text-primary-500 transition-colors" />
+                      <span className="text-xs font-bold" style={{ color: '#F87171' }}>Risk: {warning.riskScore}%</span>
+                      <FaArrowRight size={12} style={{ color: '#6B5E8E' }} />
                     </div>
                   </div>
                 </Link>
               ))}
-              {warnings.length === 0 && <p className="text-slate-400 text-sm italic">No active warnings.</p>}
+              {warnings.length === 0 && <p className="text-sm italic" style={{ color: '#6B5E8E' }}>No active warnings.</p>}
             </div>
           </motion.div>
 
-          <motion.div variants={variants.item} className="bg-white p-6 rounded-3xl border border-slate-100 shadow-soft">
+          <motion.div variants={variants.item}>
             <div className="flex items-center gap-3 mb-6">
-              <div className="w-10 h-10 rounded-xl bg-amber-50 text-amber-500 flex items-center justify-center">
+              <div className="w-10 h-10 rounded-xl flex items-center justify-center" style={{ backgroundColor: 'rgba(245,158,11,0.15)', color: '#F59E0B' }}>
                 <FaLightbulb size={18} />
               </div>
-              <h3 className="text-lg font-display font-bold text-slate-900">Insights</h3>
+              <h3 className="text-lg font-display font-bold" style={{ color: '#EDE9FE' }}>Insights</h3>
             </div>
-            <p className="text-sm text-slate-500 mb-6 leading-relaxed">
+            <p className="text-sm mb-6 leading-relaxed" style={{ color: '#A899CF' }}>
               Based on recent activity, 12% of your medium-risk students have improved their engagement scores this week.
             </p>
-            <button className="w-full py-3 rounded-xl bg-slate-100 text-slate-900 font-bold text-sm hover:bg-slate-200 transition-colors">
+            <button
+              className="w-full py-3 rounded-xl font-bold text-sm transition-colors"
+              style={{ backgroundColor: 'rgba(139,92,246,0.15)', color: '#C4B5FD', border: '1px solid rgba(139,92,246,0.25)' }}
+              onMouseEnter={e => { e.currentTarget.style.backgroundColor = 'rgba(139,92,246,0.25)'; }}
+              onMouseLeave={e => { e.currentTarget.style.backgroundColor = 'rgba(139,92,246,0.15)'; }}
+            >
               Compare Cohorts
             </button>
           </motion.div>
@@ -203,10 +213,10 @@ function Dashboard() {
 
       <div className="grid grid-cols-1 lg:grid-cols-12 gap-8">
         <div className="lg:col-span-8">
-          <motion.div variants={variants.item} className="bg-white p-8 rounded-3xl border border-slate-100 shadow-soft">
+          <motion.div variants={variants.item}>
             <div className="flex justify-between items-center mb-8">
               <h3 className="text-xl font-display font-bold text-slate-900">Top Priority Cases</h3>
-              <Link to="/students" className="text-sm font-bold text-primary-500 hover:text-primary-600 transition-colors flex items-center gap-1">
+              <Link to="/students" className="text-sm font-bold transition-colors flex items-center gap-1" style={{ color: '#8B5CF6', textDecoration: 'none' }}>
                 View All Students <FaArrowRight size={12} />
               </Link>
             </div>

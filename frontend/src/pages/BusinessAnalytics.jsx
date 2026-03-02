@@ -264,7 +264,7 @@ const BusinessAnalytics = () => {
                 {/* Footer Note */}
                 <div className="mt-5 pt-4 border-top text-center">
                     <small className="text-muted">
-                        Data refreshed in real-time from EWS prediction engine. Financial projections based on configured LTV of $12,500 per student.
+                        Data refreshed in real-time from Lumivance prediction engine. Financial projections based on configured LTV of $12,500 per student.
                     </small>
                 </div>
             </Container>

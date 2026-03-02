@@ -108,7 +108,7 @@ const ExplainableRiskNarrative = ({ studentData, riskFactors }) => {
                         <li key={idx} style={{
                             padding: 'var(--space-sm) var(--space-md)',
                             marginBottom: 'var(--space-xs)',
-                            background: 'white',
+                            background: 'var(--surface-color)',
                             border: 'var(--border-width-thin) solid var(--gray-200)',
                             borderRadius: 'var(--radius-sm)',
                             display: 'flex',

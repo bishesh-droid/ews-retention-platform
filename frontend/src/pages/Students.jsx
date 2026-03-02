@@ -154,15 +154,23 @@ const Students = () => {
             Browse, filter, and compare student risk profiles across your cohort.
           </p>
         </div>
-        <motion.div whileHover={{ scale: 1.05 }} whileTap={{ scale: 0.95 }}>
-          <Button
-            variant="primary"
-            disabled={selectedStudents.length < 2}
+        <motion.div whileHover={{ scale: 1.03 }} whileTap={{ scale: 0.97 }}>
+          <button
             onClick={() => setShowCompareModal(true)}
-            className="d-flex align-items-center gap-2 shadow-lg px-4 py-2 rounded-pill"
+            className="d-flex align-items-center gap-2 px-4 py-2 rounded-pill"
+            style={{
+              backgroundColor: selectedStudents.length >= 2 ? '#7C3AED' : 'rgba(139,92,246,0.25)',
+              color: selectedStudents.length >= 2 ? '#fff' : '#A78BFA',
+              border: '1px solid rgba(139,92,246,0.5)',
+              fontWeight: 600,
+              fontSize: '14px',
+              cursor: 'pointer',
+              transition: 'all 0.2s',
+            }}
           >
-            <FaExchangeAlt /> <span>Compare ({selectedStudents.length})</span>
-          </Button>
+            <FaExchangeAlt />
+            <span>Compare ({selectedStudents.length})</span>
+          </button>
         </motion.div>
       </div>
 
@@ -199,13 +207,13 @@ const Students = () => {
         {/* Advanced Filter Sidebar */}
         <Col lg={3}>
           <motion.div variants={variants.item} className="glass-panel p-4">
-            <h6 className="mb-3 fw-semibold d-flex align-items-center gap-2">
+            <h6 className="mb-3 fw-semibold d-flex align-items-center gap-2" style={{ color: '#C4B5FD' }}>
               <FaFilter /> Advanced Filters
             </h6>
 
             {/* Search */}
             <Form.Group className="mb-3">
-              <Form.Label className="small text-muted">Search</Form.Label>
+              <Form.Label className="small" style={{ color: '#C4B5FD' }}>Search</Form.Label>
               <Form.Control
                 type="text"
                 placeholder="Name or ID..."
@@ -217,7 +225,7 @@ const Students = () => {
 
             {/* Risk Level */}
             <Form.Group className="mb-3">
-              <Form.Label className="small text-muted">Risk Level</Form.Label>
+              <Form.Label className="small" style={{ color: '#C4B5FD' }}>Risk Level</Form.Label>
               <Form.Select
                 value={riskFilter}
                 onChange={(e) => setRiskFilter(e.target.value)}
@@ -233,8 +241,8 @@ const Students = () => {
 
             {/* Quiz Score Range */}
             <Form.Group className="mb-3">
-              <Form.Label className="small text-muted">
-                Quiz Score: {quizScoreRange[0]} - {quizScoreRange[1]}
+              <Form.Label className="small" style={{ color: '#C4B5FD' }}>
+                Quiz Score: {quizScoreRange[0]} – {quizScoreRange[1]}
               </Form.Label>
               <div className="d-flex gap-2 mb-2">
                 <Form.Control
@@ -264,8 +272,8 @@ const Students = () => {
 
             {/* Attendance Range */}
             <Form.Group className="mb-3">
-              <Form.Label className="small text-muted">
-                Attendance: {attendanceRange[0]}% - {attendanceRange[1]}%
+              <Form.Label className="small" style={{ color: '#C4B5FD' }}>
+                Attendance: {attendanceRange[0]}% – {attendanceRange[1]}%
               </Form.Label>
               <div className="d-flex gap-2 mb-2">
                 <Form.Control
@@ -295,7 +303,7 @@ const Students = () => {
 
             {/* Department Filter */}
             <Form.Group className="mb-3">
-              <Form.Label className="small text-muted">Department</Form.Label>
+              <Form.Label className="small" style={{ color: '#C4B5FD' }}>Department</Form.Label>
               <Form.Select
                 value={departmentFilter}
                 onChange={(e) => setDepartmentFilter(e.target.value)}

@@ -29,15 +29,15 @@ const AiInsight = ({ title, content, confidence = 'medium', sources = [], type =
             {/* AI Glow Effect */}
             <div className="absolute -inset-0.5 bg-gradient-to-r from-primary-500 to-blue-600 rounded-3xl blur opacity-10 group-hover:opacity-20 transition duration-1000"></div>
 
-            <div className="relative bg-white p-8 rounded-3xl border border-primary-50 shadow-soft overflow-hidden">
+            <div className="relative p-8 rounded-3xl overflow-hidden" style={{ backgroundColor: '#130D23', border: '1px solid rgba(139,92,246,0.25)' }}>
                 <div className="flex flex-col md:flex-row md:items-center justify-between gap-4 mb-6">
                     <div className="flex items-center gap-3">
                         <div className="w-12 h-12 rounded-2xl bg-primary-500 text-white flex items-center justify-center shadow-glow animate-pulse-slow">
                             <FaRobot size={22} />
                         </div>
                         <div>
-                            <h3 className="text-xl font-display font-bold text-slate-900 tracking-tight">{title}</h3>
-                            <p className="text-[10px] font-bold text-primary-500 uppercase tracking-widest">EWS-AI Engine</p>
+                            <h3 className="text-xl font-display font-bold tracking-tight" style={{ color: '#F0EEFF' }}>{title}</h3>
+                            <p className="text-[10px] font-bold text-primary-400 uppercase tracking-widest">Lumivance AI</p>
                         </div>
                     </div>
 
@@ -57,7 +57,7 @@ const AiInsight = ({ title, content, confidence = 'medium', sources = [], type =
                     </div>
                 </div>
 
-                <div className="text-slate-600 leading-relaxed text-sm mb-8 border-l-2 border-primary-100 pl-6 py-1 italic">
+                <div className="leading-relaxed text-sm mb-8 pl-6 py-1 italic" style={{ color: '#DDD6FE', borderLeft: '2px solid rgba(139,92,246,0.5)' }}>
                     "{content}"
                 </div>
 
@@ -65,10 +65,10 @@ const AiInsight = ({ title, content, confidence = 'medium', sources = [], type =
                     <div className="flex items-center gap-2">
                         <div className="flex -space-x-2">
                             {[1, 2, 3].map(i => (
-                                <div key={i} className="w-6 h-6 rounded-full bg-slate-100 border-2 border-white flex items-center justify-center text-[8px] font-bold text-slate-400">D{i}</div>
+                                <div key={i} className="w-6 h-6 rounded-full flex items-center justify-center text-[8px] font-bold" style={{ backgroundColor: '#251850', border: '2px solid #130D23', color: '#A899CF' }}>D{i}</div>
                             ))}
                         </div>
-                        <span className="text-[10px] font-medium text-slate-400">Institutional Data Sources</span>
+                        <span className="text-[10px] font-medium" style={{ color: '#A899CF' }}>Institutional Data Sources</span>
                     </div>
 
                     {sources.length > 0 && (
@@ -90,11 +90,11 @@ const AiInsight = ({ title, content, confidence = 'medium', sources = [], type =
                             exit={{ height: 0, opacity: 0 }}
                             className="mt-6 overflow-hidden"
                         >
-                            <div className="bg-slate-50 rounded-2xl p-6 border border-slate-100">
-                                <h4 className="text-[10px] font-bold text-slate-900 uppercase tracking-widest mb-4">Underlying Data Points</h4>
+                            <div className="rounded-2xl p-6" style={{ backgroundColor: '#1A1035', border: '1px solid rgba(139,92,246,0.2)' }}>
+                                <h4 className="text-[10px] font-bold uppercase tracking-widest mb-4" style={{ color: '#C4B5FD' }}>Underlying Data Points</h4>
                                 <ul className="grid grid-cols-1 md:grid-cols-2 gap-3">
                                     {sources.map((source, idx) => (
-                                        <li key={idx} className="flex items-center gap-3 text-xs text-slate-500">
+                                        <li key={idx} className="flex items-center gap-3 text-xs" style={{ color: '#A899CF' }}>
                                             <div className="w-1.5 h-1.5 rounded-full bg-primary-400"></div>
                                             {source}
                                         </li>

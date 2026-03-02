@@ -176,7 +176,7 @@ const FairnessMetricCard = ({ label, score, description }) => {
     return (
         <div style={{
             padding: 'var(--space-md)',
-            background: 'white',
+            background: 'var(--surface-color)',
             border: 'var(--border-width-thin) solid var(--gray-200)',
             borderRadius: 'var(--radius-md)',
             textAlign: 'center'

@@ -122,12 +122,6 @@ const StudentPortal = () => {
                     </Col>
                 </Row>
 
-                {/* AI Attribution Footer */}
-                <div className="mt-5 pt-4 border-top text-center">
-                    <small className="text-muted">
-                        🤖 Powered by AI-driven insights based on your real academic data
-                    </small>
-                </div>
             </Container>
         </motion.div>
     );

@@ -103,12 +103,6 @@ const FacultyTools = () => {
                     </Col>
                 </Row>
 
-                {/* AI Attribution */}
-                <div className="mt-5 pt-4 border-top text-center">
-                    <small className="text-muted">
-                        🤖 AI-powered prioritization and summaries save you 5-10 minutes per student
-                    </small>
-                </div>
             </Container>
         </motion.div>
     );

@@ -200,7 +200,7 @@ const RetentionFunnel = () => {
                             <div key={idx} style={{
                                 textAlign: 'center',
                                 padding: 'var(--space-md)',
-                                background: 'white',
+                                background: 'var(--surface-color)',
                                 borderRadius: 'var(--radius-sm)',
                                 border: '1px solid var(--gray-200)'
                             }}>

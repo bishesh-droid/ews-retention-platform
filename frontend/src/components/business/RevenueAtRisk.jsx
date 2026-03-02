@@ -174,7 +174,7 @@ const RevenueAtRisk = ({ studentData, revenueData }) => {
 const RiskCategoryCard = ({ category }) => (
     <div style={{
         padding: 'var(--space-lg)',
-        background: 'white',
+        background: 'var(--surface-color)',
         border: 'var(--border-width-thin) solid var(--gray-200)',
         borderRadius: 'var(--radius-md)',
         marginBottom: 'var(--space-md)',

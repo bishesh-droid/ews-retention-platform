@@ -128,10 +128,10 @@ const FacultySummaryCard = ({ students }) => {
                 </div>
 
                 <div className="mt-10 pt-8 border-t border-white/10 flex flex-wrap gap-4">
-                    <Link to="/students" className="px-6 py-2.5 rounded-xl bg-white text-slate-900 font-bold text-sm hover:bg-slate-100 transition-all flex items-center gap-2">
+                    <Link to="/students" className="px-6 py-2.5 rounded-xl font-bold text-sm transition-all flex items-center gap-2" style={{ border: '1px solid rgba(139,92,246,0.35)', color: '#C4B5FD', textDecoration: 'none' }}>
                         View All Students <FaArrowRight size={10} />
                     </Link>
-                    <Link to="/interventions" className="px-6 py-2.5 rounded-xl bg-primary-500 text-white font-bold text-sm hover:bg-primary-600 transition-all flex items-center gap-2 shadow-glow">
+                    <Link to="/interventions" className="px-6 py-2.5 rounded-xl font-bold text-sm transition-all flex items-center gap-2" style={{ backgroundColor: '#7C3AED', color: '#fff', textDecoration: 'none' }}>
                         Intervention Queue <FaArrowRight size={10} />
                     </Link>
                 </div>
