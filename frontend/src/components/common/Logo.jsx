@@ -1,61 +1,97 @@
 import React from 'react';
 
 /**
- * Lumivance Logo Mark
- * Concept: A glowing "eye of insight" above a horizon line with an amber early-warning beacon —
- * representing AI-powered vigilance over student retention.
+ * Meridian Logo Mark
+ * Concept: A globe with a glowing vertical meridian line and an amber zenith point —
+ * representing the highest point of student insight and the precise moment of early intervention.
  */
-const LumivanceMark = ({ size = 40 }) => (
+const MeridianMark = ({ size = 40 }) => (
     <svg width={size} height={size} viewBox="0 0 40 40" fill="none" xmlns="http://www.w3.org/2000/svg">
         <defs>
-            <linearGradient id="lv-bg" x1="0" y1="0" x2="40" y2="40" gradientUnits="userSpaceOnUse">
+            <linearGradient id="md-bg" x1="0" y1="0" x2="40" y2="40" gradientUnits="userSpaceOnUse">
                 <stop offset="0%" stopColor="#7C3AED" />
-                <stop offset="100%" stopColor="#5B21B6" />
+                <stop offset="100%" stopColor="#4C1D95" />
             </linearGradient>
-            <radialGradient id="lv-glow" cx="50%" cy="50%" r="50%">
-                <stop offset="0%" stopColor="#F59E0B" stopOpacity="0.35" />
+            <radialGradient id="md-zenith-glow" cx="50%" cy="22%" r="35%">
+                <stop offset="0%" stopColor="#F59E0B" stopOpacity="0.5" />
                 <stop offset="100%" stopColor="#F59E0B" stopOpacity="0" />
             </radialGradient>
-            <filter id="lv-blur">
-                <feGaussianBlur stdDeviation="1.5" />
+            <radialGradient id="md-core-glow" cx="50%" cy="50%" r="50%">
+                <stop offset="0%" stopColor="#8B5CF6" stopOpacity="0.3" />
+                <stop offset="100%" stopColor="#8B5CF6" stopOpacity="0" />
+            </radialGradient>
+            <filter id="md-blur-sm">
+                <feGaussianBlur stdDeviation="1.2" />
             </filter>
+            <filter id="md-blur-md">
+                <feGaussianBlur stdDeviation="2" />
+            </filter>
+            <clipPath id="md-globe-clip">
+                <circle cx="20" cy="22" r="11.5" />
+            </clipPath>
         </defs>
 
         {/* Background rounded square */}
-        <rect width="40" height="40" rx="10" fill="url(#lv-bg)" />
+        <rect width="40" height="40" rx="10" fill="url(#md-bg)" />
 
-        {/* Outer arc — the "eye of insight" / radar sweep */}
+        {/* Subtle core glow */}
+        <circle cx="20" cy="22" r="14" fill="url(#md-core-glow)" filter="url(#md-blur-md)" />
+
+        {/* Globe outline */}
+        <circle cx="20" cy="22" r="11.5" stroke="rgba(255,255,255,0.18)" strokeWidth="1.2" fill="none" />
+
+        {/* Latitude arc — upper (clipped to globe) */}
         <path
-            d="M9 26 Q20 7 31 26"
-            stroke="rgba(255,255,255,0.25)"
-            strokeWidth="1.5"
+            d="M10.5 17 Q20 13.5 29.5 17"
+            stroke="rgba(255,255,255,0.14)"
+            strokeWidth="0.9"
+            fill="none"
+            clipPath="url(#md-globe-clip)"
+        />
+
+        {/* Latitude arc — equator (clipped to globe) */}
+        <path
+            d="M8.5 22 Q20 18.5 31.5 22"
+            stroke="rgba(255,255,255,0.14)"
+            strokeWidth="0.9"
+            fill="none"
+            clipPath="url(#md-globe-clip)"
+        />
+
+        {/* Latitude arc — lower (clipped to globe) */}
+        <path
+            d="M10.5 27 Q20 30.5 29.5 27"
+            stroke="rgba(255,255,255,0.10)"
+            strokeWidth="0.9"
+            fill="none"
+            clipPath="url(#md-globe-clip)"
+        />
+
+        {/* Meridian line — vertical through globe (the main element) */}
+        <line
+            x1="20" y1="10.5"
+            x2="20" y2="33.5"
+            stroke="rgba(255,255,255,0.65)"
+            strokeWidth="1.4"
+            strokeLinecap="round"
+        />
+
+        {/* Zenith glow (blurred amber behind the top dot) */}
+        <circle cx="20" cy="10.5" r="5" fill="url(#md-zenith-glow)" filter="url(#md-blur-sm)" />
+
+        {/* Zenith dot — the peak / highest point */}
+        <circle cx="20" cy="10.5" r="2.6" fill="#F59E0B" />
+        {/* Zenith highlight */}
+        <circle cx="19.2" cy="9.7" r="0.85" fill="rgba(255,255,255,0.75)" />
+
+        {/* Subtle arc above globe — celestial meridian sweep */}
+        <path
+            d="M14 10.5 Q20 5.5 26 10.5"
+            stroke="rgba(245,158,11,0.35)"
+            strokeWidth="1"
             fill="none"
             strokeLinecap="round"
         />
-        {/* Inner arc */}
-        <path
-            d="M13 26 Q20 13 27 26"
-            stroke="rgba(255,255,255,0.55)"
-            strokeWidth="1.8"
-            fill="none"
-            strokeLinecap="round"
-        />
-
-        {/* Horizon baseline */}
-        <line x1="8" y1="26" x2="32" y2="26" stroke="rgba(255,255,255,0.2)" strokeWidth="1.2" strokeLinecap="round" />
-
-        {/* Amber beacon glow (blurred) */}
-        <circle cx="20" cy="26" r="6" fill="url(#lv-glow)" filter="url(#lv-blur)" />
-
-        {/* Amber beacon core */}
-        <circle cx="20" cy="26" r="2.8" fill="#F59E0B" />
-        {/* Beacon highlight */}
-        <circle cx="19.2" cy="25.2" r="0.9" fill="rgba(255,255,255,0.7)" />
-
-        {/* Upward tick mark — the "early warning" pulse */}
-        <line x1="20" y1="26" x2="20" y2="19" stroke="rgba(255,255,255,0.5)" strokeWidth="1.2" strokeLinecap="round" />
-        <line x1="17.5" y1="21" x2="20" y2="19" stroke="rgba(255,255,255,0.5)" strokeWidth="1.2" strokeLinecap="round" />
-        <line x1="22.5" y1="21" x2="20" y2="19" stroke="rgba(255,255,255,0.5)" strokeWidth="1.2" strokeLinecap="round" />
     </svg>
 );
 
@@ -64,7 +100,7 @@ const LumivanceMark = ({ size = 40 }) => (
  */
 const Logo = ({ size = 40, showText = true, textSize = 'xl' }) => (
     <div className="flex items-center gap-3">
-        <LumivanceMark size={size} />
+        <MeridianMark size={size} />
         {showText && (
             <div className="flex flex-col leading-none">
                 <span
@@ -75,7 +111,7 @@ const Logo = ({ size = 40, showText = true, textSize = 'xl' }) => (
                         fontFamily: 'Inter, system-ui, sans-serif',
                     }}
                 >
-                    Lumivance
+                    Meridian
                 </span>
                 <span
                     className="text-[9px] font-semibold uppercase tracking-widest mt-0.5"
@@ -88,5 +124,5 @@ const Logo = ({ size = 40, showText = true, textSize = 'xl' }) => (
     </div>
 );
 
-export { LumivanceMark };
+export { MeridianMark };
 export default Logo;

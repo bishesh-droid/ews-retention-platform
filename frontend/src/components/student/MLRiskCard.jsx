@@ -5,9 +5,14 @@ import { FaRobot, FaCheckCircle, FaExclamationTriangle } from 'react-icons/fa';
 const MLRiskCard = ({ mlPrediction, ruleRiskScore }) => {
     if (!mlPrediction || mlPrediction.error) return null;
 
-    const mlScore = Math.round((mlPrediction.dropout_probability || 0) * 100);
+    const rawProb = typeof mlPrediction.dropout_probability === 'number' ? mlPrediction.dropout_probability : 0;
+    const mlPercent = rawProb * 100;
+    const mlScore = Number.isFinite(mlPercent) ? parseFloat(mlPercent.toFixed(2)) : 0;
     const riskLevel = mlPrediction.risk_level || 'Low';
     const factors = mlPrediction.top_risk_factors || [];
+    const featureEntries = mlPrediction.features && typeof mlPrediction.features === 'object'
+        ? Object.entries(mlPrediction.features)
+        : [];
 
     // Determine color based on ML score
     const getColor = (score) => {
@@ -32,7 +37,7 @@ const MLRiskCard = ({ mlPrediction, ruleRiskScore }) => {
                 {/* Score Comparison */}
                 <div className="col-md-5 text-center border-end">
                     <div className="mb-3">
-                        <span className="display-6 fw-bold" style={{ color: mlColor }}>{mlScore}%</span>
+                        <span className="display-6 fw-bold" style={{ color: mlColor }}>{mlScore.toFixed(2)}%</span>
                         <p className="text-muted small text-uppercase fw-bold">ML Dropout Probability</p>
                     </div>
                     <div>
@@ -54,6 +59,29 @@ const MLRiskCard = ({ mlPrediction, ruleRiskScore }) => {
                         </ul>
                     ) : (
                         <p className="small text-muted mb-0"><FaCheckCircle className="text-success me-1" /> No significant risk factors detected.</p>
+                    )}
+
+                    {/* Top contributing features (raw model inputs) */}
+                    {featureEntries.length > 0 && (
+                        <div className="mt-3">
+                            <h6 className="fw-bold mb-2">Top Contributing Features</h6>
+                            <div className="row g-2">
+                                {featureEntries.slice(0, 8).map(([k, v]) => {
+                                    const num = typeof v === 'number' ? v : null;
+                                    const display = num !== null
+                                        ? (Number.isFinite(num) ? num.toFixed(2) : String(v))
+                                        : String(v);
+                                    return (
+                                        <div className="col-12 col-sm-6" key={k}>
+                                            <div className="d-flex justify-content-between small">
+                                                <span className="text-muted text-truncate" style={{ maxWidth: '70%' }}>{k}</span>
+                                                <span className="fw-semibold">{display}</span>
+                                            </div>
+                                        </div>
+                                    );
+                                })}
+                            </div>
+                        </div>
                     )}
 
                     <div className="mt-3">

@@ -26,6 +26,8 @@ from . import (
     goals,
     reports,
     ml_routes,
+    monitoring,
+    interventions,
 )
 
 api_router = APIRouter()
@@ -49,3 +51,5 @@ api_router.include_router(recommendations.router, prefix="/recommendations", tag
 api_router.include_router(advisor.router, tags=["AI Academic Advisor"])
 api_router.include_router(business.router, tags=["Business Intelligence"])
 api_router.include_router(integration.router, prefix="/integration", tags=["Integration API"])
+api_router.include_router(monitoring.router, tags=["monitoring"])
+api_router.include_router(interventions.router, tags=["interventions"])

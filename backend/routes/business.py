@@ -23,6 +23,7 @@ from backend.config import (
     TARGET_RETENTION_RATE,
     INTERVENTION_THRESHOLDS
 )
+from backend.utils.api import success_response
 
 router = APIRouter(prefix="/business", tags=["Business Intelligence"])
 
@@ -78,6 +79,30 @@ class ExecutiveSummaryResponse(BaseModel):
     calculated_at: str
 
 
+class DepartmentComparisonRow(BaseModel):
+    department: str
+    student_count: int
+    avg_risk_score: float
+
+
+class RetentionForecastPoint(BaseModel):
+    period: str
+    optimistic_retention_rate: float
+    baseline_retention_rate: float
+    pessimistic_retention_rate: float
+    optimistic_retained_revenue: float
+    baseline_retained_revenue: float
+    pessimistic_retained_revenue: float
+
+
+class CohortHeatmapRow(BaseModel):
+    cohort: str
+    Low: float
+    Medium: float
+    High: float
+    Critical: float
+
+
 def _get_risk_counts(students):
     """Count students by risk level using risk_score (0-100 scale)."""
     at_risk = 0
@@ -94,7 +119,17 @@ def _get_risk_counts(students):
     return at_risk, high_risk, critical
 
 
-@router.get("/metrics/retention", response_model=RetentionMetricsResponse)
+def _risk_tier(score: float) -> str:
+    if score <= 40:
+        return "Low"
+    if score <= 70:
+        return "Medium"
+    if score <= 85:
+        return "High"
+    return "Critical"
+
+
+@router.get("/metrics/retention")
 def get_retention_metrics(
     period: str = Query(default="current_semester"),
     db: Session = Depends(get_db)
@@ -109,7 +144,7 @@ def get_retention_metrics(
     estimated_dropouts = (high_risk_count * 0.25) + (critical_risk_count * 0.50)
     retention_rate = (total_enrolled - estimated_dropouts) / total_enrolled if total_enrolled > 0 else 0
 
-    return RetentionMetricsResponse(
+    data = RetentionMetricsResponse(
         total_enrolled=total_enrolled,
         retention_rate=round(retention_rate, 4),
         target_retention_rate=TARGET_RETENTION_RATE,
@@ -120,9 +155,10 @@ def get_retention_metrics(
         period=period,
         calculated_at=datetime.now().isoformat()
     )
+    return success_response(data.dict(), message="Retention metrics")
 
 
-@router.get("/metrics/revenue-at-risk", response_model=RevenueAtRiskResponse)
+@router.get("/metrics/revenue-at-risk")
 def get_revenue_at_risk(db: Session = Depends(get_db)):
     """Calculate total revenue at risk from potential dropouts."""
     students = StudentService.get_all_students(db, 0, 5000)
@@ -165,7 +201,7 @@ def get_revenue_at_risk(db: Session = Depends(get_db)):
         if data["count"] > 0
     ]
 
-    return RevenueAtRiskResponse(
+    data = RevenueAtRiskResponse(
         total_enrolled_revenue=round(total_enrolled_revenue, 2),
         revenue_at_risk=round(total_revenue_at_risk, 2),
         high_risk_revenue=round(high_risk_revenue, 2),
@@ -175,9 +211,10 @@ def get_revenue_at_risk(db: Session = Depends(get_db)):
         risk_breakdown=breakdown_list,
         calculated_at=datetime.now().isoformat()
     )
+    return success_response(data.dict(), message="Revenue at risk metrics")
 
 
-@router.get("/metrics/intervention-roi", response_model=InterventionROIResponse)
+@router.get("/metrics/intervention-roi")
 def get_intervention_roi(
     period: str = Query(default="quarterly"),
     db: Session = Depends(get_db)
@@ -202,7 +239,7 @@ def get_intervention_roi(
     revenue_saved = estimated_recovered * AVERAGE_STUDENT_LTV
     roi_multiple = (revenue_saved - total_cost) / total_cost if total_cost > 0 else 0
 
-    return InterventionROIResponse(
+    data = InterventionROIResponse(
         period=period,
         interventions_triggered=interventions_triggered,
         estimated_recovered=estimated_recovered,
@@ -220,9 +257,10 @@ def get_intervention_roi(
         },
         calculated_at=datetime.now().isoformat()
     )
+    return success_response(data.dict(), message="Intervention ROI metrics")
 
 
-@router.get("/funnel", response_model=RetentionFunnelResponse)
+@router.get("/funnel")
 def get_retention_funnel(
     period: str = Query(default="current_semester"),
     db: Session = Depends(get_db)
@@ -255,15 +293,16 @@ def get_retention_funnel(
                 "rate": round(rate, 1),
             })
 
-    return RetentionFunnelResponse(
+    data = RetentionFunnelResponse(
         stages=stages,
         conversion_rates=conversion_rates,
         period=period,
         calculated_at=datetime.now().isoformat()
     )
+    return success_response(data.dict(), message="Retention funnel")
 
 
-@router.get("/executive-summary", response_model=ExecutiveSummaryResponse)
+@router.get("/executive-summary")
 def get_executive_summary(db: Session = Depends(get_db)):
     """Get executive summary dashboard data."""
     stats = StudentService.get_overview_stats(db)
@@ -297,7 +336,7 @@ def get_executive_summary(db: Session = Depends(get_db)):
         actions.append("Escalate to sales leadership for immediate attention")
     actions.append("Review intervention effectiveness metrics weekly")
 
-    return ExecutiveSummaryResponse(
+    data = ExecutiveSummaryResponse(
         headline_metrics={
             "total_enrolled": total_enrolled,
             "retention_rate": round(retention_rate * 100, 1),
@@ -313,3 +352,126 @@ def get_executive_summary(db: Session = Depends(get_db)):
         recommended_actions=actions,
         calculated_at=datetime.now().isoformat()
     )
+    return success_response(data.dict(), message="Executive summary")
+
+
+@router.get("/departments/comparison")
+def get_department_comparison(db: Session = Depends(get_db)):
+    """
+    Department comparison for BI dashboards.
+
+    Returns student counts and average risk score per department.
+    """
+    analytics = StudentService.get_analytics_data(db)
+    dept_rows = analytics.get("department_summary", []) if isinstance(analytics, dict) else []
+    payload = [
+        {
+            "department": d.get("department", "Unknown"),
+            "student_count": int(d.get("student_count") or 0),
+            "avg_risk_score": float(d.get("avg_risk_score") or 0),
+        }
+        for d in dept_rows
+    ]
+    # Sort largest cohorts first
+    payload.sort(key=lambda r: (-r["student_count"], r["department"]))
+    return success_response(payload, message="Department comparison")
+
+
+@router.get("/forecast/retention")
+def get_retention_forecast(
+    horizon_months: int = Query(6, ge=1, le=24),
+    db: Session = Depends(get_db),
+):
+    """
+    Simple retention forecast for BI charts (deterministic heuristic).
+
+    Produces optimistic/baseline/pessimistic retention rates and retained revenue.
+    """
+    retention = get_retention_metrics(db=db, period="current_semester")
+    # retention is success_response envelope already
+    retention_data = retention.get("data") if isinstance(retention, dict) else None
+    if isinstance(retention_data, dict) and "retention_rate" in retention_data:
+        baseline_rate = float(retention_data.get("retention_rate") or 0)  # 0..1
+        target_rate = float(retention_data.get("target_retention_rate") or TARGET_RETENTION_RATE)
+    else:
+        baseline_rate = 0.0
+        target_rate = TARGET_RETENTION_RATE
+
+    total_enrolled = int(retention_data.get("total_enrolled") or 0) if isinstance(retention_data, dict) else 0
+    base_revenue = total_enrolled * AVERAGE_STUDENT_LTV
+
+    # optimistic moves toward target; pessimistic decays modestly below baseline
+    optimistic_rate = min(1.0, max(baseline_rate, target_rate))
+    pessimistic_rate = max(0.0, baseline_rate - max(0.02, abs(target_rate - baseline_rate) * 0.5))
+
+    points: List[Dict[str, Any]] = []
+    for m in range(1, horizon_months + 1):
+        label = f"+{m} mo"
+        # Apply small drift factors over time
+        opt = min(1.0, optimistic_rate * (1 - 0.001 * m))
+        base = max(0.0, baseline_rate * (1 - 0.002 * m))
+        pess = max(0.0, pessimistic_rate * (1 - 0.003 * m))
+
+        points.append(
+            RetentionForecastPoint(
+                period=label,
+                optimistic_retention_rate=round(opt, 4),
+                baseline_retention_rate=round(base, 4),
+                pessimistic_retention_rate=round(pess, 4),
+                optimistic_retained_revenue=round(base_revenue * opt, 2),
+                baseline_retained_revenue=round(base_revenue * base, 2),
+                pessimistic_retained_revenue=round(base_revenue * pess, 2),
+            ).dict()
+        )
+
+    return success_response(
+        {
+            "base": {
+                "total_enrolled": total_enrolled,
+                "average_student_ltv": AVERAGE_STUDENT_LTV,
+                "baseline_retention_rate": round(baseline_rate, 4),
+                "target_retention_rate": round(target_rate, 4),
+            },
+            "points": points,
+        },
+        message="Retention forecast",
+    )
+
+
+@router.get("/cohort-heatmap")
+def get_cohort_heatmap(db: Session = Depends(get_db)):
+    """
+    Cohort heatmap-style risk tier distribution.
+
+    Uses department as cohort key (stable and available in the current dataset).
+    """
+    students = StudentService.get_all_students(db, 0, 5000)
+    by_dept: Dict[str, Dict[str, int]] = {}
+    totals: Dict[str, int] = {}
+
+    for s in students:
+        dept = s.get("department") or "Unknown"
+        score = float(s.get("risk_score") or 0)
+        tier = _risk_tier(score)
+        if dept not in by_dept:
+            by_dept[dept] = {"Low": 0, "Medium": 0, "High": 0, "Critical": 0}
+            totals[dept] = 0
+        by_dept[dept][tier] += 1
+        totals[dept] += 1
+
+    rows: List[Dict[str, Any]] = []
+    for dept, counts in by_dept.items():
+        total = max(1, totals.get(dept, 0))
+        rows.append(
+            CohortHeatmapRow(
+                cohort=dept,
+                Low=round((counts["Low"] / total) * 100, 1),
+                Medium=round((counts["Medium"] / total) * 100, 1),
+                High=round((counts["High"] / total) * 100, 1),
+                Critical=round((counts["Critical"] / total) * 100, 1),
+            ).dict()
+        )
+
+    # Sort by High+Critical desc for readability
+    rows.sort(key=lambda r: -((r["High"] or 0) + (r["Critical"] or 0)))
+    return success_response(rows, message="Cohort heatmap")

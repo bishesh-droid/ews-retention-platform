@@ -1,5 +1,6 @@
-import React, { useMemo } from 'react';
-import { useStudentData } from '../../context/StudentContext';
+import React, { useEffect, useMemo, useState } from 'react';
+import { Alert, Spinner } from 'react-bootstrap';
+import { getInterventionRoiMetrics } from '../../services/api';
 
 /**
  * Cost Per Retained Student Component
@@ -9,61 +10,89 @@ import { useStudentData } from '../../context/StudentContext';
  */
 
 const CostPerRetainedStudent = () => {
-    const { students } = useStudentData();
+    const [loading, setLoading] = useState(false);
+    const [error, setError] = useState(null);
+    const [payload, setPayload] = useState(null);
+
+    useEffect(() => {
+        let isMounted = true;
+        const load = async () => {
+            setLoading(true);
+            setError(null);
+            const resp = await getInterventionRoiMetrics('quarterly');
+            if (!isMounted) return;
+
+            if (!resp.success) {
+                setError(resp.message || 'Failed to load intervention ROI metrics.');
+                setPayload(null);
+                setLoading(false);
+                return;
+            }
+
+            setPayload(resp.data || null);
+            setLoading(false);
+        };
+
+        load();
+        return () => {
+            isMounted = false;
+        };
+    }, []);
 
     const metrics = useMemo(() => {
-        if (!students || students.length === 0) {
-            return null;
-        }
+        if (!payload) return null;
+        const totalCost = Number(payload.total_intervention_cost || 0);
+        const studentsRetained = Number(payload.estimated_recovered || 0);
+        const costPerStudent = Number(payload.cost_per_retained_student || 0);
+        const revenueSaved = Number(payload.revenue_saved || 0);
+        const roiMultiple = Number(payload.roi_multiple || 0);
 
-        const atRiskCount = students.filter(s => s.risk_score > 40).length;
-        const highRiskCount = students.filter(s => s.risk_score > 70).length;
-
-        // Cost assumptions (in production, these would come from config/API)
-        const staffTimePerIntervention = 2.5;  // hours
-        const hourlyStaffCost = 45;  // dollars
-        const automatedToolCost = 5000;  // monthly platform cost
-        const incentiveBudget = 25000;  // quarterly incentive pool
-        const trainingCost = 3500;  // quarterly training costs
-
-        // Calculate interventions (simplified model)
-        const interventionsTriggered = Math.floor(atRiskCount * 0.6);
-        const recoveredStudents = Math.floor(interventionsTriggered * 0.35);
-
-        // Calculate costs
-        const staffTimeCost = interventionsTriggered * staffTimePerIntervention * hourlyStaffCost;
-        const toolingCost = automatedToolCost;
-        const incentivesUsed = Math.min(incentiveBudget, recoveredStudents * 150);  // ~$150 per recovered
-        const totalCost = staffTimeCost + toolingCost + incentivesUsed + trainingCost;
-
-        // Calculate cost per retained student
-        const costPerStudent = recoveredStudents > 0 ? totalCost / recoveredStudents : 0;
-
-        // Revenue preserved (assume $12,500 LTV per student)
-        const avgStudentLTV = 12500;
-        const revenueSaved = recoveredStudents * avgStudentLTV;
-
-        // ROI calculation
-        const roi = totalCost > 0 ? ((revenueSaved - totalCost) / totalCost) * 100 : 0;
+        const breakdownObj = payload.breakdown && typeof payload.breakdown === 'object' ? payload.breakdown : {};
+        const breakdown = [
+            { category: 'Staff Time', amount: Number(breakdownObj.staff_time || 0) },
+            { category: 'Platform & Tools', amount: Number(breakdownObj.platform_tools || 0) },
+            { category: 'Student Incentives', amount: Number(breakdownObj.student_incentives || 0) },
+            { category: 'Training & Development', amount: Number(breakdownObj.training || 0) },
+        ];
+        const total = breakdown.reduce((a, b) => a + (b.amount || 0), 0) || 1;
 
         return {
             totalCost,
-            studentsRetained: recoveredStudents,
+            studentsRetained,
             costPerStudent: Math.round(costPerStudent),
             revenueSaved,
-            roi: Math.round(roi * 10) / 10,
-            breakdown: [
-                { category: 'Staff Time', amount: Math.round(staffTimeCost), percentage: Math.round((staffTimeCost / totalCost) * 100) },
-                { category: 'Platform & Tools', amount: toolingCost, percentage: Math.round((toolingCost / totalCost) * 100) },
-                { category: 'Student Incentives', amount: Math.round(incentivesUsed), percentage: Math.round((incentivesUsed / totalCost) * 100) },
-                { category: 'Training & Development', amount: trainingCost, percentage: Math.round((trainingCost / totalCost) * 100) }
-            ],
+            roiMultiple,
+            breakdown: breakdown.map((b) => ({
+                ...b,
+                amount: Math.round(b.amount || 0),
+                percentage: Math.round(((b.amount || 0) / total) * 100),
+            })),
             efficiency: {
-                interventionsPerRecovery: recoveredStudents > 0 ? (interventionsTriggered / recoveredStudents).toFixed(1) : 'N/A',
-                revenueMultiple: totalCost > 0 ? (revenueSaved / totalCost).toFixed(1) : 'N/A'
-            }
+                revenueMultiple: totalCost > 0 ? (revenueSaved / totalCost).toFixed(1) : 'N/A',
+            },
         };
-    }, [students]);
+    }, [payload]);
+
+    if (loading) {
+        return (
+            <div className="premium-card business-context">
+                <div style={{ textAlign: 'center', padding: 'var(--space-2xl)', color: 'var(--gray-500)' }}>
+                    <Spinner animation="border" size="sm" />
+                    <div className="mt-2">Loading ROI metrics…</div>
+                </div>
+            </div>
+        );
+    }
+
+    if (error) {
+        return (
+            <div className="premium-card business-context">
+                <Alert variant="danger" className="mb-0">
+                    {error}
+                </Alert>
+            </div>
+        );
+    }
 
     if (!metrics) {
         return (
@@ -169,14 +198,14 @@ const CostPerRetainedStudent = () => {
                         opacity: 0.9,
                         marginBottom: 'var(--space-xs)'
                     }}>
-                        ROI
+                        ROI Multiple
                     </div>
                     <div style={{
                         fontSize: 'var(--font-size-display)',
                         fontWeight: 'var(--font-weight-extrabold)',
                         fontFamily: 'var(--font-family-mono)'
                     }}>
-                        {metrics.roi}x
+                        {Number(metrics.roiMultiple || 0).toFixed(2)}x
                     </div>
                 </div>
             </div>
@@ -199,7 +228,7 @@ const CostPerRetainedStudent = () => {
                         alignItems: 'center',
                         justifyContent: 'space-between',
                         padding: 'var(--space-md)',
-                        background: idx % 2 === 0 ? 'var(--gray-50)' : 'white',
+                        background: idx % 2 === 0 ? 'var(--gray-50)' : 'transparent',
                         borderRadius: 'var(--radius-sm)'
                     }}>
                         <div style={{

@@ -15,7 +15,7 @@ from backend.database import SessionLocal, Prediction
 
 logger = sys_logger
 
-MODELS_DIR = os.path.abspath(os.path.join(os.path.dirname(__file__), '../../../models/saved_models'))
+MODELS_DIR = os.path.abspath(os.path.join(os.path.dirname(__file__), '../../models/saved_models'))
 
 class MLService:
     def __init__(self):

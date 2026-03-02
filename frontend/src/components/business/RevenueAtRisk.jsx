@@ -1,4 +1,6 @@
-import React, { useState, useEffect } from 'react';
+import React, { useEffect, useMemo, useState } from 'react';
+import { Alert, Spinner } from 'react-bootstrap';
+import { getRevenueAtRiskMetrics } from '../../services/api';
 
 /**
  * Revenue-at-Risk Dashboard Component
@@ -9,44 +11,59 @@ import React, { useState, useEffect } from 'react';
  * LOCATION: Executive dashboard, business intelligence view
  */
 
-const RevenueAtRisk = ({ studentData, revenueData }) => {
-    const [metrics, setMetrics] = useState(null);
-    const [breakdown, setBreakdown] = useState([]);
-    const [trend, setTrend] = useState(null);
+const RevenueAtRisk = () => {
+    const [loading, setLoading] = useState(false);
+    const [error, setError] = useState(null);
+    const [payload, setPayload] = useState(null);
+
+    const fmtCurrency = useMemo(
+        () => new Intl.NumberFormat('en-US', { style: 'currency', currency: 'USD', maximumFractionDigits: 0 }),
+        []
+    );
 
     useEffect(() => {
-        if (studentData && revenueData) {
-            calculateRevenueMetrics(studentData, revenueData);
-        } else {
-            // Mock data
-            setMetrics({
-                totalRevenue: 2450000,
-                highRiskRevenue: 245000,
-                mediumRiskRevenue: 480000,
-                lowRiskRevenue: 125000,
-                safeRevenue: 1600000,
-                totalAtRisk: 850000
-            });
+        let isMounted = true;
+        const load = async () => {
+            setLoading(true);
+            setError(null);
+            const resp = await getRevenueAtRiskMetrics();
+            if (!isMounted) return;
 
-            setBreakdown([
-                { category: 'High Risk (>70%)', amount: 245000, studentCount: 18, avgValue: 13611 },
-                { category: 'Medium Risk (40-70%)', amount: 480000, studentCount: 42, avgValue: 11429 },
-                { category: 'Low Risk (20-40%)', amount: 125000, studentCount: 15, avgValue: 8333 }
-            ]);
+            if (!resp.success) {
+                setError(resp.message || 'Failed to load revenue-at-risk metrics.');
+                setPayload(null);
+                setLoading(false);
+                return;
+            }
 
-            setTrend({
-                change: -35000,
-                changePercent: -3.95,
-                period: 'vs last month'
-            });
-        }
-    }, [studentData, revenueData]);
+            setPayload(resp.data || null);
+            setLoading(false);
+        };
 
-    const calculateRevenueMetrics = (students, revenue) => {
-        // Calculate revenue at risk based on student dropout probabilities
-        // In production, this would aggregate student LTV * dropout probability
-        // Mock implementation for demonstration
-    };
+        load();
+        return () => {
+            isMounted = false;
+        };
+    }, []);
+
+    const metrics = useMemo(() => {
+        if (!payload) return null;
+        const totalRevenue = payload.total_enrolled_revenue ?? 0;
+        const totalAtRisk = payload.revenue_at_risk ?? 0;
+        const safeRevenue = Math.max(0, totalRevenue - totalAtRisk);
+        return { totalRevenue, totalAtRisk, safeRevenue };
+    }, [payload]);
+
+    const breakdown = useMemo(() => {
+        const raw = payload?.risk_breakdown;
+        if (!Array.isArray(raw)) return [];
+        return raw.map((r) => ({
+            category: String(r.category || '').toLowerCase(),
+            amount: Number(r.revenue_at_risk || 0),
+            studentCount: Number(r.student_count || 0),
+            avgValue: Number(r.avg_value_per_student || 0),
+        }));
+    }, [payload]);
 
     return (
         <div className="premium-card business-context" style={{ marginBottom: 'var(--space-lg)' }}>
@@ -68,7 +85,20 @@ const RevenueAtRisk = ({ studentData, revenueData }) => {
                 Financial impact of student dropout risk
             </div>
 
-            {metrics && (
+            {loading && (
+                <div className="text-center py-5 text-muted">
+                    <Spinner animation="border" size="sm" />
+                    <div className="mt-2">Loading revenue risk…</div>
+                </div>
+            )}
+
+            {error && (
+                <Alert variant="danger" className="mb-0">
+                    {error}
+                </Alert>
+            )}
+
+            {!loading && !error && metrics && (
                 <>
                     {/* Primary Metric - Revenue at Risk */}
                     <div style={{
@@ -97,7 +127,7 @@ const RevenueAtRisk = ({ studentData, revenueData }) => {
                             fontFamily: 'var(--font-family-mono)',
                             marginBottom: 'var(--space-md)'
                         }}>
-                            ${metrics.totalAtRisk.toLocaleString()}
+                            {fmtCurrency.format(metrics.totalAtRisk)}
                         </div>
 
                         {/* Percentage */}
@@ -106,20 +136,8 @@ const RevenueAtRisk = ({ studentData, revenueData }) => {
                             fontWeight: 'var(--font-weight-semibold)',
                             opacity: 0.95
                         }}>
-                            {((metrics.totalAtRisk / metrics.totalRevenue) * 100).toFixed(1)}% of total revenue
+                            {metrics.totalRevenue > 0 ? `${((metrics.totalAtRisk / metrics.totalRevenue) * 100).toFixed(1)}%` : '0.0%'} of total revenue
                         </div>
-
-                        {/* Trend - Delta with ± symbols */}
-                        {trend && (
-                            <div style={{
-                                marginTop: 'var(--space-md)',
-                                fontSize: 'var(--font-size-small)',
-                                fontWeight: 'var(--font-weight-semibold)',
-                                opacity: 0.9
-                            }}>
-                                {trend.change < 0 ? '↓' : '↑'} ${Math.abs(trend.change).toLocaleString()} ({trend.changePercent > 0 ? '+' : ''}{trend.changePercent.toFixed(1)}%) {trend.period}
-                            </div>
-                        )}
                     </div>
 
                     {/* Breakdown by Risk Level */}
@@ -151,17 +169,17 @@ const RevenueAtRisk = ({ studentData, revenueData }) => {
                     }}>
                         <SummaryMetric
                             label="Total Revenue"
-                            value={`$${metrics.totalRevenue.toLocaleString()}`}
+                            value={fmtCurrency.format(metrics.totalRevenue)}
                             color="var(--business-primary)"
                         />
                         <SummaryMetric
                             label="At Risk"
-                            value={`$${metrics.totalAtRisk.toLocaleString()}`}
+                            value={fmtCurrency.format(metrics.totalAtRisk)}
                             color="var(--business-revenue)"
                         />
                         <SummaryMetric
                             label="Safe Revenue"
-                            value={`$${metrics.safeRevenue.toLocaleString()}`}
+                            value={fmtCurrency.format(metrics.safeRevenue)}
                             color="var(--business-growth)"
                         />
                     </div>
@@ -189,13 +207,13 @@ const RiskCategoryCard = ({ category }) => (
                 color: 'var(--gray-900)',
                 marginBottom: 'var(--space-xs)'
             }}>
-                {category.category}
+                {category.category || 'Risk segment'}
             </div>
             <div style={{
                 fontSize: 'var(--font-size-small)',
                 color: 'var(--gray-600)'
             }}>
-                {category.studentCount} students • ${category.avgValue.toLocaleString()} avg value
+                {Number(category.studentCount || 0).toLocaleString()} students • ${Number(category.avgValue || 0).toLocaleString()} avg value
             </div>
         </div>
 
@@ -205,7 +223,7 @@ const RiskCategoryCard = ({ category }) => (
             fontFamily: 'var(--font-family-mono)',
             color: 'var(--business-revenue)'
         }}>
-            ${category.amount.toLocaleString()}
+            ${Number(category.amount || 0).toLocaleString()}
         </div>
     </div>
 );

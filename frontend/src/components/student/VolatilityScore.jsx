@@ -18,21 +18,22 @@ const VolatilityScore = ({ studentId, engagementHistory }) => {
         if (engagementHistory && engagementHistory.length > 0) {
             calculateVolatility(engagementHistory);
         } else {
-            // Mock data
-            setVolatilityScore(68);
-            setPattern('High Variance');
-            setRecentSpikes([
-                { date: '2024-01-28', type: 'Drop', magnitude: -35 },
-                { date: '2024-01-25', type: 'Spike', magnitude: +42 },
-                { date: '2024-01-20', type: 'Drop', magnitude: -28 }
-            ]);
+            setVolatilityScore(0);
+            setPattern('No Data');
+            setRecentSpikes([]);
         }
     }, [engagementHistory]);
 
     const calculateVolatility = (history) => {
         // Calculate standard deviation of engagement levels
-        const values = history.map(h => h.engagementLevel);
+        const values = history.map(h => h.engagementLevel || 0);
         const mean = values.reduce((sum, v) => sum + v, 0) / values.length;
+        if (!Number.isFinite(mean) || mean === 0) {
+            setVolatilityScore(0);
+            setPattern('No Data');
+            setRecentSpikes([]);
+            return;
+        }
         const variance = values.reduce((sum, v) => sum + Math.pow(v - mean, 2), 0) / values.length;
         const stdDev = Math.sqrt(variance);
 

@@ -14,50 +14,10 @@ const CourseRiskAnalysis = ({ courseData }) => {
     const [sortBy, setSortBy] = useState('riskCorrelation');
 
     useEffect(() => {
-        if (courseData) {
+        if (Array.isArray(courseData) && courseData.length) {
             processCourseData(courseData);
         } else {
-            // Mock data
-            const mockCourses = [
-                {
-                    id: 'CS301',
-                    name: 'Advanced Algorithms',
-                    riskCorrelation: 0.68,
-                    studentCount: 85,
-                    avgDropoutRate: 0.34,
-                    difficulty: 'High',
-                    insights: 'High failure rate in midterm exam correlates with dropout'
-                },
-                {
-                    id: 'MATH205',
-                    name: 'Calculus II',
-                    riskCorrelation: 0.54,
-                    studentCount: 120,
-                    avgDropoutRate: 0.28,
-                    difficulty: 'High',
-                    insights: 'Prerequisites gap leads to struggling'
-                },
-                {
-                    id: 'PHY101',
-                    name: 'Physics Fundamentals',
-                    riskCorrelation: 0.42,
-                    studentCount: 95,
-                    avgDropoutRate: 0.22,
-                    difficulty: 'Medium',
-                    insights: 'Lab attendance issues correlate with risk'
-                },
-                {
-                    id: 'ENG102',
-                    name: 'Technical Writing',
-                    riskCorrelation: 0.18,
-                    studentCount: 110,
-                    avgDropoutRate: 0.08,
-                    difficulty: 'Low',
-                    insights: 'Low risk factor, well-supported course'
-                }
-            ];
-
-            setCourses(mockCourses.sort((a, b) => b.riskCorrelation - a.riskCorrelation));
+            setCourses([]);
         }
     }, [courseData, sortBy]);
 
@@ -125,6 +85,9 @@ const CourseRiskAnalysis = ({ courseData }) => {
 
             {/* Course Cards */}
             <div>
+                {courses.length === 0 && (
+                    <div className="text-muted small">No course risk data available.</div>
+                )}
                 {courses.map((course, idx) => {
                     const riskLevel = getRiskLevel(course.riskCorrelation);
                     return (

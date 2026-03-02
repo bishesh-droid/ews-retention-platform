@@ -6,15 +6,15 @@
 @import './design-system.css';
 
 :root {
-  /* Core Brand Colors - Lumivance */
+  /* Core Brand Colors - Meridian */
   --primary-color: #7C3AED;
-  /* Lumivance Violet */
+  /* Meridian Violet */
   --primary-hover: #6D28D9;
   /* Deeper Violet */
   --primary-light: #C4B5FD;
   /* Soft Lavender */
 
-  /* Lumivance Accent Colors */
+  /* Meridian Accent Colors */
   --accent-gold: #F59E0B;
   /* Warm Amber - Radiance */
   --accent-gold-light: #FDE68A;
@@ -32,7 +32,7 @@
   --neutral-risk-color: #6C757D;
   /* Gray */
 
-  /* AI & Ethics Colors - Lumivance Theme */
+  /* AI & Ethics Colors - Meridian Theme */
   --ai-primary: #F59E0B; /* Warm Amber for AI distinction */
   --ai-light: #FDE68A;
   --ai-bg-glass: rgba(245, 158, 11, 0.05);
@@ -47,7 +47,7 @@
   --gradient-glow: radial-gradient(circle at 50% -20%, rgba(139, 92, 246, 0.18), transparent 70%);
   --gradient-glass: linear-gradient(180deg, rgba(255, 255, 255, 0.95) 0%, rgba(255, 255, 255, 0.7) 100%);
 
-  /* Backgrounds & Surfaces (Dark — Lumivance) */
+  /* Backgrounds & Surfaces (Dark — Meridian) */
   --bg-color: #0B0714;
   /* Deep Void */
   --surface-color: #130D23;
@@ -121,6 +121,9 @@
   --student-success: #10B981;
   --student-warning: #F59E0B;
   --business-primary: #8B5CF6;
+  --business-revenue: #EF4444;
+  --business-growth: #10B981;
+  --business-warning: #F59E0B;
   --institutional-primary: #C4B5FD;
 }
 
@@ -306,7 +309,7 @@ a:hover {
 
 .modern-table tbody tr:hover {
   background-color: rgba(139, 92, 246, 0.06);
-  /* Faint Lumivance violet overlay */
+  /* Faint Meridian violet overlay */
 }
 
 .modern-table td {

@@ -19,6 +19,7 @@ from backend.services.feature_engineering import FeatureEngineer
 from backend.services.risk_scoring import RiskScorer
 from backend.database import Student, Enrollment
 from backend.config import INTEGRATION_API_KEY
+from backend.utils.api import success_response
 
 router = APIRouter()
 
@@ -83,7 +84,7 @@ def _build_risk_profile(db: Session, student: Student) -> dict:
         "courses_with_zero_progress": courses_zero,
     }
 
-    return {
+    data = {
         "student_id": student.id,
         "student_name": f"{student.first_name or ''} {student.last_name or ''}".strip() or student.id,
         "risk_score": round(risk_score, 2),
@@ -97,6 +98,7 @@ def _build_risk_profile(db: Session, student: Student) -> dict:
         "exported_at": datetime.now().isoformat(),
         "api_version": API_VERSION,
     }
+    return data
 
 
 # ─── Endpoints ───────────────────────────────────────────────────────────────
@@ -121,7 +123,11 @@ def get_student_risk_profile(
     if not profile:
         raise HTTPException(status_code=500, detail="Failed to build risk profile")
 
-    return profile
+    return success_response(
+        profile,
+        message="Student risk profile",
+        meta={"model_version": API_VERSION},
+    )
 
 
 @router.get("/cohort-risk-profiles")
@@ -154,7 +160,7 @@ def get_cohort_risk_profiles(
                 continue
             profiles.append(profile)
 
-    return {
+    data = {
         "profiles": profiles,
         "total_in_system": total,
         "returned": len(profiles),
@@ -163,3 +169,16 @@ def get_cohort_risk_profiles(
         "exported_at": datetime.now().isoformat(),
         "api_version": API_VERSION,
     }
+    return success_response(
+        data,
+        message="Cohort risk profiles",
+        meta={
+            "pagination": {
+                "skip": skip,
+                "limit": limit,
+                "returned": len(profiles),
+                "total_in_system": total,
+            },
+            "model_version": API_VERSION,
+        },
+    )

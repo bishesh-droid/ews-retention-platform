@@ -8,6 +8,7 @@ from sqlalchemy.orm import Session
 
 from backend.api.deps import get_db
 from backend.services.student_service import StudentService
+from backend.utils.api import success_response
 
 router = APIRouter(
     responses={404: {"description": "Not found"}},
@@ -78,4 +79,8 @@ def get_recommendations_for_student(student_id: str, db: Session = Depends(get_d
             "description": "You're performing well. Continue your current study habits and consider mentoring other students.",
         })
 
-    return recommendations
+    return success_response(
+        recommendations,
+        message="Student recommendations",
+        meta={"pagination": {"total": len(recommendations)}},
+    )

@@ -71,59 +71,34 @@ const getAttendanceRate = (student) => {
   return Math.round(student.exam_attendance_rate ?? 0);
 };
 
-// Get risk category badge
+// Get risk category badge (prefer backend risk_label when available)
 const RiskCategoryBadge = ({ student }) => {
   const score = student.risk_score ?? 50;
-  if (score >= 70) {
-    return <Badge bg="danger" className="px-2">High Risk</Badge>;
-  } else if (score >= 40) {
-    return <Badge bg="warning" className="px-2">Medium</Badge>;
+  const label = student.risk_label || (score >= 70 ? 'High Risk' : score >= 40 ? 'Medium' : 'Low Risk');
+
+  if (label.toLowerCase().includes('high')) {
+    return <Badge bg="danger" className="px-2">{label}</Badge>;
   }
-  return <Badge bg="success" className="px-2">Low Risk</Badge>;
+  if (label.toLowerCase().includes('medium')) {
+    return <Badge bg="warning" className="px-2">{label}</Badge>;
+  }
+  return <Badge bg="success" className="px-2">{label}</Badge>;
 };
 
-const RiskTable = ({ students, onSelectStudent, selectedStudents }) => {
-  const [sortConfig, setSortConfig] = useState({ key: 'risk_score', direction: 'descending' });
+const RiskTable = ({ students, onSelectStudent, selectedStudents, sortConfig, onSortChange }) => {
   const navigate = useNavigate();
 
-  const sortedStudents = useMemo(() => {
-    let sortableItems = [...students];
-    if (sortConfig !== null) {
-      sortableItems.sort((a, b) => {
-        let aVal = a[sortConfig.key];
-        let bVal = b[sortConfig.key];
-
-        // Handle computed fields
-        if (sortConfig.key === 'graded_quiz_score') {
-          aVal = getQuizScore(a);
-          bVal = getQuizScore(b);
-        } else if (sortConfig.key === 'exam_attendance_rate') {
-          aVal = getAttendanceRate(a);
-          bVal = getAttendanceRate(b);
-        }
-
-        if (aVal < bVal) {
-          return sortConfig.direction === 'ascending' ? -1 : 1;
-        }
-        if (aVal > bVal) {
-          return sortConfig.direction === 'ascending' ? 1 : -1;
-        }
-        return 0;
-      });
-    }
-    return sortableItems;
-  }, [students, sortConfig]);
-
   const requestSort = (key) => {
+    if (!onSortChange) return;
     let direction = 'ascending';
-    if (sortConfig.key === key && sortConfig.direction === 'ascending') {
+    if (sortConfig && sortConfig.key === key && sortConfig.direction === 'ascending') {
       direction = 'descending';
     }
-    setSortConfig({ key, direction });
+    onSortChange({ key, direction });
   };
 
   const getSortIndicator = (key) => {
-    if (sortConfig.key === key) {
+    if (sortConfig && sortConfig.key === key) {
       return sortConfig.direction === 'ascending' ? <FaSortUp /> : <FaSortDown />;
     }
     return <FaSort className="text-muted opacity-50" />;
@@ -191,7 +166,7 @@ const RiskTable = ({ students, onSelectStudent, selectedStudents }) => {
           </tr>
         </thead>
         <tbody>
-          {sortedStudents.map((student, index) => {
+          {students.map((student, index) => {
             const isSelected = selectedStudents.includes(student.id);
             return (
             <motion.tr

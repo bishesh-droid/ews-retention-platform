@@ -1,4 +1,4 @@
-import React, { useState, useMemo } from 'react';
+import React, { useState, useMemo, useEffect } from 'react';
 import { Form, Row, Col, Button, InputGroup, Badge } from 'react-bootstrap';
 import { FaSearch, FaFilter, FaExchangeAlt, FaUserGraduate, FaExclamationTriangle, FaTimes, FaEnvelope, FaDownload, FaClipboardList } from 'react-icons/fa';
 import { motion } from 'framer-motion';
@@ -6,12 +6,15 @@ import ComparisonModal from '../components/common/ComparisonModal';
 import RiskTable from '../components/dashboard/RiskTable';
 import StudentDrawer from '../components/student/StudentDrawer';
 import Skeleton from '../components/common/Skeleton';
-import { useStudentData } from '../context/StudentContext';
 import { variants } from '../utils/motionConfig';
 import useDebounce from '../hooks/useDebounce';
+import { getStudentList } from '../services/api';
 
 const Students = () => {
-  const { students, loading, error } = useStudentData();
+  const [students, setStudents] = useState([]);
+  const [totalStudents, setTotalStudents] = useState(0);
+  const [loading, setLoading] = useState(false);
+  const [error, setError] = useState(null);
   const [searchTerm, setSearchTerm] = useState('');
   const [riskFilter, setRiskFilter] = useState('all');
   const [selectedStudents, setSelectedStudents] = useState([]);
@@ -26,9 +29,37 @@ const Students = () => {
   const [showDrawer, setShowDrawer] = useState(false);
   const [selectedStudent, setSelectedStudent] = useState(null);
 
-  // Pagination
+  // Pagination (server-side)
   const [currentPage, setCurrentPage] = useState(1);
   const [pageSize, setPageSize] = useState(50);
+  const [sortConfig, setSortConfig] = useState({ key: 'risk_score', direction: 'descending' });
+
+  // Fetch students from backend when page or page size changes
+  useEffect(() => {
+    let isMounted = true;
+    const load = async () => {
+      setLoading(true);
+      setError(null);
+      const sortBy = sortConfig.key || 'risk_score';
+      const order = sortConfig.direction === 'ascending' ? 'asc' : 'desc';
+      const response = await getStudentList(currentPage, pageSize, sortBy, order);
+      if (!isMounted) return;
+      if (response.success && response.data) {
+        const { students: pageStudents = [], total = 0 } = response.data;
+        setStudents(pageStudents);
+        setTotalStudents(total || pageStudents.length);
+      } else {
+        setError(response.message || 'Failed to load students');
+        setStudents([]);
+        setTotalStudents(0);
+      }
+      setLoading(false);
+    };
+    load();
+    return () => {
+      isMounted = false;
+    };
+  }, [currentPage, pageSize, sortConfig]);
 
   const departments = useMemo(() => {
     const depts = new Set(students.map(s => s.department).filter(Boolean));
@@ -96,14 +127,10 @@ const Students = () => {
     return students.filter(s => selectedStudents.includes(s.id));
   }, [students, selectedStudents]);
 
-  // Paginated students
-  const paginatedStudents = useMemo(() => {
-    const startIndex = (currentPage - 1) * pageSize;
-    const endIndex = startIndex + pageSize;
-    return filteredStudents.slice(startIndex, endIndex);
-  }, [filteredStudents, currentPage, pageSize]);
+  // Server-side pagination: filteredStudents already represent current page
+  const paginatedStudents = filteredStudents;
 
-  const totalPages = Math.ceil(filteredStudents.length / pageSize);
+  const totalPages = Math.max(1, Math.ceil((totalStudents || 0) / pageSize));
 
   const handlePageSizeChange = (newSize) => {
     setPageSize(newSize);
@@ -391,14 +418,16 @@ const Students = () => {
                   onSelectStudent={handleSelectStudent}
                   selectedStudents={selectedStudents}
                   onStudentClick={handleStudentClick}
+                  sortConfig={sortConfig}
+                  onSortChange={setSortConfig}
                 />
 
                 {/* Pagination Controls */}
                 <div className="d-flex justify-content-between align-items-center mt-4 pt-3 border-top" style={{ borderColor: 'var(--border-color)' }}>
                   <div className="d-flex align-items-center gap-3">
-                    <small className="text-muted">
-                      Showing {((currentPage - 1) * pageSize) + 1}-{Math.min(currentPage * pageSize, filteredStudents.length)} of {filteredStudents.length} students
-                    </small>
+                      <small className="text-muted">
+                        Showing {((currentPage - 1) * pageSize) + 1}-{((currentPage - 1) * pageSize) + paginatedStudents.length} of {totalStudents || paginatedStudents.length} students
+                      </small>
                     <div className="d-flex align-items-center gap-2">
                       <small className="text-muted">Per page:</small>
                       <Form.Select

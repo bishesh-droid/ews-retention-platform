@@ -13,6 +13,7 @@ import StudentPortal from './pages/StudentPortal';
 import FacultyTools from './pages/FacultyTools';
 import BusinessAnalytics from './pages/BusinessAnalytics';
 import Login from './pages/Login';
+import Signup from './pages/Signup';
 import { useAuth } from './context/AuthContext';
 import './App.css';
 
@@ -27,6 +28,7 @@ function App() {
   return (
     <Routes location={location} key={location.pathname}>
       <Route path="/login" element={<Login />} />
+      <Route path="/signup" element={<Signup />} />
       <Route
         path="/*"
         element={

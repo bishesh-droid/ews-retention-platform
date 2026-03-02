@@ -1,5 +1,6 @@
-import React, { useMemo } from 'react';
-import { useStudentData } from '../../context/StudentContext';
+import React, { useEffect, useMemo, useState } from 'react';
+import { Alert, Spinner } from 'react-bootstrap';
+import { getRetentionFunnel } from '../../services/api';
 
 /**
  * Retention Funnel Component
@@ -9,75 +10,61 @@ import { useStudentData } from '../../context/StudentContext';
  */
 
 const RetentionFunnel = () => {
-    const { students } = useStudentData();
+    const [loading, setLoading] = useState(false);
+    const [error, setError] = useState(null);
+    const [payload, setPayload] = useState(null);
+
+    useEffect(() => {
+        let isMounted = true;
+        const load = async () => {
+            setLoading(true);
+            setError(null);
+            const resp = await getRetentionFunnel('current_semester');
+            if (!isMounted) return;
+
+            if (!resp.success) {
+                setError(resp.message || 'Failed to load retention funnel.');
+                setPayload(null);
+                setLoading(false);
+                return;
+            }
+
+            setPayload(resp.data || null);
+            setLoading(false);
+        };
+
+        load();
+        return () => {
+            isMounted = false;
+        };
+    }, []);
 
     const funnelData = useMemo(() => {
-        if (!students || students.length === 0) {
+        if (!payload) {
             return {
                 stages: [],
                 conversionRates: []
             };
         }
 
-        // Calculate funnel stages based on actual student data
-        const totalEnrolled = students.length;
-        const atRisk = students.filter(s => s.risk_score > 40).length;
-        const highRisk = students.filter(s => s.risk_score > 70).length;
-        const criticalRisk = students.filter(s => s.risk_score > 85).length;
+        const stagesRaw = Array.isArray(payload.stages) ? payload.stages : [];
+        const conversionRaw = Array.isArray(payload.conversion_rates) ? payload.conversion_rates : [];
 
-        // Estimate interventions and outcomes (in production, this would come from Intervention table)
-        const interventionsTriggered = Math.floor(atRisk * 0.6);  // 60% of at-risk get intervention
-        const recovered = Math.floor(interventionsTriggered * 0.35);  // 35% recovery rate
-        const dropped = Math.floor(highRisk * 0.25);  // 25% of high-risk drop out
+        const stages = stagesRaw.map((s) => ({
+            name: s.name,
+            count: Number(s.count || 0),
+            color: s.color || '#8B5CF6',
+            description: s.description,
+        }));
 
-        const stages = [
-            {
-                name: 'Total Enrolled',
-                count: totalEnrolled,
-                color: '#3B82F6',
-                description: 'All active students in the system'
-            },
-            {
-                name: 'Identified At-Risk',
-                count: atRisk,
-                color: '#F59E0B',
-                description: 'Risk score > 40%'
-            },
-            {
-                name: 'Intervention Triggered',
-                count: interventionsTriggered,
-                color: '#8B5CF6',
-                description: 'Students who received outreach'
-            },
-            {
-                name: 'Recovered',
-                count: recovered,
-                color: '#10B981',
-                description: 'Risk reduced after intervention'
-            },
-            {
-                name: 'Dropped Out',
-                count: dropped,
-                color: '#EF4444',
-                description: 'Students who left the program'
-            }
-        ];
-
-        // Calculate conversion rates between stages
-        const conversionRates = [];
-        for (let i = 1; i < stages.length - 1; i++) {
-            if (stages[i - 1].count > 0) {
-                const rate = ((stages[i].count / stages[i - 1].count) * 100).toFixed(1);
-                conversionRates.push({
-                    from: stages[i - 1].name,
-                    to: stages[i].name,
-                    rate: parseFloat(rate)
-                });
-            }
-        }
+        const conversionRates = conversionRaw.map((c) => ({
+            from: c.from,
+            to: c.to,
+            rate: Number(c.rate || 0),
+        }));
 
         return { stages, conversionRates };
-    }, [students]);
+    }, [payload]);
 
     const maxCount = Math.max(...funnelData.stages.map(s => s.count), 1);
 
@@ -99,7 +86,20 @@ const RetentionFunnel = () => {
                 Track student journey from enrollment to outcome
             </div>
 
-            {funnelData.stages.length > 0 ? (
+            {loading && (
+                <div style={{ textAlign: 'center', padding: 'var(--space-2xl)', color: 'var(--gray-500)' }}>
+                    <Spinner animation="border" size="sm" />
+                    <div className="mt-2">Loading funnel…</div>
+                </div>
+            )}
+
+            {error && (
+                <Alert variant="danger" className="mb-0">
+                    {error}
+                </Alert>
+            )}
+
+            {!loading && !error && funnelData.stages.length > 0 ? (
                 <div style={{ display: 'flex', flexDirection: 'column', gap: 'var(--space-sm)' }}>
                     {funnelData.stages.map((stage, idx) => {
                         const widthPercent = (stage.count / maxCount) * 100;
@@ -157,20 +157,22 @@ const RetentionFunnel = () => {
                                     color: 'var(--gray-500)',
                                     marginBottom: isLast ? 0 : 'var(--space-sm)'
                                 }}>
-                                    {stage.description}
+                                    {stage.description || ''}
                                 </div>
                             </div>
                         );
                     })}
                 </div>
             ) : (
-                <div style={{
-                    textAlign: 'center',
-                    padding: 'var(--space-2xl)',
-                    color: 'var(--gray-500)'
-                }}>
-                    No data available
-                </div>
+                !loading && !error ? (
+                    <div style={{
+                        textAlign: 'center',
+                        padding: 'var(--space-2xl)',
+                        color: 'var(--gray-500)'
+                    }}>
+                        No data available
+                    </div>
+                ) : null
             )}
 
             {/* Conversion Rate Summary */}

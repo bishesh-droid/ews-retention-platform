@@ -6,7 +6,8 @@ from datetime import timedelta
 from backend.database import User
 from backend.api import deps
 from backend.core import auth
-from backend.schemas.auth import Token, UserOut, UserCreate
+from backend.schemas.auth import Token, UserOut, UserCreate, UserUpdate
+from backend.utils.api import success_response, error_response
 from backend.config import ACCESS_TOKEN_EXPIRE_MINUTES
 
 router = APIRouter()
@@ -70,3 +71,69 @@ def register(
     db.commit()
     db.refresh(db_user)
     return db_user
+
+
+@router.get("/me")
+def get_current_profile(
+    db: Session = Depends(deps.get_db),
+    current_user: User = Depends(deps.get_current_user),
+):
+    """
+    Get the authenticated user's profile, role, and preferences.
+    """
+    prefs = current_user.preferences or {}
+    data = {
+        "id": current_user.id,
+        "username": current_user.username,
+        "email": current_user.email,
+        "role": current_user.role,
+        "is_active": current_user.is_active,
+        "created_at": current_user.created_at.isoformat() if current_user.created_at else None,
+        "preferences": prefs,
+    }
+    return success_response(data, message="Current user profile")
+
+
+@router.put("/me")
+def update_current_profile(
+    payload: UserUpdate,
+    db: Session = Depends(deps.get_db),
+    current_user: User = Depends(deps.get_current_user),
+):
+    """
+    Update authenticated user's profile fields and preferences.
+    """
+    # Basic profile updates
+    if payload.username is not None:
+        current_user.username = payload.username
+    if payload.email is not None:
+        current_user.email = payload.email
+    if payload.role is not None:
+        current_user.role = payload.role
+    if payload.is_active is not None:
+        current_user.is_active = payload.is_active
+
+    # Preferences can be passed in payload.model_extra or a dedicated key; here we accept `preferences` from model_extra
+    extra = getattr(payload, "model_extra", {}) or {}
+    prefs = extra.get("preferences")
+    if isinstance(prefs, dict):
+        current_user.preferences = {**(current_user.preferences or {}), **prefs}
+
+    # Optional password change
+    if payload.password:
+        current_user.hashed_password = auth.get_password_hash(payload.password)
+
+    db.add(current_user)
+    db.commit()
+    db.refresh(current_user)
+
+    data = {
+        "id": current_user.id,
+        "username": current_user.username,
+        "email": current_user.email,
+        "role": current_user.role,
+        "is_active": current_user.is_active,
+        "created_at": current_user.created_at.isoformat() if current_user.created_at else None,
+        "preferences": current_user.preferences or {},
+    }
+    return success_response(data, message="Profile updated")

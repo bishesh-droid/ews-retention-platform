@@ -47,7 +47,7 @@
      ======================================== */
   
   /* Semantic Colors */
-  /* Violet (Lumivance Primary) */
+  /* Violet (Meridian Primary) */
   --color-primary: #8B5CF6;
   --color-primary-dark: #7C3AED;
   --color-primary-light: rgba(139, 92, 246, 0.12);
@@ -70,7 +70,7 @@
   /* Info */
   --color-info: #8B5CF6;
 
-  /* Neutral Palette — Dark (Lumivance) */
+  /* Neutral Palette — Dark (Meridian) */
   --gray-50:  #1A1035;
   --gray-100: #211645;
   --gray-200: rgba(139, 92, 246, 0.2);

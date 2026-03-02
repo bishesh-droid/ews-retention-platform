@@ -83,9 +83,9 @@ const StudentHealthScore = ({ studentData }) => {
 
             {/* Breakdown */}
             <div style={{ marginTop: 'var(--space-lg)', display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(150px, 1fr))', gap: 'var(--space-md)' }}>
-                <ScoreDimension label="Engagement" value={studentData?.engagement_score || 75} />
-                <ScoreDimension label="Performance" value={studentData?.performance_score || 82} />
-                <ScoreDimension label="Attendance" value={studentData?.attendance_score || 90} />
+                <ScoreDimension label="Engagement" value={studentData?.engagement_score ?? 0} />
+                <ScoreDimension label="Performance" value={studentData?.performance_score ?? 0} />
+                <ScoreDimension label="Attendance" value={studentData?.attendance_score ?? 0} />
             </div>
         </div>
     );

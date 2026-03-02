@@ -1,0 +1,134 @@
+{
+  "version": "1.0",
+  "training_date": "2026-03-02",
+  "description": "Canonical feature registry for the EWS dropout prediction model. All features must appear in this exact order during both training and inference.",
+  "features": [
+    {
+      "name": "attendance_rate",
+      "type": "float",
+      "range": [0.0, 100.0],
+      "description": "Student attendance as a percentage (0-100). Derived from sessions attended / total sessions.",
+      "missing_strategy": "median_impute"
+    },
+    {
+      "name": "avg_quiz_score",
+      "type": "float",
+      "range": [0.0, 100.0],
+      "description": "Average quiz score across all graded quizzes in the trimester, normalised to 0-100.",
+      "missing_strategy": "median_impute"
+    },
+    {
+      "name": "assignment_avg",
+      "type": "float",
+      "range": [0.0, 100.0],
+      "description": "Average assignment score across all submissions in the trimester, normalised to 0-100.",
+      "missing_strategy": "median_impute"
+    },
+    {
+      "name": "exam_score",
+      "type": "float",
+      "range": [0.0, 100.0],
+      "description": "Final or midterm exam score, normalised to 0-100. May be NaN if no exam recorded.",
+      "missing_strategy": "median_impute"
+    },
+    {
+      "name": "num_logins",
+      "type": "integer",
+      "range": [0, 999999],
+      "description": "Total platform login count for the trimester.",
+      "missing_strategy": "zero_fill"
+    },
+    {
+      "name": "time_spent_minutes",
+      "type": "float",
+      "range": [0.0, 999999.0],
+      "description": "Total minutes spent on the platform during the trimester.",
+      "missing_strategy": "zero_fill"
+    },
+    {
+      "name": "content_completed",
+      "type": "integer",
+      "range": [0, 99999],
+      "description": "Number of content items (modules, videos, readings) completed.",
+      "missing_strategy": "zero_fill"
+    },
+    {
+      "name": "content_completion_rate",
+      "type": "float",
+      "range": [0.0, 100.0],
+      "description": "Percentage of required content items completed (content_completed / content_required * 100).",
+      "missing_strategy": "zero_fill"
+    },
+    {
+      "name": "quiz_completion_rate",
+      "type": "float",
+      "range": [0.0, 100.0],
+      "description": "Percentage of available quizzes attempted.",
+      "missing_strategy": "zero_fill"
+    },
+    {
+      "name": "quiz_attempts",
+      "type": "integer",
+      "range": [0, 9999],
+      "description": "Total number of quiz attempts made (includes retakes).",
+      "missing_strategy": "zero_fill"
+    },
+    {
+      "name": "discussion_posts",
+      "type": "integer",
+      "range": [0, 9999],
+      "description": "Number of discussion forum posts created.",
+      "missing_strategy": "zero_fill"
+    },
+    {
+      "name": "submission_delay_avg",
+      "type": "float",
+      "range": [0.0, 1.0],
+      "description": "Proportion of assignments submitted late (proxy for procrastination index).",
+      "missing_strategy": "zero_fill"
+    },
+    {
+      "name": "engagement_frequency",
+      "type": "float",
+      "range": [0.0, 1.0],
+      "description": "Fraction of weeks with non-zero engagement activity (0=never active, 1=every week).",
+      "missing_strategy": "zero_fill"
+    },
+    {
+      "name": "engagement_decay",
+      "type": "float",
+      "range": [0.0, 99.0],
+      "description": "Ratio of last week activity to first week activity. < 1 means declining engagement.",
+      "missing_strategy": "median_impute"
+    },
+    {
+      "name": "activity_variance",
+      "type": "float",
+      "range": [0.0, 999999.0],
+      "description": "Variance of weekly activity levels. High variance indicates inconsistent engagement.",
+      "missing_strategy": "zero_fill"
+    },
+    {
+      "name": "performance_trend",
+      "type": "float",
+      "range": [-100.0, 100.0],
+      "description": "Linear regression slope over [attendance_rate, avg_quiz_score, assignment_avg]. Positive = improving.",
+      "missing_strategy": "zero_fill"
+    }
+  ],
+  "target": {
+    "name": "is_dropout",
+    "type": "integer",
+    "values": [0, 1],
+    "description": "Binary dropout risk label. 1 = at-risk / dropped out, 0 = retained. Ground truth from institution."
+  },
+  "metadata": {
+    "n_features": 16,
+    "feature_names": [
+      "attendance_rate", "avg_quiz_score", "assignment_avg", "exam_score",
+      "num_logins", "time_spent_minutes", "content_completed", "content_completion_rate",
+      "quiz_completion_rate", "quiz_attempts", "discussion_posts", "submission_delay_avg",
+      "engagement_frequency", "engagement_decay", "activity_variance", "performance_trend"
+    ]
+  }
+}

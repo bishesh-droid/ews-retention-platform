@@ -3,35 +3,10 @@ import { motion } from 'framer-motion';
 import {
   PieChart, Pie, Cell, Tooltip, Legend, ResponsiveContainer,
   LineChart, Line, XAxis, YAxis, CartesianGrid,
-  AreaChart, Area, BarChart, Bar
+  AreaChart, Area, BarChart, Bar, ReferenceLine,
 } from 'recharts';
 
-// Mock data for new charts
-const engagementData = [
-  { name: 'Week 1', score: 65 },
-  { name: 'Week 2', score: 59 },
-  { name: 'Week 3', score: 80 },
-  { name: 'Week 4', score: 81 },
-  { name: 'Week 5', score: 86 },
-  { name: 'Week 6', score: 92 },
-];
-
-const riskTrendData = [
-  { name: 'Sep', avgRisk: 42 },
-  { name: 'Oct', avgRisk: 48 },
-  { name: 'Nov', avgRisk: 55 },
-  { name: 'Dec', avgRisk: 40 },
-  { name: 'Jan', avgRisk: 38 },
-];
-
-const interventionData = [
-  { name: 'Tutoring', success: 75, failure: 25 },
-  { name: 'Counseling', success: 85, failure: 15 },
-  { name: 'Fin-Aid', success: 92, failure: 8 },
-  { name: 'Mentoring', success: 68, failure: 32 },
-];
-
-const Charts = ({ students, onRiskFilterChange, riskFilter }) => {
+const Charts = ({ students, onRiskFilterChange, riskFilter, engagementSeries = [], riskTrendSeries = [], interventionSummary = [], riskFactorSummary = [] }) => {
   const riskDistribution = useMemo(() => {
     return students.reduce((acc, student) => {
       if (student.risk_score > 75) acc.high++;
@@ -43,11 +18,31 @@ const Charts = ({ students, onRiskFilterChange, riskFilter }) => {
   }, [students]);
 
   const pieData = useMemo(() => [
-    { name: 'High Risk',     value: riskDistribution.high,    color: '#E879F9' }, // fuchsia — danger in violet family
-    { name: 'Medium Risk',  value: riskDistribution.medium,  color: '#FBBF24' }, // amber — brand accent
-    { name: 'Low Risk',     value: riskDistribution.low,     color: '#A78BFA' }, // violet-400 — on-theme
-    { name: 'Very Low Risk',value: riskDistribution.veryLow, color: '#6EE7B7' }, // muted emerald — safe
+    { name: 'High Risk',     value: riskDistribution.high,    color: '#E879F9' },
+    { name: 'Medium Risk',  value: riskDistribution.medium,  color: '#FBBF24' },
+    { name: 'Low Risk',     value: riskDistribution.low,     color: '#A78BFA' },
+    { name: 'Very Low Risk',value: riskDistribution.veryLow, color: '#6EE7B7' },
   ], [riskDistribution]);
+
+  // Risk Score Distribution histogram (5 buckets)
+  const histogramData = useMemo(() => {
+    const buckets = [
+      { range: '0–20',   count: 0, fill: '#6EE7B7' },
+      { range: '21–40',  count: 0, fill: '#A78BFA' },
+      { range: '41–60',  count: 0, fill: '#FBBF24' },
+      { range: '61–80',  count: 0, fill: '#F87171' },
+      { range: '81–100', count: 0, fill: '#E879F9' },
+    ];
+    students.forEach(s => {
+      const i = Math.min(Math.floor(s.risk_score / 20), 4);
+      buckets[i].count++;
+    });
+    return buckets;
+  }, [students]);
+
+  const avgRisk = useMemo(() =>
+    students.length > 0 ? Math.round(students.reduce((a, s) => a + s.risk_score, 0) / students.length) : 0,
+  [students]);
 
   const cardStyle = {
     backgroundColor: '#130D23',
@@ -75,7 +70,7 @@ const Charts = ({ students, onRiskFilterChange, riskFilter }) => {
   const tooltipStyle = { backgroundColor: '#1A1035', border: '1px solid rgba(139,92,246,0.3)', borderRadius: '10px', color: '#EDE9FE' };
 
   return (
-    <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
+    <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
       {/* 1. Risk Distribution Chart */}
       <motion.div style={cardStyle} {...hoverProps}>
         <h4 style={titleStyle}>Risk Distribution</h4>
@@ -110,7 +105,7 @@ const Charts = ({ students, onRiskFilterChange, riskFilter }) => {
       <motion.div style={cardStyle} {...hoverProps}>
         <h4 style={titleStyle}>Engagement Trend (Cohort Avg)</h4>
         <ResponsiveContainer width="100%" height={250}>
-          <AreaChart data={engagementData} margin={{ top: 10, right: 10, left: -20, bottom: 0 }}>
+          <AreaChart data={engagementSeries} margin={{ top: 10, right: 10, left: -20, bottom: 0 }}>
             <defs>
               <linearGradient id="colorScore" x1="0" y1="0" x2="0" y2="1">
                 <stop offset="5%" stopColor="#8B5CF6" stopOpacity={0.5} />
@@ -130,7 +125,7 @@ const Charts = ({ students, onRiskFilterChange, riskFilter }) => {
       <motion.div style={cardStyle} {...hoverProps}>
         <h4 style={titleStyle}>Risk Trend Over Time</h4>
         <ResponsiveContainer width="100%" height={250}>
-          <LineChart data={riskTrendData} margin={{ top: 10, right: 10, left: -20, bottom: 0 }}>
+          <LineChart data={riskTrendSeries} margin={{ top: 10, right: 10, left: -20, bottom: 0 }}>
             <CartesianGrid strokeDasharray="3 3" vertical={false} stroke={gridStroke} />
             <XAxis dataKey="name" tick={tickStyle} axisLine={false} tickLine={false} />
             <YAxis tick={tickStyle} axisLine={false} tickLine={false} />
@@ -144,7 +139,7 @@ const Charts = ({ students, onRiskFilterChange, riskFilter }) => {
       <motion.div style={cardStyle} {...hoverProps}>
         <h4 style={titleStyle}>Intervention Success Rates</h4>
         <ResponsiveContainer width="100%" height={250}>
-          <BarChart data={interventionData} margin={{ top: 10, right: 10, left: -20, bottom: 0 }}>
+          <BarChart data={interventionSummary} margin={{ top: 10, right: 10, left: -20, bottom: 0 }}>
             <CartesianGrid strokeDasharray="3 3" vertical={false} stroke={gridStroke} />
             <XAxis dataKey="name" tick={tickStyle} axisLine={false} tickLine={false} />
             <YAxis tick={tickStyle} axisLine={false} tickLine={false} />
@@ -152,6 +147,61 @@ const Charts = ({ students, onRiskFilterChange, riskFilter }) => {
             <Legend verticalAlign="top" height={36} wrapperStyle={{ color: '#8B7DB8', fontSize: '12px' }} />
             <Bar dataKey="success" stackId="a" fill="#10B981" name="Success %" barSize={30} radius={[0, 0, 4, 4]} />
             <Bar dataKey="failure" stackId="a" fill="rgba(239,68,68,0.5)" name="Failure %" radius={[4, 4, 0, 0]} />
+          </BarChart>
+        </ResponsiveContainer>
+      </motion.div>
+
+      {/* 5. Risk Score Distribution (Histogram) */}
+      <motion.div style={cardStyle} {...hoverProps}>
+        <h4 style={titleStyle}>Risk Score Distribution</h4>
+        <p style={{ fontSize: '11px', color: '#6B5E8E', textAlign: 'center', marginBottom: '8px' }}>
+          Students bucketed by risk score range
+        </p>
+        <ResponsiveContainer width="100%" height={230}>
+          <BarChart data={histogramData} margin={{ top: 5, right: 10, left: -20, bottom: 0 }}>
+            <CartesianGrid strokeDasharray="3 3" vertical={false} stroke={gridStroke} />
+            <XAxis dataKey="range" tick={tickStyle} axisLine={false} tickLine={false} />
+            <YAxis tick={tickStyle} axisLine={false} tickLine={false} />
+            <Tooltip
+              contentStyle={tooltipStyle}
+              cursor={{ fill: 'rgba(139,92,246,0.06)' }}
+              formatter={(v) => [v, 'Students']}
+            />
+            <ReferenceLine
+              y={0}
+              stroke="transparent"
+              label={{ value: `Avg Risk: ${avgRisk}%`, fill: '#8B7DB8', fontSize: 10, position: 'insideTopRight' }}
+            />
+            <Bar dataKey="count" name="Students" radius={[4, 4, 0, 0]} barSize={32}>
+              {histogramData.map((entry, index) => (
+                <Cell key={`cell-${index}`} fill={entry.fill} />
+              ))}
+            </Bar>
+          </BarChart>
+        </ResponsiveContainer>
+      </motion.div>
+
+      {/* 6. Top Risk Factors (Horizontal Bar) */}
+      <motion.div style={cardStyle} {...hoverProps}>
+        <h4 style={titleStyle}>Top Risk Factor Contributions</h4>
+        <p style={{ fontSize: '11px', color: '#6B5E8E', textAlign: 'center', marginBottom: '8px' }}>
+          Primary drivers of student risk scores (%)
+        </p>
+        <ResponsiveContainer width="100%" height={230}>
+          <BarChart
+            data={riskFactorSummary}
+            layout="vertical"
+            margin={{ top: 5, right: 20, left: 10, bottom: 0 }}
+          >
+            <CartesianGrid strokeDasharray="3 3" horizontal={false} stroke={gridStroke} />
+            <XAxis type="number" tick={tickStyle} axisLine={false} tickLine={false} unit="%" domain={[0, 40]} />
+            <YAxis type="category" dataKey="factor" tick={{ ...tickStyle, fontSize: 10 }} axisLine={false} tickLine={false} width={110} />
+            <Tooltip contentStyle={tooltipStyle} formatter={(v) => [`${v}%`, 'Contribution']} />
+            <Bar dataKey="score" name="Contribution %" radius={[0, 4, 4, 0]} barSize={18}>
+              {riskFactorSummary.map((_, i) => (
+                <Cell key={`rfcell-${i}`} fill={['#E879F9', '#F87171', '#FBBF24', '#A78BFA', '#6EE7B7'][i % 5]} />
+              ))}
+            </Bar>
           </BarChart>
         </ResponsiveContainer>
       </motion.div>

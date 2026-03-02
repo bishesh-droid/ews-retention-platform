@@ -1,5 +1,5 @@
 from datetime import datetime
-from sqlalchemy import Column, Integer, String, Boolean, DateTime
+from sqlalchemy import Column, Integer, String, Boolean, DateTime, JSON
 from sqlalchemy.orm import relationship
 from ..connection import Base
 
@@ -14,6 +14,7 @@ class User(Base):
     is_active = Column(Boolean, default=True)
     is_superuser = Column(Boolean, default=False)
     created_at = Column(DateTime, default=datetime.utcnow)
+    preferences = Column(JSON, default=dict)  # UI and notification preferences per user
 
     # Relationships
     audit_trail = relationship("AuditLog", back_populates="user")

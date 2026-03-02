@@ -1,8 +1,9 @@
-import React, { useState } from 'react';
-import { Row, Col, Card, Form, Button, Table, Badge } from 'react-bootstrap';
-import { FaCog, FaBell, FaUsers, FaDatabase, FaPalette, FaInfoCircle } from 'react-icons/fa';
+import React, { useEffect, useState } from 'react';
+import { Alert, Row, Col, Card, Form, Button, Table, Badge, Spinner } from 'react-bootstrap';
+import { FaCog, FaBell, FaUsers, FaDatabase, FaPalette, FaInfoCircle, FaUserCircle } from 'react-icons/fa';
 import { motion } from 'framer-motion';
 import { variants } from '../utils/motionConfig';
+import { getCurrentProfile, updateCurrentProfile } from '../services/api';
 
 const Settings = () => {
     const [thresholds, setThresholds] = useState({
@@ -12,17 +13,94 @@ const Settings = () => {
         low: { min: 76, max: 100 },
     });
 
-    const activeUsers = [
-        { name: 'Dr. Sarah Kim', email: 's.kim@edu', role: 'Admin', lastLogin: '2 hours ago', status: 'Active' },
-        { name: 'Prof. M. Lee', email: 'm.lee@edu', role: 'Counselor', lastLogin: 'Yesterday', status: 'Active' },
-        { name: 'John Smith', email: 'j.smith@edu', role: 'Instructor', lastLogin: '3 days ago', status: 'Active' },
-    ];
+    const [profile, setProfile] = useState(null);
+    const [preferences, setPreferences] = useState({
+        dashboardLayout: 'comfortable',
+        highContrast: false,
+        reduceAnimations: false,
+        notifications: {
+            criticalRisk: true,
+            riskDrop: true,
+            lowAttendance: true,
+            interventionCompleted: false,
+            aiHighConfidence: true,
+        },
+    });
+    const [loading, setLoading] = useState(false);
+    const [saving, setSaving] = useState(false);
+    const [error, setError] = useState(null);
+    const [success, setSuccess] = useState(null);
 
-    const dataSources = [
-        { name: 'Student Information System (SIS)', platform: 'Banner', status: 'Connected', lastSync: '2 hours ago', autoSync: 'Every 6 hours' },
-        { name: 'Learning Management System (LMS)', platform: 'Canvas', status: 'Connected', lastSync: '30 minutes ago', autoSync: 'Every 1 hour' },
-        { name: 'Grade Portal', platform: 'PowerSchool', status: 'Connected', lastSync: '1 hour ago', autoSync: 'Every 3 hours' },
-    ];
+    useEffect(() => {
+        let isMounted = true;
+        const load = async () => {
+            setLoading(true);
+            setError(null);
+            const resp = await getCurrentProfile();
+            if (!isMounted) return;
+            if (!resp.success) {
+                setError(resp.message || 'Failed to load settings.');
+                setLoading(false);
+                return;
+            }
+            const data = resp.data || {};
+            setProfile({
+                id: data.id,
+                username: data.username || '',
+                email: data.email || '',
+                role: data.role || '',
+                is_active: data.is_active,
+            });
+            const prefs = data.preferences || {};
+            setPreferences((prev) => ({
+                ...prev,
+                ...prefs,
+                notifications: {
+                    ...prev.notifications,
+                    ...(prefs.notifications || {}),
+                },
+            }));
+            const riskPrefs = prefs.risk_thresholds;
+            if (riskPrefs && typeof riskPrefs === 'object') {
+                setThresholds({
+                    critical: riskPrefs.critical || prevThreshold('critical', prev).critical,
+                    high: riskPrefs.high || prevThreshold('high', prev).high,
+                    medium: riskPrefs.medium || prevThreshold('medium', prev).medium,
+                    low: riskPrefs.low || prevThreshold('low', prev).low,
+                });
+            }
+            setLoading(false);
+        };
+        const prevThreshold = (level, prev) => prev || thresholds;
+        load();
+        return () => { isMounted = false; };
+        // eslint-disable-next-line react-hooks/exhaustive-deps
+    }, []);
+
+    const handleSave = async () => {
+        if (!profile) return;
+        setSaving(true);
+        setError(null);
+        setSuccess(null);
+        const payload = {
+            username: profile.username,
+            email: profile.email,
+            role: profile.role,
+            is_active: profile.is_active,
+            preferences: {
+                ...preferences,
+                risk_thresholds: thresholds,
+            },
+        };
+        const resp = await updateCurrentProfile(payload);
+        setSaving(false);
+        if (!resp.success) {
+            setError(resp.message || 'Failed to save settings.');
+            return;
+        }
+        setSuccess('Settings saved successfully.');
+        setTimeout(() => setSuccess(null), 3000);
+    };
 
     return (
         <motion.div
@@ -38,7 +116,67 @@ const Settings = () => {
                 </p>
             </div>
 
+            {loading && (
+                <div className="mb-4 d-flex align-items-center gap-2 text-muted">
+                    <Spinner animation="border" size="sm" />
+                    <span>Loading your profile and preferences…</span>
+                </div>
+            )}
+            {error && (
+                <Alert variant="danger" className="mb-4">
+                    {error}
+                </Alert>
+            )}
+            {success && (
+                <Alert variant="success" className="mb-4">
+                    {success}
+                </Alert>
+            )}
+
             <Row className="g-4">
+                {/* My Profile */}
+                <Col lg={6}>
+                    <motion.div variants={variants.item}>
+                        <Card className="glass-panel border-0 h-100">
+                            <Card.Body>
+                                <h5 className="mb-4 fw-semibold d-flex align-items-center gap-2">
+                                    <FaUserCircle /> My Profile
+                                </h5>
+                                {profile ? (
+                                    <>
+                                        <Form.Group className="mb-3">
+                                            <Form.Label>Username</Form.Label>
+                                            <Form.Control
+                                                type="text"
+                                                value={profile.username}
+                                                onChange={(e) => setProfile({ ...profile, username: e.target.value })}
+                                            />
+                                        </Form.Group>
+                                        <Form.Group className="mb-3">
+                                            <Form.Label>Email</Form.Label>
+                                            <Form.Control
+                                                type="email"
+                                                value={profile.email}
+                                                onChange={(e) => setProfile({ ...profile, email: e.target.value })}
+                                            />
+                                        </Form.Group>
+                                        <Form.Group className="mb-3">
+                                            <Form.Label>Role</Form.Label>
+                                            <Form.Control
+                                                type="text"
+                                                value={profile.role}
+                                                disabled
+                                            />
+                                        </Form.Group>
+                                    </>
+                                ) : (
+                                    <div className="text-muted small">Profile not available.</div>
+                                )}
+                            </Card.Body>
+                        </Card>
+                    </motion.div>
+                </Col>
+
                 {/* Risk Score Thresholds */}
                 <Col lg={6}>
                     <motion.div variants={variants.item}>
@@ -86,8 +224,7 @@ const Settings = () => {
                                 </div>
 
                                 <div className="d-grid gap-2">
-                                    <Button variant="primary">Save Changes</Button>
-                                    <Button variant="outline-secondary">Reset to Default</Button>
+                                    <Button variant="outline-secondary" disabled={saving}>Reset to Default</Button>
                                 </div>
                             </Card.Body>
                         </Card>
@@ -107,7 +244,13 @@ const Settings = () => {
                                     type="checkbox"
                                     label="Student enters Critical risk level"
                                     className="mb-3"
-                                    defaultChecked
+                                    checked={preferences.notifications.criticalRisk}
+                                    onChange={(e) =>
+                                        setPreferences((prev) => ({
+                                            ...prev,
+                                            notifications: { ...prev.notifications, criticalRisk: e.target.checked },
+                                        }))
+                                    }
                                 />
                                 <div className="ms-4 mb-3">
                                     <small className="text-muted d-block">Recipients: Assigned counselor</small>
@@ -118,7 +261,13 @@ const Settings = () => {
                                     type="checkbox"
                                     label="Risk score drops 20+ points in 7 days"
                                     className="mb-3"
-                                    defaultChecked
+                                    checked={preferences.notifications.riskDrop}
+                                    onChange={(e) =>
+                                        setPreferences((prev) => ({
+                                            ...prev,
+                                            notifications: { ...prev.notifications, riskDrop: e.target.checked },
+                                        }))
+                                    }
                                 />
                                 <div className="ms-4 mb-3">
                                     <small className="text-muted d-block">Recipients: Academic advisor</small>
@@ -129,7 +278,13 @@ const Settings = () => {
                                     type="checkbox"
                                     label="Attendance falls below 60%"
                                     className="mb-3"
-                                    defaultChecked
+                                    checked={preferences.notifications.lowAttendance}
+                                    onChange={(e) =>
+                                        setPreferences((prev) => ({
+                                            ...prev,
+                                            notifications: { ...prev.notifications, lowAttendance: e.target.checked },
+                                        }))
+                                    }
                                 />
                                 <div className="ms-4 mb-3">
                                     <small className="text-muted d-block">Recipients: Student, Counselor</small>
@@ -140,6 +295,13 @@ const Settings = () => {
                                     type="checkbox"
                                     label="Intervention completed"
                                     className="mb-3"
+                                    checked={preferences.notifications.interventionCompleted}
+                                    onChange={(e) =>
+                                        setPreferences((prev) => ({
+                                            ...prev,
+                                            notifications: { ...prev.notifications, interventionCompleted: e.target.checked },
+                                        }))
+                                    }
                                 />
                                 <div className="ms-4 mb-3">
                                     <small className="text-muted d-block">Recipients: Coach, System admin</small>
@@ -150,14 +312,20 @@ const Settings = () => {
                                     type="checkbox"
                                     label="AI suggestion has 90%+ confidence"
                                     className="mb-3"
-                                    defaultChecked
+                                    checked={preferences.notifications.aiHighConfidence}
+                                    onChange={(e) =>
+                                        setPreferences((prev) => ({
+                                            ...prev,
+                                            notifications: { ...prev.notifications, aiHighConfidence: e.target.checked },
+                                        }))
+                                    }
                                 />
                                 <div className="ms-4 mb-3">
                                     <small className="text-muted d-block">Recipients: Dashboard only</small>
                                 </div>
 
-                                <Button variant="primary" className="w-100 mt-3">
-                                    Save Notification Rules
+                                <Button variant="primary" className="w-100 mt-3" disabled={saving} onClick={handleSave}>
+                                    {saving ? 'Saving…' : 'Save Settings'}
                                 </Button>
                             </Card.Body>
                         </Card>
@@ -173,7 +341,7 @@ const Settings = () => {
                                     <h5 className="mb-0 fw-semibold d-flex align-items-center gap-2">
                                         <FaUsers /> User Roles & Permissions
                                     </h5>
-                                    <Button variant="primary" size="sm">Add User</Button>
+                                    <Button variant="outline-secondary" size="sm" disabled>Manage in Admin console</Button>
                                 </div>
 
                                 <div className="table-responsive">
@@ -189,19 +357,11 @@ const Settings = () => {
                                             </tr>
                                         </thead>
                                         <tbody>
-                                            {activeUsers.map((user, idx) => (
-                                                <tr key={idx}>
-                                                    <td>{user.name}</td>
-                                                    <td>{user.email}</td>
-                                                    <td><Badge bg="secondary">{user.role}</Badge></td>
-                                                    <td>{user.lastLogin}</td>
-                                                    <td><Badge bg="success">{user.status}</Badge></td>
-                                                    <td>
-                                                        <Button variant="link" size="sm" className="p-0 me-2">Edit</Button>
-                                                        <Button variant="link" size="sm" className="p-0 text-danger">Deactivate</Button>
-                                                    </td>
-                                                </tr>
-                                            ))}
+                                            <tr>
+                                                <td colSpan={6} className="text-muted small">
+                                                    User management is handled via the Admin APIs. This section is read-only in the current build.
+                                                </td>
+                                            </tr>
                                         </tbody>
                                     </Table>
                                 </div>
@@ -219,26 +379,16 @@ const Settings = () => {
                                     <FaDatabase /> Data Sources
                                 </h5>
 
-                                {dataSources.map((source, idx) => (
-                                    <div key={idx} className="border-bottom pb-3 mb-3" style={{ borderColor: 'var(--border-color)' }}>
+                                <div className="border-bottom pb-3 mb-3" style={{ borderColor: 'var(--border-color)' }}>
                                         <div className="d-flex justify-content-between align-items-start">
                                             <div>
-                                                <h6 className="mb-2">{source.name}</h6>
-                                                <div className="d-flex gap-3 align-items-center mb-2">
-                                                    <Badge bg="success">● {source.status}</Badge>
-                                                    <small className="text-muted">Platform: {source.platform}</small>
-                                                </div>
-                                                <small className="text-muted d-block">Last sync: {source.lastSync}</small>
-                                                <small className="text-muted">Auto-sync: {source.autoSync}</small>
-                                            </div>
-                                            <div className="d-flex gap-2">
-                                                <Button variant="outline-secondary" size="sm">Configure</Button>
-                                                <Button variant="outline-primary" size="sm">Test Connection</Button>
-                                                <Button variant="primary" size="sm">Sync Now</Button>
+                                                <h6 className="mb-2">Data source configuration</h6>
+                                                <small className="text-muted d-block mb-1">
+                                                    SIS / LMS connectors are configured server-side. UI configuration for data sources is not enabled in this environment.
+                                                </small>
                                             </div>
                                         </div>
                                     </div>
-                                ))}
 
                                 <div className="alert alert-info d-flex align-items-center gap-2">
                                     <FaInfoCircle />
@@ -261,19 +411,49 @@ const Settings = () => {
                                 <Form.Group className="mb-3">
                                     <Form.Label>Dashboard Layout:</Form.Label>
                                     <Form.Select>
-                                        <option>Compact</option>
-                                        <option selected>Comfortable (default)</option>
-                                        <option>Spacious</option>
+                                        <option
+                                            value="compact"
+                                            selected={preferences.dashboardLayout === 'compact'}
+                                            onChange={() => {}}
+                                        >
+                                            Compact
+                                        </option>
+                                        <option
+                                            value="comfortable"
+                                            selected={preferences.dashboardLayout === 'comfortable'}
+                                            onChange={() => {}}
+                                        >
+                                            Comfortable (default)
+                                        </option>
+                                        <option
+                                            value="spacious"
+                                            selected={preferences.dashboardLayout === 'spacious'}
+                                            onChange={() => {}}
+                                        >
+                                            Spacious
+                                        </option>
                                     </Form.Select>
                                 </Form.Group>
 
                                 <Form.Group className="mb-3">
                                     <Form.Label>Accessibility:</Form.Label>
-                                    <Form.Check type="checkbox" label="High contrast mode" defaultChecked />
-                                    <Form.Check type="checkbox" label="Reduce animations" />
+                                    <Form.Check
+                                        type="checkbox"
+                                        label="High contrast mode"
+                                        checked={preferences.highContrast}
+                                        onChange={(e) => setPreferences((prev) => ({ ...prev, highContrast: e.target.checked }))}
+                                    />
+                                    <Form.Check
+                                        type="checkbox"
+                                        label="Reduce animations"
+                                        checked={preferences.reduceAnimations}
+                                        onChange={(e) => setPreferences((prev) => ({ ...prev, reduceAnimations: e.target.checked }))}
+                                    />
                                 </Form.Group>
 
-                                <Button variant="primary" className="w-100">Save Preferences</Button>
+                                <Button variant="primary" className="w-100" disabled={saving} onClick={handleSave}>
+                                    {saving ? 'Saving…' : 'Save Preferences'}
+                                </Button>
                             </Card.Body>
                         </Card>
                     </motion.div>

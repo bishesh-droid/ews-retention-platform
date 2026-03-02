@@ -63,7 +63,7 @@ const RiskChangeExplainer = ({ students, limit = 5 }) => {
     }
 
     return (
-        <div className="p-6 rounded-3xl h-full flex flex-col" style={{ backgroundColor: '#130D23', border: '1px solid rgba(139,92,246,0.2)' }}>
+        <div className="p-6 rounded-3xl flex flex-col" style={{ backgroundColor: '#130D23', border: '1px solid rgba(139,92,246,0.2)' }}>
             <div className="flex items-center gap-3 mb-8">
                 <div className="w-10 h-10 rounded-xl flex items-center justify-center" style={{ backgroundColor: 'rgba(139,92,246,0.15)', color: '#A78BFA' }}>
                     <FaInfoCircle size={18} />
@@ -71,7 +71,7 @@ const RiskChangeExplainer = ({ students, limit = 5 }) => {
                 <h3 className="text-lg font-display font-bold" style={{ color: '#F0EEFF' }}>Dynamic Risk Audit</h3>
             </div>
 
-            <div className="space-y-4 flex-grow">
+            <div className="space-y-4">
                 {changedStudents.map((student, idx) => (
                     <motion.div
                         key={student.id}
@@ -97,10 +97,14 @@ const RiskChangeExplainer = ({ students, limit = 5 }) => {
                                     {student.factors.map((factor, i) => (
                                         <span
                                             key={i}
-                                            className={`text-[9px] font-bold px-2 py-0.5 rounded-full uppercase tracking-tighter ${student.changeType === 'increase'
-                                                    ? 'bg-rose-50 text-rose-600'
-                                                    : 'bg-emerald-50 text-emerald-600'
-                                                }`}
+                                            style={{
+                                                fontSize: 9, fontWeight: 700, padding: '2px 8px',
+                                                borderRadius: 99, textTransform: 'uppercase', letterSpacing: '0.04em',
+                                                background: student.changeType === 'increase'
+                                                    ? 'rgba(239,68,68,0.18)' : 'rgba(16,185,129,0.18)',
+                                                color: student.changeType === 'increase' ? '#F87171' : '#34D399',
+                                                border: `1px solid ${student.changeType === 'increase' ? 'rgba(239,68,68,0.3)' : 'rgba(16,185,129,0.3)'}`,
+                                            }}
                                         >
                                             {factor}
                                         </span>

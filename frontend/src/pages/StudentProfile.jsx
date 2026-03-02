@@ -4,7 +4,8 @@ import { Row, Col, Button, Spinner as BootstrapSpinner, Form, Badge } from 'reac
 import { LineChart, Line, XAxis, YAxis, CartesianGrid, Tooltip, Legend, ResponsiveContainer } from 'recharts';
 import { motion } from 'framer-motion';
 import { FaArrowLeft, FaHistory, FaLightbulb, FaClipboardList, FaHeartbeat } from 'react-icons/fa';
-import { getStudent, getStudentPrediction, getStudentRiskHistory, getAIAdvice, getInterventions, createIntervention, getStudentMLPrediction } from '../api';
+import { getStudentRiskHistory, getAIAdvice, getInterventions, createIntervention } from '../api';
+import { getStudentDetails, getMLPrediction } from '../services/api';
 import Spinner from '../components/common/Spinner';
 import { variants } from '../utils/motionConfig';
 import RiskExplanation from '../components/ai/RiskExplanation';
@@ -47,19 +48,44 @@ function StudentProfile() {
     const fetchData = async () => {
       try {
         setLoading(true);
-        const studentData = await getStudent(id);
-        const predictionData = await getStudentPrediction(id);
-        const mlData = await getStudentMLPrediction(id);
-        const riskHistoryData = await getStudentRiskHistory(id, predictionData.risk_score);
+        setError(null);
 
-        setStudent(studentData);
-        setPrediction(predictionData);
+        const [studentResp, mlResp] = await Promise.all([
+          getStudentDetails(id),
+          getMLPrediction(id),
+        ]);
+
+        if (!studentResp.success || !studentResp.data) {
+          throw new Error(studentResp.message || 'Failed to load student');
+        }
+
+        const s = studentResp.data;
+
+        const ruleRiskScore = typeof s.risk_score === 'number' ? s.risk_score : 0;
+        const engagementScore = typeof s.engagement_score === 'number' ? s.engagement_score : 0;
+        const retentionLikelihood = s.retention_likelihood ?? 'Unknown';
+
+        const builtPrediction = {
+          risk_score: ruleRiskScore,
+          engagement_score: engagementScore,
+          retention_likelihood: retentionLikelihood,
+        };
+
+        let mlData = null;
+        if (mlResp && mlResp.success && mlResp.data) {
+          mlData = mlResp.data;
+        }
+
+        const riskHistoryData = await getStudentRiskHistory(id, builtPrediction.risk_score);
+
+        setStudent(s);
+        setPrediction(builtPrediction);
         setMlPrediction(mlData);
-        setRiskHistory(riskHistoryData);
+        setRiskHistory(riskHistoryData || []);
         await fetchInterventions(id);
       } catch (err) {
+        console.error('Failed to fetch student data:', err);
         setError('Failed to fetch student data. Please try again later.');
-        console.error(err);
       } finally {
         setLoading(false);
       }

@@ -37,7 +37,7 @@ const AiInsight = ({ title, content, confidence = 'medium', sources = [], type =
                         </div>
                         <div>
                             <h3 className="text-xl font-display font-bold tracking-tight" style={{ color: '#F0EEFF' }}>{title}</h3>
-                            <p className="text-[10px] font-bold text-primary-400 uppercase tracking-widest">Lumivance AI</p>
+                            <p className="text-[10px] font-bold text-primary-400 uppercase tracking-widest">Meridian AI</p>
                         </div>
                     </div>
 

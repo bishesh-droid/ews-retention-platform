@@ -14,9 +14,12 @@ import traceback
 from backend.config import API_HOST, API_PORT, CORS_ORIGINS
 from backend.database import init_db, SessionLocal
 from backend.routes import api_router
-from backend.services.core.data_ingestion import ingest_all_data
+from backend.data_ingestion import ingest_all_data
 from backend.core.logger import sys_logger
 from backend.core.security import security_manager
+from backend.middleware.security_logging import security_and_logging_middleware
+from backend.middleware.request_validation import request_validation_middleware
+from backend.utils.api import AppError, error_response, success_response
 
 
 @asynccontextmanager
@@ -62,41 +65,40 @@ app.add_middleware(
 )
 
 # Rate Limiting & Access Logging Middleware
-rate_limit_store = {}
+app.middleware("http")(security_and_logging_middleware)
 
-@app.middleware("http")
-async def security_and_logging_middleware(request: Request, call_next):
-    client_ip = request.client.host
-    current_time = time.time()
-    
-    # Rate Limiting Logic (100 req / minute per IP)
-    if client_ip in rate_limit_store:
-        last_time, count = rate_limit_store[client_ip]
-        if current_time - last_time < 60:
-            if count >= 100:
-                sys_logger.warning(f"Rate limit exceeded for IP: {client_ip}")
-                return JSONResponse(status_code=429, content={"detail": "Too many requests"})
-            rate_limit_store[client_ip] = (last_time, count + 1)
-        else:
-            rate_limit_store[client_ip] = (current_time, 1)
-    else:
-        rate_limit_store[client_ip] = (current_time, 1)
-        
-    # Log Request
-    sys_logger.info(f"Incoming request: {request.method} {request.url.path} from {client_ip}")
-    
-    try:
-        start_time = time.time()
-        response = await call_next(request)
-        process_time = time.time() - start_time
-        sys_logger.info(f"Request completed: {request.method} {request.url.path} - Status: {response.status_code} - Time: {process_time:.4f}s")
-        return response
-    except Exception as e:
-        sys_logger.error(f"Unhandled Server Error on {request.method} {request.url.path}: {str(e)}\n{traceback.format_exc()}")
-        return JSONResponse(
-            status_code=500,
-            content={"detail": "Internal server error. Please try again later."}
-        )
+# Request validation middleware
+app.middleware("http")(request_validation_middleware)
+
+
+# Centralised error handlers
+@app.exception_handler(AppError)
+async def app_error_handler(request: Request, exc: AppError):
+    """
+    Handle known application-level errors and return consistent JSON.
+    """
+    sys_logger.warning(f"AppError on {request.method} {request.url.path}: {exc.message}")
+    return JSONResponse(
+        status_code=exc.status_code,
+        content=error_response(exc.message, exc.details),
+    )
+
+
+@app.exception_handler(HTTPException)
+async def http_exception_handler(request: Request, exc: HTTPException):
+    """
+    Override default HTTPException handler to return a consistent JSON error format
+    while preserving the original status code and detail message.
+    """
+    sys_logger.warning(
+        f"HTTPException on {request.method} {request.url.path}: "
+        f"{exc.status_code} {exc.detail}"
+    )
+    detail = exc.detail if isinstance(exc.detail, str) else str(exc.detail)
+    return JSONResponse(
+        status_code=exc.status_code,
+        content=error_response(detail),
+    )
 
 # Include API Router
 app.include_router(api_router, prefix="/api/v1")
@@ -105,21 +107,23 @@ app.include_router(api_router, prefix="/api/v1")
 @app.get("/")
 def read_root():
     sys_logger.info("Root endpoint accessed")
-    return {
+    payload = {
         "message": "Welcome to the EWS Retention Platform API v2",
         "docs_url": "/docs",
-        "redoc_url": "/redoc"
+        "redoc_url": "/redoc",
     }
+    return success_response(payload, message="EWS API root")
 
 @app.get("/health", tags=["System"])
 def health_check():
     """Health check endpoint for monitoring uptime."""
     sys_logger.info("Health check endpoint pinged")
-    return {
+    payload = {
         "status": "healthy",
         "uptime": "ok",
-        "timestamp": time.time()
+        "timestamp": time.time(),
     }
+    return success_response(payload, message="Health check OK")
 
 
 if __name__ == "__main__":

@@ -369,6 +369,129 @@ class StudentService:
         }
 
     @staticmethod
+    def get_courses(db: Session) -> List[Dict]:
+        """Get all courses with content requirements."""
+        courses = db.query(Course).all()
+        return [
+            {
+                "id": c.id,
+                "name": c.name,
+                "semester": c.semester_name,
+                "content_required_w1w2": c.content_required_w1w2,
+                "content_required_total": c.content_required_total,
+                "week1_content": c.week1_content,
+                "week2_content": c.week2_content,
+            }
+            for c in courses
+        ]
+
+    @staticmethod
+    def get_course_engagement(db: Session, course_id: str) -> Optional[Dict]:
+        """Get engagement breakdown for a specific course."""
+        course = db.query(Course).filter(Course.id == course_id).first()
+        if not course:
+            return None
+
+        enrollments = db.query(Enrollment).filter(Enrollment.course_id == course_id).all()
+
+        zero_progress = sum(1 for e in enrollments if (e.content_completed or 0) == 0)
+        low_progress = sum(
+            1
+            for e in enrollments
+            if 0 < (e.content_completed or 0) <= ((e.content_required or 1) * 0.1)
+        )
+        active = len(enrollments) - zero_progress - low_progress
+
+        return {
+            "course_id": course.id,
+            "course_name": course.name,
+            "total_enrolled": len(enrollments),
+            "zero_progress": zero_progress,
+            "low_progress_0_10": low_progress,
+            "active_above_10": active,
+            "avg_content_completed": round(
+                sum(e.content_completed or 0 for e in enrollments) / max(len(enrollments), 1),
+                2,
+            ),
+            "avg_time_spent_hours": round(
+                sum(e.total_time_spent_seconds or 0 for e in enrollments)
+                / max(len(enrollments), 1)
+                / 3600,
+                2,
+            ),
+        }
+
+    @staticmethod
+    def get_risk_distribution(db: Session) -> Dict:
+        """Get risk score distribution and percentiles across all students."""
+        students = db.query(Student).all()
+
+        if not students:
+            return {"histogram": [], "percentiles": {}}
+
+        # Pre-fetch enrollments
+        all_enrollments = db.query(Enrollment).all()
+        enrollment_map: Dict[str, List[Dict]] = {}
+        for e in all_enrollments:
+            if e.student_id not in enrollment_map:
+                enrollment_map[e.student_id] = []
+            enrollment_map[e.student_id].append(
+                {
+                    "content_completed": e.content_completed,
+                    "content_required": e.content_required,
+                    "content_required_w1w2": e.content_required_w1w2,
+                    "quiz_completed": e.quiz_completed,
+                    "total_quiz_attempts": e.total_quiz_attempts,
+                    "discussion_posts_created": e.discussion_posts_created,
+                    "discussion_post_replies": e.discussion_post_replies,
+                    "discussion_posts_read": e.discussion_posts_read,
+                    "num_assignment_submissions": e.num_assignment_submissions,
+                    "total_time_spent_seconds": e.total_time_spent_seconds,
+                    "num_logins": e.num_logins,
+                }
+            )
+
+        risk_scores: List[float] = []
+        for student in students:
+            enrollments = enrollment_map.get(student.id, [])
+            features = FeatureEngineer.calculate_all_features(enrollments)
+            risk_score = RiskScorer.calculate_risk_score(features)
+            risk_scores.append(risk_score)
+
+        # Histogram
+        buckets: Dict[str, int] = {}
+        for score in risk_scores:
+            bucket = int(score // 10) * 10
+            bucket_label = f"{bucket}-{bucket + 10}"
+            buckets[bucket_label] = buckets.get(bucket_label, 0) + 1
+
+        histogram = [{"range": k, "count": v} for k, v in sorted(buckets.items())]
+
+        # Percentiles
+        sorted_scores = sorted(risk_scores)
+        n = len(sorted_scores)
+
+        def percentile(p: int) -> float:
+            k = (n - 1) * p / 100
+            f = int(k)
+            c = k - f
+            if f + 1 < n:
+                return round(
+                    sorted_scores[f] + c * (sorted_scores[f + 1] - sorted_scores[f]), 2
+                )
+            return round(sorted_scores[f], 2)
+
+        return {
+            "histogram": histogram,
+            "percentiles": {
+                "p25": percentile(25),
+                "p50": percentile(50),
+                "p75": percentile(75),
+                "p90": percentile(90),
+            },
+        }
+
+    @staticmethod
     def get_analytics_data(db: Session) -> Dict:
         """Get analytics data - per-department and per-course engagement summaries."""
         dept_stats = {}
@@ -470,4 +593,72 @@ class StudentService:
             'department_summary': department_summary,
             'course_summary': course_summary,
             'total_analyzed': len(students),
+        }
+
+    # ------------------------------------------------------------------ #
+    # Prediction helpers (used by controllers)
+    # ------------------------------------------------------------------ #
+
+    @staticmethod
+    def build_prediction_payload(student_metrics: Dict) -> Dict:
+        """
+        Build a consistent prediction payload from a student metrics dict.
+
+        This keeps controllers free of transformation logic while preserving
+        the existing response shape expected by the frontend.
+        """
+        risk = student_metrics["risk_score"]
+        payload = {
+            "student_id": student_metrics["id"],
+            "risk_score": risk / 100.0,
+            "engagement_score": (100 - risk) / 100.0,
+            "retention_likelihood": student_metrics["retention_likelihood"],
+            "model_version": "rule_based_v2",
+            "signal_breakdown": {
+                "academic_signal_score": student_metrics.get("graded_quiz_score", 0) / 100.0,
+                "engagement_signal_score": student_metrics.get("content_completion_score", 0) / 100.0,
+                "consistency_signal_score": student_metrics.get("exam_attendance_rate", 0) / 100.0,
+                "intent_signal_score": student_metrics.get("graded_assignment_score", 0) / 100.0,
+                "responsiveness_signal_score": student_metrics.get("exam_score", 0) / 100.0,
+            },
+            "top_risk_factors": [student_metrics.get("dominant_risk_factor", "Unknown")],
+            "prediction_error": False,
+        }
+        return payload
+
+    @staticmethod
+    def build_intervention_recommendation(risk_score: float) -> Dict:
+        """
+        Derive intervention recommendation from a risk score.
+        Keeps business rules centralised in the service layer.
+        """
+        if risk_score >= 80:
+            category = "urgent"
+            action = "Immediate outreach required"
+            channels = ["whatsapp", "phone", "email"]
+            team = "sales"
+        elif risk_score >= 60:
+            category = "mentor_outreach"
+            action = "Schedule mentor meeting"
+            channels = ["email", "mentor_call"]
+            team = "faculty"
+        elif risk_score >= 40:
+            category = "gentle_reminder"
+            action = "Send encouragement email"
+            channels = ["email"]
+            team = "automated"
+        else:
+            category = "no_action"
+            action = "No intervention needed"
+            channels = []
+            team = "none"
+
+        return {
+            "threshold_category": category,
+            "action_type": action,
+            "channels": channels,
+            "assigned_team": team,
+            "priority": "critical" if risk_score >= 80 else "high" if risk_score >= 60 else "medium" if risk_score >= 40 else "low",
+            "urgency": category,
+            "description": action,
         }

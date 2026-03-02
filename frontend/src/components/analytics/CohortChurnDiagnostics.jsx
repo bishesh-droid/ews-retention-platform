@@ -15,31 +15,25 @@ const CohortChurnDiagnostics = ({ cohorts }) => {
     const [avgChurn, setAvgChurn] = useState(0);
 
     useEffect(() => {
-        if (cohorts) {
+        if (Array.isArray(cohorts) && cohorts.length) {
             processCohortData(cohorts);
         } else {
-            // Mock data
-            const mockCohorts = [
-                { id: 'C-2024-Jan', name: 'January 2024', size: 120, churnRate: 0.18, isAnomaly: false },
-                { id: 'C-2024-Feb', name: 'February 2024', size: 135, churnRate: 0.15, isAnomaly: false },
-                { id: 'C-2024-Mar', name: 'March 2024', size: 142, churnRate: 0.32, isAnomaly: true },
-                { id: 'C-2024-Apr', name: 'April 2024', size: 128, churnRate: 0.17, isAnomaly: false },
-                { id: 'C-2024-May', name: 'May 2024', size: 155, churnRate: 0.28, isAnomaly: true },
-                { id: 'C-2024-Jun', name: 'June 2024', size: 148, churnRate: 0.14, isAnomaly: false }
-            ];
-
-            setCohortData(mockCohorts);
-            const avg = mockCohorts.reduce((sum, c) => sum + c.churnRate, 0) / mockCohorts.length;
-            setAvgChurn(avg);
-            setAnomalies(mockCohorts.filter(c => c.isAnomaly));
+            setCohortData([]);
+            setAvgChurn(0);
+            setAnomalies([]);
         }
     }, [cohorts]);
 
     const processCohortData = (data) => {
         setCohortData(data);
-        // Calculate anomalies using statistical methods
-        const avg = data.reduce((sum, c) => sum + c.churnRate, 0) / data.length;
+        if (!data.length) {
+            setAvgChurn(0);
+            setAnomalies([]);
+            return;
+        }
+        const avg = data.reduce((sum, c) => sum + (c.churnRate || 0), 0) / data.length;
         setAvgChurn(avg);
+        setAnomalies(data.filter((c) => c.isAnomaly));
     };
 
     const getChurnColor = (rate, isAnomaly) => {
@@ -107,6 +101,9 @@ const CohortChurnDiagnostics = ({ cohorts }) => {
 
             {/* Cohort Table */}
             <div>
+                {cohortData.length === 0 && (
+                    <div className="text-muted small">No cohort churn data available.</div>
+                )}
                 {cohortData.map((cohort) => (
                     <CohortRow
                         key={cohort.id}

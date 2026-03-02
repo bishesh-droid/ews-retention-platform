@@ -22,13 +22,11 @@
 export const validateRiskScore = (score, defaultValue = 50) => {
     // Handle null/undefined
     if (score === null || score === undefined) {
-        console.warn(`Invalid risk score: ${score}, using default: ${defaultValue}`);
         return defaultValue;
     }
 
     // Handle NaN
     if (isNaN(score)) {
-        console.warn(`Invalid risk score (NaN), using default: ${defaultValue}`);
         return defaultValue;
     }
 
@@ -37,18 +35,15 @@ export const validateRiskScore = (score, defaultValue = 50) => {
 
     // Handle Infinity
     if (!isFinite(numScore)) {
-        console.warn(`Invalid risk score (Infinity), using default: ${defaultValue}`);
         return defaultValue;
     }
 
     // Clamp to [0, 100] range
     if (numScore < 0) {
-        console.warn(`Negative risk score ${numScore} detected, clamping to 0`);
         return 0;
     }
 
     if (numScore > 100) {
-        console.warn(`Risk score ${numScore} > 100 detected, clamping to 100`);
         return 100;
     }
 
@@ -117,7 +112,6 @@ export const getSafeDefaultPrediction = () => ({
  */
 export const probabilityToPercentage = (probability) => {
     if (probability === null || probability === undefined || isNaN(probability)) {
-        console.warn(`Invalid probability: ${probability}, returning 50%`);
         return 50;
     }
 
@@ -140,7 +134,6 @@ export const probabilityToPercentage = (probability) => {
  */
 export const sanitizePrediction = (prediction) => {
     if (!prediction || typeof prediction !== 'object') {
-        console.warn('Invalid prediction object, using safe default');
         return getSafeDefaultPrediction();
     }
 

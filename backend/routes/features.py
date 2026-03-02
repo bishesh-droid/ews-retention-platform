@@ -10,6 +10,7 @@ from typing import Optional
 from backend.api.deps import get_db
 from backend.services.student_service import StudentService
 from backend.database import Student
+from backend.utils.api import success_response
 
 router = APIRouter(
     responses={404: {"description": "Not found"}},
@@ -24,7 +25,7 @@ def get_student_features(student_id: str, db: Session = Depends(get_db)):
     if not student:
         raise HTTPException(status_code=404, detail="No features found for student.")
 
-    return {
+    data = {
         "student_id": student_id,
         "computation_date": "latest",
         "academic_signals": {
@@ -56,6 +57,7 @@ def get_student_features(student_id: str, db: Session = Depends(get_db)):
             "avg_response_time_hours": 0.0,
         },
     }
+    return success_response(data, message="Student features")
 
 
 @router.post("/compute")
@@ -69,20 +71,22 @@ def compute_features(
         if not student:
             raise HTTPException(status_code=404, detail="Student not found")
 
-        return {
+        data = {
             "status": "success",
             "student_id": student_id,
             "computation_date": "now",
             "message": "Features computed successfully (on-the-fly from enrollment data)",
         }
+        return success_response(data, message="Features computed")
     else:
         total = db.query(Student).count()
-        return {
+        data = {
             "status": "completed",
             "computed": total,
             "failed": 0,
             "message": f"Features are computed on-the-fly for all {total} students",
         }
+        return success_response(data, message="Features compute summary")
 
 
 @router.get("/signal-summary/{signal_category}")
@@ -111,7 +115,8 @@ def get_signal_summary(
     values = [signal_map[signal_category](s) for s in students]
 
     if not values:
-        return {"signal_category": signal_category, "total_students": 0, "mean": 0, "median": 0}
+        data = {"signal_category": signal_category, "total_students": 0, "mean": 0, "median": 0}
+        return success_response(data, message="Signal summary")
 
     values.sort()
     n = len(values)
@@ -122,10 +127,11 @@ def get_signal_summary(
     medium = sum(1 for v in values if 0.3 <= v < 0.7)
     high = sum(1 for v in values if v >= 0.7)
 
-    return {
+    data = {
         "signal_category": signal_category,
         "total_students": n,
         "mean": round(mean_val, 3),
         "median": round(median_val, 3),
         "distribution": {"low": low, "medium": medium, "high": high},
     }
+    return success_response(data, message="Signal summary")

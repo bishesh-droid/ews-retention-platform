@@ -1,10 +1,15 @@
 from sqlalchemy.orm import Session
 from sqlalchemy import func
 from datetime import datetime, timedelta
-from typing import List, Dict, Any
+from typing import List, Dict, Any, Optional, Tuple
 
 from backend.database import RiskSnapshot, Prediction
 from backend.schemas.student import Student
+
+
+_COHORT_CACHE: Dict[str, Tuple[datetime, Dict[str, Any]]] = {}
+_COHORT_CACHE_TTL_SECONDS = 60
+
 
 class AnalyticsService:
     @staticmethod
@@ -112,6 +117,16 @@ class AnalyticsService:
         # For simplicity, we'll implement core logic first
         
         # 1. Top 10 At-Risk Students
+        cache_key = "kpi_cards"
+        now = datetime.utcnow()
+
+        # Return cached result if still within TTL
+        cached = _COHORT_CACHE.get(cache_key)
+        if cached:
+            cached_at, data = cached
+            if (now - cached_at).total_seconds() <= _COHORT_CACHE_TTL_SECONDS:
+                return data
+
         top_at_risk = db.query(Prediction).order_by(Prediction.risk_score.desc()).limit(10).all()
         
         # 2. Biggest Attendance Drop (Velocity in attendance)
@@ -123,13 +138,17 @@ class AnalyticsService:
             RiskSnapshot.velocity > 0.2 # Arbitrary spike threshold
         ).count()
 
-        return {
+        result = {
             "top_at_risk": [
                 {"student_id": p.student_id, "risk_score": p.risk_score} for p in top_at_risk
             ],
             "engagement_alerts": anomalies_count,
             "system_health": "stable" # Placeholder
         }
+
+        # Cache cohort summary for a short period to reduce DB load
+        _COHORT_CACHE[cache_key] = (now, result)
+        return result
 
     @staticmethod
     def get_drill_down(db: Session, metric: str, filters: Dict[str, Any] = None):

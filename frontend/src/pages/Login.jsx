@@ -1,8 +1,8 @@
 import React, { useState } from 'react';
-import { useNavigate } from 'react-router-dom';
+import { useNavigate, Link } from 'react-router-dom';
 import { motion } from 'framer-motion';
 import { FaEye, FaEyeSlash, FaLock, FaUser } from 'react-icons/fa';
-import { LumivanceMark } from '../components/common/Logo';
+import { MeridianMark } from '../components/common/Logo';
 import { useAuth } from '../context/AuthContext';
 
 /* --------------------------------------------------
@@ -143,9 +143,9 @@ const Login = () => {
                     transition={{ duration: 0.6 }}
                     style={{ display: 'flex', flexDirection: 'column', alignItems: 'center', marginBottom: '2rem' }}
                 >
-                    <LumivanceMark size={60} />
+                    <MeridianMark size={60} />
                     <h1 style={{ color: '#F0EEFF', fontSize: '22px', fontWeight: 700, letterSpacing: '-0.02em', marginTop: '14px', marginBottom: '2px' }}>
-                        Lumivance
+                        Meridian
                     </h1>
                     <span style={{ color: '#8B5CF6', fontSize: '10px', fontWeight: 600, textTransform: 'uppercase', letterSpacing: '0.15em' }}>
                         Retention AI
@@ -246,6 +246,12 @@ const Login = () => {
 
                     <p style={{ textAlign: 'center', fontSize: '12px', color: '#6B5E8E', marginTop: '20px', marginBottom: 0 }}>
                         Default: <span style={{ color: '#A78BFA', fontWeight: 500 }}>admin</span> / <span style={{ color: '#A78BFA', fontWeight: 500 }}>admin123</span>
+                    </p>
+                    <p style={{ textAlign: 'center', fontSize: '12px', color: '#6B5E8E', marginTop: '10px', marginBottom: 0 }}>
+                        No account?{' '}
+                        <Link to="/signup" style={{ color: '#A78BFA', fontWeight: 600, textDecoration: 'none' }}>
+                            Request access
+                        </Link>
                     </p>
                 </motion.div>
             </div>

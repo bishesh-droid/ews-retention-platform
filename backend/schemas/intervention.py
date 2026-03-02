@@ -14,6 +14,8 @@ class InterventionBase(BaseModel):
     date: date
     user: str
     action: str
+    status: Optional[str] = "Pending"
+    assigned_faculty: Optional[str] = None
     risk_score_at_trigger: Optional[float] = None
     threshold_category: Optional[str] = None
     channels: Optional[List[str]] = None
@@ -22,8 +24,13 @@ class InterventionBase(BaseModel):
 
 class InterventionCreate(BaseModel):
     """Schema for creating an intervention."""
+    student_id: Optional[str] = None
+    student_ids: Optional[List[str]] = None
+    date: Optional[date] = None
     user: str
     action: str
+    status: Optional[str] = "Pending"
+    assigned_faculty: Optional[str] = None
     risk_score_at_trigger: Optional[float] = None
     threshold_category: Optional[str] = None
     channels: Optional[List[str]] = None

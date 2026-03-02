@@ -1,9 +1,10 @@
-import React, { useState } from 'react';
-import { Row, Col, Button, Table, Badge, Modal, Form, Card, ListGroup } from 'react-bootstrap';
+import React, { useState, useEffect, useMemo } from 'react';
+import { Row, Col, Button, Table, Badge, Modal, Form, Card, ListGroup, Alert } from 'react-bootstrap';
 import { FaPlus, FaClipboardList, FaUser, FaUsers, FaCalendar } from 'react-icons/fa';
 import { motion } from 'framer-motion';
 import { variants } from '../utils/motionConfig';
 import { useStudentData } from '../context/StudentContext';
+import { getAllInterventions, createIntervention, updateIntervention } from '../services/api';
 
 const Interventions = () => {
     const { students } = useStudentData();
@@ -11,76 +12,151 @@ const Interventions = () => {
     const [modalStep, setModalStep] = useState(1);
     const [selectedStudents, setSelectedStudents] = useState([]);
     const [selectedIntervention, setSelectedIntervention] = useState(null);
+    const [assignedFaculty, setAssignedFaculty] = useState('');
+    const [startDate, setStartDate] = useState('');
 
-    // Mock active interventions data
-    const [activeInterventions] = useState([
-        {
-            id: 1,
-            studentId: students[0]?.id || '2024-001',
-            intervention: 'One-on-One Tutoring',
-            assignedDate: 'Jan 15, 2026',
-            status: 'In Progress',
-            owner: 'Dr. Kim',
-            riskBefore: 18,
-            riskAfter: 32,
-        },
-        {
-            id: 2,
-            studentId: students[1]?.id || '2024-002',
-            intervention: 'Academic Coaching',
-            assignedDate: 'Jan 10, 2026',
-            status: 'Completed',
-            owner: 'Prof. Lee',
-            riskBefore: 22,
-            riskAfter: 58,
-        },
-    ]);
+    // Backend-backed interventions
+    const [interventions, setInterventions] = useState([]);
+    const [loading, setLoading] = useState(false);
+    const [error, setError] = useState(null);
+    const [successMessage, setSuccessMessage] = useState(null);
 
-    const interventionLibrary = [
-        {
-            category: 'Academic Support',
-            items: [
-                { name: 'One-on-One Tutoring', duration: '4-8 weeks', frequency: '2x/week', rating: 4.2 },
-                { name: 'Study Skills Workshop', duration: '3 sessions', frequency: 'Weekly', rating: 3.9 },
-                { name: 'Academic Coaching', duration: 'Ongoing', frequency: 'Weekly', rating: 4.0 },
-            ],
-        },
-        {
-            category: 'Attendance',
-            items: [
-                { name: 'Attendance Warning Letter', duration: '1 week follow-up', frequency: 'One-time', rating: 3.2 },
-                { name: 'Attendance Contract', duration: '4 weeks', frequency: 'Daily check-ins', rating: 3.8 },
-            ],
-        },
-        {
-            category: 'Engagement',
-            items: [
-                { name: 'Professor Office Hours', duration: '1 semester', frequency: 'Bi-weekly', rating: 4.1 },
-                { name: 'Peer Mentoring', duration: '1 semester', frequency: 'Weekly', rating: 4.7 },
-            ],
-        },
-        {
-            category: 'Support Services',
-            items: [
-                { name: 'Counseling Referral', duration: 'As needed', frequency: 'Varies', rating: 4.3 },
-                { name: 'Financial Aid Review', duration: '2 weeks', frequency: 'One-time', rating: 3.6 },
-                { name: 'Parent/Guardian Outreach', duration: '1 session', frequency: 'As needed', rating: 3.5 },
-            ],
-        },
-    ];
+    // Pagination (client-side over backend list)
+    const [currentPage, setCurrentPage] = useState(1);
+    const [pageSize, setPageSize] = useState(25);
+
+    const loadInterventions = async () => {
+        setLoading(true);
+        setError(null);
+        try {
+            const response = await getAllInterventions({ limit: 500 });
+            if (response.success && response.data) {
+                const list = response.data.interventions || [];
+                setInterventions(list);
+            } else {
+                setError(response.message || 'Failed to load interventions.');
+                setInterventions([]);
+            }
+        } catch (err) {
+            console.error('Error loading interventions:', err);
+            setError('Failed to load interventions.');
+            setInterventions([]);
+        } finally {
+            setLoading(false);
+        }
+    };
+
+    useEffect(() => {
+        loadInterventions();
+    }, []);
+
+    const interventionLibrary = useMemo(() => {
+        // Derive a lightweight “library” from real intervention types already used.
+        const grouped = {};
+        interventions.forEach((i) => {
+            const category = i.assigned_team || 'General';
+            const key = i.action || i.threshold_category || 'Intervention';
+            if (!grouped[category]) grouped[category] = {};
+            if (!grouped[category][key]) grouped[category][key] = { count: 0, avgEff: 0, effN: 0 };
+            grouped[category][key].count += 1;
+            const eff = typeof i.effectiveness_score === 'number' ? i.effectiveness_score : null;
+            if (eff !== null) {
+                grouped[category][key].avgEff += eff;
+                grouped[category][key].effN += 1;
+            }
+        });
+        return Object.entries(grouped).map(([category, itemsMap]) => ({
+            category,
+            items: Object.entries(itemsMap).map(([name, meta]) => {
+                const avg = meta.effN ? meta.avgEff / meta.effN : null;
+                const rating = avg !== null ? Math.round(avg * 10) / 2 : null; // 0..1 → 0..5 (0.5 steps)
+                return {
+                    name,
+                    duration: '—',
+                    frequency: `${meta.count} assigned`,
+                    rating: rating !== null ? Math.min(5, Math.max(0, rating)) : null,
+                };
+            }),
+        }));
+    }, [interventions]);
+
+    const facultyOptions = useMemo(() => {
+        const set = new Set();
+        interventions.forEach((i) => {
+            if (i.assigned_faculty) set.add(i.assigned_faculty);
+        });
+        return [...set].sort();
+    }, [interventions]);
 
     const handleCreateIntervention = () => {
         setModalStep(1);
         setSelectedStudents([]);
         setSelectedIntervention(null);
+        setAssignedFaculty('');
+        setStartDate('');
         setShowModal(true);
     };
 
     const nextStep = () => setModalStep(modalStep + 1);
     const prevStep = () => setModalStep(modalStep - 1);
 
-    const handleAssign = () => {
+    const handleAssign = async () => {
+        setError(null);
+        if (!selectedIntervention) {
+            setError('Please select an intervention type.');
+            return;
+        }
+        if (selectedStudents.length === 0) {
+            setError('Please select at least one student.');
+            return;
+        }
+
+        setLoading(true);
+        const response = await createIntervention({
+            student_ids: selectedStudents,
+            date: startDate || undefined,
+            user: assignedFaculty || 'Unassigned',
+            assigned_faculty: assignedFaculty || null,
+            action: selectedIntervention,
+            status: 'Pending',
+        });
+        setLoading(false);
+
+        if (!response.success) {
+            setError(response.message || 'Failed to create intervention.');
+            return;
+        }
+
         setShowModal(false);
+        setSuccessMessage('Intervention assigned successfully.');
+        await loadInterventions();
+        setTimeout(() => setSuccessMessage(null), 3000);
+    };
+
+    const handleStatusToggle = async (idx) => {
+        setError(null);
+        const current = interventions[idx];
+        if (!current) return;
+
+        const nextStatus =
+            current.status === 'Completed'
+                ? 'Pending'
+                : current.status === 'In Progress'
+                ? 'Completed'
+                : 'In Progress';
+
+        setLoading(true);
+        const response = await updateIntervention(current.id, { status: nextStatus });
+        setLoading(false);
+
+        if (!response.success) {
+            setError(response.message || 'Failed to update intervention status.');
+            return;
+        }
+
+        setSuccessMessage('Intervention status updated.');
+        await loadInterventions();
+        setTimeout(() => setSuccessMessage(null), 3000);
     };
 
     const getStatusBadge = (status) => {
@@ -94,8 +170,35 @@ const Interventions = () => {
     };
 
     const renderStars = (rating) => {
+        if (typeof rating !== 'number') return '—';
         const fullStars = Math.floor(rating);
         return '★'.repeat(fullStars) + '☆'.repeat(5 - fullStars);
+    };
+
+    const total = interventions.length;
+    const totalPages = Math.max(1, Math.ceil(total / pageSize));
+    const paginatedInterventions = useMemo(() => {
+        const start = (currentPage - 1) * pageSize;
+        return interventions.slice(start, start + pageSize);
+    }, [interventions, currentPage, pageSize]);
+
+    const studentRiskById = useMemo(() => {
+        const map = new Map();
+        (students || []).forEach((s) => {
+            map.set(s.id, s.risk_score);
+        });
+        return map;
+    }, [students]);
+
+    const handlePageSizeChange = (newSize) => {
+        setPageSize(newSize);
+        setCurrentPage(1);
+    };
+
+    const handlePageChange = (newPage) => {
+        if (newPage >= 1 && newPage <= totalPages) {
+            setCurrentPage(newPage);
+        }
     };
 
     return (
@@ -121,46 +224,119 @@ const Interventions = () => {
                 </Button>
             </div>
 
+            {successMessage && (
+                <Alert variant="success" className="mb-3">
+                    {successMessage}
+                </Alert>
+            )}
+            {error && (
+                <Alert variant="danger" className="mb-3">
+                    {error}
+                </Alert>
+            )}
+
             {/* Active Interventions Table */}
             <motion.div variants={variants.item} className="glass-panel p-4 mb-4">
                 <h5 className="mb-4 fw-semibold">Active Interventions</h5>
-                <div className="table-responsive">
-                    <Table hover className="modern-table">
-                        <thead>
-                            <tr>
-                                <th>Student ID</th>
-                                <th>Intervention</th>
-                                <th>Assigned Date</th>
-                                <th>Status</th>
-                                <th>Owner</th>
-                                <th>Risk Change</th>
-                                <th>Actions</th>
-                            </tr>
-                        </thead>
-                        <tbody>
-                            {activeInterventions.map((intervention) => (
-                                <tr key={intervention.id}>
-                                    <td>{intervention.studentId}</td>
-                                    <td>{intervention.intervention}</td>
-                                    <td>{intervention.assignedDate}</td>
-                                    <td>{getStatusBadge(intervention.status)}</td>
-                                    <td>{intervention.owner}</td>
-                                    <td>
-                                        <span className={intervention.riskAfter > intervention.riskBefore ? 'text-success' : 'text-danger'}>
-                                            {intervention.riskBefore}→{intervention.riskAfter}{' '}
-                                            {intervention.riskAfter > intervention.riskBefore ? '↑' : '↓'}
-                                        </span>
-                                    </td>
-                                    <td>
-                                        <Button variant="link" size="sm" className="p-0">
-                                            •••
-                                        </Button>
-                                    </td>
-                                </tr>
-                            ))}
-                        </tbody>
-                    </Table>
-                </div>
+                {loading ? (
+                    <div className="text-center py-4 text-muted">Loading interventions…</div>
+                ) : paginatedInterventions.length === 0 ? (
+                    <div className="text-center py-4 text-muted">No pending interventions found.</div>
+                ) : (
+                    <>
+                        <div className="table-responsive">
+                            <Table hover className="modern-table">
+                                <thead>
+                                    <tr>
+                                        <th>Student ID</th>
+                                        <th>Intervention</th>
+                                        <th>Assigned Date</th>
+                                        <th>Status</th>
+                                        <th>Owner</th>
+                                        <th>Risk Change</th>
+                                        <th>Actions</th>
+                                    </tr>
+                                </thead>
+                                <tbody>
+                                    {paginatedInterventions.map((item, idx) => (
+                                        <tr key={`${item.student_id}-${idx}`}>
+                                            <td>{item.student_id}</td>
+                                            <td>{item.action || item.threshold_category || 'Intervention'}</td>
+                                            <td>{item.date || '—'}</td>
+                                            <td>{getStatusBadge(item.status || 'Pending')}</td>
+                                            <td>{item.assigned_faculty || item.assigned_team || 'Unassigned'}</td>
+                                            <td>
+                                                {(() => {
+                                                    const currentRisk = studentRiskById.get(item.student_id);
+                                                    const baseRisk = typeof item.risk_score_at_trigger === 'number' ? item.risk_score_at_trigger : null;
+                                                    if (typeof currentRisk !== 'number' || baseRisk === null) return '—';
+                                                    const delta = Math.round((currentRisk - baseRisk) * 10) / 10;
+                                                    const color = delta <= -5 ? 'text-success' : delta >= 5 ? 'text-danger' : 'text-muted';
+                                                    const sign = delta > 0 ? '+' : '';
+                                                    return <span className={color}>{sign}{delta} pts</span>;
+                                                })()}
+                                            </td>
+                                            <td>
+                                                <Button
+                                                    variant="link"
+                                                    size="sm"
+                                                    className="p-0"
+                                                    onClick={() => handleStatusToggle((currentPage - 1) * pageSize + idx)}
+                                                >
+                                                    •••
+                                                </Button>
+                                            </td>
+                                        </tr>
+                                    ))}
+                                </tbody>
+                            </Table>
+                        </div>
+
+                        {/* Pagination Controls */}
+                        <div className="d-flex justify-content-between align-items-center mt-3 pt-2 border-top" style={{ borderColor: 'var(--border-color)' }}>
+                            <div className="d-flex align-items-center gap-3">
+                                <small className="text-muted">
+                                    Showing {(currentPage - 1) * pageSize + 1}-
+                                    {(currentPage - 1) * pageSize + paginatedInterventions.length} of {total} interventions
+                                </small>
+                                <div className="d-flex align-items-center gap-2">
+                                    <small className="text-muted">Per page:</small>
+                                    <Form.Select
+                                        size="sm"
+                                        value={pageSize}
+                                        onChange={(e) => handlePageSizeChange(parseInt(e.target.value, 10))}
+                                        style={{ width: 'auto' }}
+                                    >
+                                        <option value="10">10</option>
+                                        <option value="25">25</option>
+                                        <option value="50">50</option>
+                                    </Form.Select>
+                                </div>
+                            </div>
+                            <div className="d-flex gap-2">
+                                <Button
+                                    variant="outline-secondary"
+                                    size="sm"
+                                    onClick={() => handlePageChange(currentPage - 1)}
+                                    disabled={currentPage === 1}
+                                >
+                                    ← Previous
+                                </Button>
+                                <Button variant="primary" size="sm" disabled>
+                                    {currentPage}
+                                </Button>
+                                <Button
+                                    variant="outline-secondary"
+                                    size="sm"
+                                    onClick={() => handlePageChange(currentPage + 1)}
+                                    disabled={currentPage === totalPages}
+                                >
+                                    Next →
+                                </Button>
+                            </div>
+                        </div>
+                    </>
+                )}
             </motion.div>
 
             {/* Intervention Library */}
@@ -186,7 +362,7 @@ const Interventions = () => {
                                                     </div>
                                                     <div className="text-end">
                                                         <span className="text-warning">{renderStars(item.rating)}</span>
-                                                        <small className="text-muted d-block">{item.rating}/5</small>
+                                                        <small className="text-muted d-block">{typeof item.rating === 'number' ? `${item.rating}/5` : '—'}</small>
                                                     </div>
                                                 </div>
                                             </ListGroup.Item>
@@ -213,34 +389,53 @@ const Interventions = () => {
                             </tr>
                         </thead>
                         <tbody>
-                            <tr>
-                                <td>One-on-One Tutoring</td>
-                                <td>45</td>
-                                <td><Badge bg="success">84%</Badge></td>
-                                <td className="text-success">+28 pts</td>
-                            </tr>
-                            <tr>
-                                <td>Peer Mentoring</td>
-                                <td>23</td>
-                                <td><Badge bg="success">91%</Badge></td>
-                                <td className="text-success">+31 pts</td>
-                            </tr>
-                            <tr>
-                                <td>Academic Coaching</td>
-                                <td>31</td>
-                                <td><Badge bg="success">77%</Badge></td>
-                                <td className="text-success">+22 pts</td>
-                            </tr>
-                            <tr>
-                                <td>Attendance Contract</td>
-                                <td>18</td>
-                                <td><Badge bg="warning">61%</Badge></td>
-                                <td className="text-success">+15 pts</td>
-                            </tr>
+                            {(() => {
+                                const byType = {};
+                                interventions.forEach((i) => {
+                                    const key = i.action || i.threshold_category || 'Intervention';
+                                    if (!byType[key]) byType[key] = { type: key, count: 0, success: 0, deltaSum: 0, deltaN: 0 };
+                                    byType[key].count += 1;
+
+                                    const eff = typeof i.effectiveness_score === 'number' ? i.effectiveness_score : null;
+                                    if (eff !== null && eff >= 0.2) byType[key].success += 1;
+
+                                    const currentRisk = studentRiskById.get(i.student_id);
+                                    const baseRisk = typeof i.risk_score_at_trigger === 'number' ? i.risk_score_at_trigger : null;
+                                    if (typeof currentRisk === 'number' && baseRisk !== null) {
+                                        byType[key].deltaSum += (baseRisk - currentRisk);
+                                        byType[key].deltaN += 1;
+                                    }
+                                });
+
+                                const rows = Object.values(byType).sort((a, b) => b.count - a.count).slice(0, 8);
+                                if (!rows.length) {
+                                    return (
+                                        <tr>
+                                            <td colSpan="4" className="text-center text-muted py-4">No intervention data available.</td>
+                                        </tr>
+                                    );
+                                }
+
+                                return rows.map((r) => {
+                                    const successRate = r.count ? Math.round((r.success / r.count) * 100) : 0;
+                                    const avgImprove = r.deltaN ? Math.round((r.deltaSum / r.deltaN) * 10) / 10 : null;
+                                    const badgeVariant = successRate >= 80 ? 'success' : successRate >= 60 ? 'warning' : 'secondary';
+                                    return (
+                                        <tr key={r.type}>
+                                            <td>{r.type}</td>
+                                            <td>{r.count}</td>
+                                            <td><Badge bg={badgeVariant}>{successRate}%</Badge></td>
+                                            <td className={avgImprove !== null && avgImprove > 0 ? 'text-success' : 'text-muted'}>
+                                                {avgImprove !== null ? `+${avgImprove} pts` : '—'}
+                                            </td>
+                                        </tr>
+                                    );
+                                });
+                            })()}
                         </tbody>
                     </Table>
                 </div>
-                <small className="text-muted">Success = Risk score improvement of 20+ points</small>
+                <small className="text-muted">Success = Effectiveness score ≥ 0.2 or measurable risk improvement where available.</small>
             </motion.div>
 
             {/* Create Intervention Modal */}
@@ -276,12 +471,18 @@ const Interventions = () => {
                                 defaultChecked
                             />
                             <div style={{ maxHeight: '200px', overflowY: 'auto' }}>
-                                {students.slice(0, 5).map(student => (
+                                {students.slice(0, 25).map(student => (
                                     <Form.Check
                                         key={student.id}
                                         type="checkbox"
                                         label={`${student.id} (Risk: ${student.risk_score})`}
                                         className="ms-4"
+                                        checked={selectedStudents.includes(student.id)}
+                                        onChange={(e) => {
+                                            setSelectedStudents((prev) =>
+                                                e.target.checked ? [...prev, student.id] : prev.filter((id) => id !== student.id),
+                                            );
+                                        }}
                                     />
                                 ))}
                             </div>
@@ -322,10 +523,11 @@ const Interventions = () => {
                             <h6 className="mb-3">Configure Details:</h6>
                             <Form.Group className="mb-3">
                                 <Form.Label>Assign To (Coach/Tutor):</Form.Label>
-                                <Form.Select>
-                                    <option>Dr. Sarah Kim</option>
-                                    <option>Prof. Michael Lee</option>
-                                    <option>Dr. Johnson</option>
+                                <Form.Select value={assignedFaculty} onChange={(e) => setAssignedFaculty(e.target.value)}>
+                                    <option value="">Unassigned</option>
+                                    {facultyOptions.map((f) => (
+                                        <option key={f} value={f}>{f}</option>
+                                    ))}
                                 </Form.Select>
                             </Form.Group>
 
@@ -333,7 +535,7 @@ const Interventions = () => {
                                 <Col md={6}>
                                     <Form.Group className="mb-3">
                                         <Form.Label>Start Date:</Form.Label>
-                                        <Form.Control type="date" />
+                                        <Form.Control type="date" value={startDate} onChange={(e) => setStartDate(e.target.value)} />
                                     </Form.Group>
                                 </Col>
                                 <Col md={6}>

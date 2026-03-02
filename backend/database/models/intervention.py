@@ -26,6 +26,10 @@ class Intervention(Base):
     date = Column(Date)
     user = Column(String)  # Who performed the intervention
     action = Column(String)  # Description of the intervention action
+
+    # Workflow fields (faculty ops)
+    status = Column(String, default="Pending")  # Pending | In Progress | Completed | Cancelled
+    assigned_faculty = Column(String, nullable=True)  # Display owner in UI (e.g., faculty name/email)
     
     # AI integration
     ai_suggested = Column(Boolean, default=False)  # False=manual, True=AI-suggested
