@@ -1,6 +1,8 @@
 """
-Feature Engineering Pipeline — Production Grade
+Feature Engineering Pipeline — Production Grade (v2.0)
+======================================================
 Single source of truth for feature computation used by both training and inference.
+Extended with 12 advanced derived features for improved prediction accuracy.
 
 Contracts
 ---------
@@ -101,6 +103,7 @@ class FeatureEngineer:
         """
         vec: Dict[str, float] = {}
 
+        # First pass: compute base features from raw data
         for feat_name in FEATURE_COLS:
             meta = _FEATURE_META[feat_name]
             raw_val = raw_record.get(feat_name, None)
@@ -118,6 +121,9 @@ class FeatureEngineer:
                 value = max(lo, min(hi, value))
 
             vec[feat_name] = float(value) if value is not None else 0.0
+
+        # Second pass: compute derived features
+        vec = self._compute_derived_features(vec, raw_record)
 
         return vec
 
@@ -178,7 +184,7 @@ class FeatureEngineer:
 
         Returns
         -------
-        X : pd.DataFrame, shape (n_samples, 16), columns = FEATURE_COLS
+        X : pd.DataFrame, shape (n_samples, n_features), columns = FEATURE_COLS
         y : pd.Series, shape (n_samples,), values = 0/1
         """
         if trimester_filter:
@@ -240,6 +246,131 @@ class FeatureEngineer:
         with open(load_path, "r") as f:
             self._imputation_medians = json.load(f)
         logger.info(f"Imputation stats loaded from {load_path}")
+
+    # ------------------------------------------------------------------ #
+    # Advanced derived features (v2.0)
+    # ------------------------------------------------------------------ #
+
+    def _compute_derived_features(
+        self,
+        vec: Dict[str, float],
+        raw_record: Dict[str, Any],
+    ) -> Dict[str, float]:
+        """
+        Compute advanced derived features from base features.
+
+        These features capture trends, ratios, and behavioral indicators
+        that improve model accuracy for dropout prediction.
+        """
+        # ── Attendance trend ─────────────────────────────────────────────
+        # Use attendance_rate and engagement_decay as proxy for attendance over time
+        att = vec.get("attendance_rate", 50.0)
+        decay = vec.get("engagement_decay", 1.0)
+        if "attendance_trend" not in raw_record or raw_record.get("attendance_trend") is None:
+            # Derive from decay: if decay < 1, attendance is declining
+            vec["attendance_trend"] = float((decay - 1.0) * att / 10.0) if decay > 0 else 0.0
+            vec["attendance_trend"] = max(-100.0, min(100.0, vec["attendance_trend"]))
+
+        # ── GPA improvement rate ─────────────────────────────────────────
+        quiz = vec.get("avg_quiz_score", 50.0)
+        assign = vec.get("assignment_avg", 50.0)
+        if "gpa_improvement_rate" not in raw_record or raw_record.get("gpa_improvement_rate") is None:
+            # Use performance_trend as base, refined by individual scores
+            perf_trend = vec.get("performance_trend", 0.0)
+            vec["gpa_improvement_rate"] = float(perf_trend * 0.7 + (quiz - 50) * 0.02 + (assign - 50) * 0.02)
+            vec["gpa_improvement_rate"] = max(-100.0, min(100.0, vec["gpa_improvement_rate"]))
+
+        # ── Assignment completion ratio ──────────────────────────────────
+        if "assignment_completion_ratio" not in raw_record or raw_record.get("assignment_completion_ratio") is None:
+            content_rate = vec.get("content_completion_rate", 0.0) / 100.0
+            late_ratio = vec.get("submission_delay_avg", 0.0)
+            vec["assignment_completion_ratio"] = float(max(0.0, min(1.0, content_rate * (1 - late_ratio * 0.3))))
+
+        # ── Engagement activity frequency ────────────────────────────────
+        if "engagement_activity_freq" not in raw_record or raw_record.get("engagement_activity_freq") is None:
+            logins = vec.get("num_logins", 0.0)
+            ef = vec.get("engagement_frequency", 0.0)
+            # Approximate sessions per week (assume ~14-week trimester)
+            vec["engagement_activity_freq"] = float(logins / 14.0 * max(ef, 0.1))
+
+        # ── Weekly study hours trend ─────────────────────────────────────
+        if "weekly_study_hours_trend" not in raw_record or raw_record.get("weekly_study_hours_trend") is None:
+            time_mins = vec.get("time_spent_minutes", 0.0)
+            # Combine time and decay to estimate trend
+            weekly_avg = time_mins / (14.0 * 60.0)  # avg hours per week
+            vec["weekly_study_hours_trend"] = float((decay - 1.0) * weekly_avg * 10.0) if decay > 0 else 0.0
+            vec["weekly_study_hours_trend"] = max(-999.0, min(999.0, vec["weekly_study_hours_trend"]))
+
+        # ── Attendance rolling average (3-period) ────────────────────────
+        if "attendance_rolling_avg_3" not in raw_record or raw_record.get("attendance_rolling_avg_3") is None:
+            # Without true time-series, approximate using attendance and trend
+            att_trend = vec.get("attendance_trend", 0.0)
+            vec["attendance_rolling_avg_3"] = float(max(0.0, min(100.0, att + att_trend * 0.3)))
+
+        # ── Quiz score rolling average (3-period) ────────────────────────
+        if "quiz_score_rolling_avg_3" not in raw_record or raw_record.get("quiz_score_rolling_avg_3") is None:
+            gpa_rate = vec.get("gpa_improvement_rate", 0.0)
+            vec["quiz_score_rolling_avg_3"] = float(max(0.0, min(100.0, quiz + gpa_rate * 0.5)))
+
+        # ── Login streak max ─────────────────────────────────────────────
+        if "login_streak_max" not in raw_record or raw_record.get("login_streak_max") is None:
+            logins = vec.get("num_logins", 0.0)
+            ef = vec.get("engagement_frequency", 0.0)
+            # Approximate: high logins + high frequency → longer streaks
+            vec["login_streak_max"] = float(min(9999, logins * ef * 0.5))
+
+        # ── Late submission ratio ────────────────────────────────────────
+        if "late_submission_ratio" not in raw_record or raw_record.get("late_submission_ratio") is None:
+            vec["late_submission_ratio"] = float(vec.get("submission_delay_avg", 0.0))
+
+        # ── Engagement score composite ───────────────────────────────────
+        if "engagement_score_composite" not in raw_record or raw_record.get("engagement_score_composite") is None:
+            # Weighted composite of engagement metrics
+            logins_norm = min(100.0, vec.get("num_logins", 0.0) / 2.0)
+            time_norm = min(100.0, vec.get("time_spent_minutes", 0.0) / 50.0)
+            content_norm = vec.get("content_completion_rate", 0.0)
+            quiz_norm = vec.get("quiz_completion_rate", 0.0)
+            disc_norm = min(100.0, vec.get("discussion_posts", 0.0) * 5.0)
+
+            composite = (
+                0.25 * logins_norm +
+                0.20 * time_norm +
+                0.25 * content_norm +
+                0.20 * quiz_norm +
+                0.10 * disc_norm
+            )
+            vec["engagement_score_composite"] = float(max(0.0, min(100.0, composite)))
+
+        # ── Risk behavior index ──────────────────────────────────────────
+        if "risk_behavior_index" not in raw_record or raw_record.get("risk_behavior_index") is None:
+            # Composite risk indicator
+            att_risk = max(0.0, (70.0 - att) / 70.0 * 100.0) if att < 70 else 0.0
+            late_risk = vec.get("late_submission_ratio", 0.0) * 100.0
+            login_risk = max(0.0, (20.0 - vec.get("num_logins", 0.0)) / 20.0 * 100.0) if vec.get("num_logins", 0.0) < 20 else 0.0
+            decline_risk = max(0.0, -vec.get("performance_trend", 0.0)) * 2.0
+
+            risk_index = (
+                0.30 * att_risk +
+                0.20 * late_risk +
+                0.25 * login_risk +
+                0.25 * decline_risk
+            )
+            vec["risk_behavior_index"] = float(max(0.0, min(100.0, risk_index)))
+
+        # ── Performance consistency ──────────────────────────────────────
+        if "performance_consistency" not in raw_record or raw_record.get("performance_consistency") is None:
+            scores = [
+                vec.get("avg_quiz_score", 50.0),
+                vec.get("assignment_avg", 50.0),
+                vec.get("exam_score", 50.0),
+            ]
+            valid_scores = [s for s in scores if s > 0]
+            if len(valid_scores) > 1:
+                vec["performance_consistency"] = float(np.std(valid_scores))
+            else:
+                vec["performance_consistency"] = 0.0
+
+        return vec
 
     # ------------------------------------------------------------------ #
     # Internal utilities
@@ -387,6 +518,6 @@ if __name__ == "__main__":
         fe = FeatureEngineer(fit=True)
         X, y = fe.fit_transform(df, trimester_filter="T1")
         print(f"Feature matrix (T1 train): {X.shape}")
-        print(f"Feature columns: {FEATURE_COLS}")
+        print(f"Feature columns ({len(FEATURE_COLS)}): {FEATURE_COLS}")
         print(f"Target distribution: {y.value_counts().to_dict()}")
         print(X.describe())

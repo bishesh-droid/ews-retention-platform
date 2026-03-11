@@ -1,15 +1,17 @@
 """
-Prediction Module — Production Grade
-Loads models via ModelRegistry singleton, validates features, runs ensemble inference,
-computes SHAP explainability, and returns a structured prediction response.
+Prediction Module v2.0 — Production Grade
+==========================================
+Loads ensemble model via ModelRegistry singleton, applies the same
+preprocessing pipeline used during training, runs inference, computes
+feature importance, and returns a structured prediction response.
 
 Response schema
 ---------------
 {
   "student_id":              str,
-  "dropout_probability":     float,   # ensemble average (RF + XGB)
+  "dropout_probability":     float,   # ensemble probability
   "risk_label":              str,     # HIGH / MEDIUM / LOW
-  "top_contributing_features": list,  # [{feature, shap_value}, ...]
+  "top_contributing_features": list,  # [{feature, importance}, ...]
   "model_version":           str,
   "prediction_timestamp":    str,
   "fallback_used":           bool,    # True if ML failed and rule-based was used
@@ -36,6 +38,13 @@ logger = logging.getLogger(__name__)
 from models.feature_engineering import FeatureEngineer, FeatureValidationError, FEATURE_COLS
 from models.model_loader import ModelRegistry, ModelVersionMismatch
 
+# Preprocessing import — optional for backward compatibility
+try:
+    from models.preprocessing import PreprocessingPipeline
+    PREPROCESSING_AVAILABLE = True
+except ImportError:
+    PREPROCESSING_AVAILABLE = False
+
 # SHAP import is optional — fall back gracefully
 try:
     import shap
@@ -60,49 +69,66 @@ def _get_risk_label(probability: float) -> str:
     return "LOW"
 
 
-def _compute_shap_top_features(
+def _compute_top_features(
     model,
     X: pd.DataFrame,
     top_n: int = 5,
 ) -> List[Dict[str, Any]]:
     """
-    Compute SHAP values for one sample using TreeExplainer.
-    Falls back to model's feature_importances_ if SHAP fails or is unavailable.
+    Compute top contributing features using SHAP or feature importances.
     """
     # Try SHAP first
     if SHAP_AVAILABLE:
         try:
-            explainer = shap.TreeExplainer(model)
+            # Check if model supports TreeExplainer
+            base_model = model
+            if hasattr(model, 'get_model'):
+                # For ensemble, get the primary model
+                names = model.get_model_names() if hasattr(model, 'get_model_names') else []
+                for name in ['xgboost', 'lightgbm', 'random_forest', 'catboost', 'gradient_boosting']:
+                    if name in names:
+                        base_model = model.get_model(name)
+                        break
+
+            explainer = shap.TreeExplainer(base_model)
             shap_values = explainer.shap_values(X)
 
-            # For binary classification, shap_values may be a list [class0, class1]
             if isinstance(shap_values, list):
-                sv = shap_values[1][0]  # class 1 (at-risk) SHAP values for sample 0
+                sv = shap_values[1][0]
             else:
                 sv = shap_values[0]
 
             feature_shap = [
-                {"feature": feat, "shap_value": float(val)}
+                {"feature": feat, "importance": float(abs(val)), "shap_value": float(val)}
                 for feat, val in zip(FEATURE_COLS, sv)
             ]
-            # Sort by absolute SHAP value descending
-            feature_shap.sort(key=lambda x: abs(x["shap_value"]), reverse=True)
+            feature_shap.sort(key=lambda x: x["importance"], reverse=True)
             return feature_shap[:top_n]
 
         except Exception as exc:
-            logger.warning(f"SHAP computation failed: {exc} — falling back to feature importances")
+            logger.debug(f"SHAP computation failed: {exc} — falling back to feature importances")
 
-    # Fallback: use model feature importances (RF / XGB both have this)
-    if hasattr(model, "feature_importances_"):
+    # Fallback: use model feature importances
+    imp_source = model
+    if hasattr(model, 'feature_importances_') and model.feature_importances_ is not None:
         importances = model.feature_importances_
-        feature_imp = [
-            {"feature": feat, "shap_value": float(imp)}
-            for feat, imp in zip(FEATURE_COLS, importances)
-        ]
-        feature_imp.sort(key=lambda x: abs(x["shap_value"]), reverse=True)
-    return feature_imp[:top_n]
+    elif hasattr(model, '_models'):
+        # Try ensemble's aggregated importances
+        for m in (model._models.values() if hasattr(model, '_models') else []):
+            if hasattr(m, 'feature_importances_'):
+                importances = m.feature_importances_
+                break
+        else:
+            return []
+    else:
+        return []
 
-    return []
+    feature_imp = [
+        {"feature": feat, "importance": float(imp)}
+        for feat, imp in zip(FEATURE_COLS, importances)
+    ]
+    feature_imp.sort(key=lambda x: x["importance"], reverse=True)
+    return feature_imp[:top_n]
 
 
 # ---------------------------------------------------------------------------
@@ -110,6 +136,7 @@ def _compute_shap_top_features(
 # ---------------------------------------------------------------------------
 
 REGISTRY: Optional[ModelRegistry] = None
+PREPROCESSING: Optional[Any] = None
 
 # Lightweight runtime stats for monitoring endpoint
 RUNTIME_STATS: Dict[str, Any] = {
@@ -123,11 +150,8 @@ RUNTIME_STATS: Dict[str, Any] = {
 def _init_registry() -> None:
     """
     Load all models once at process startup and cache in memory.
-
-    Any failure here is logged; predictions will gracefully fall back to
-    rule-based scoring when REGISTRY is None or has no loaded models.
     """
-    global REGISTRY
+    global REGISTRY, PREPROCESSING
     try:
         REGISTRY = ModelRegistry.get_instance()
     except ModelVersionMismatch as exc:
@@ -136,6 +160,17 @@ def _init_registry() -> None:
     except Exception as exc:
         logger.error(f"Failed to initialise ModelRegistry: {exc}")
         REGISTRY = None
+
+    # Load preprocessing pipeline
+    if PREPROCESSING_AVAILABLE:
+        try:
+            PREPROCESSING = PreprocessingPipeline.load()
+        except FileNotFoundError:
+            logger.warning("No preprocessing pipeline found — predictions will use raw features")
+            PREPROCESSING = None
+        except Exception as exc:
+            logger.warning(f"Failed to load preprocessing pipeline: {exc}")
+            PREPROCESSING = None
 
 
 # Initialise on import (e.g. at server startup)
@@ -165,7 +200,6 @@ def predict(
     timestamp = datetime.now().isoformat()
     fallback_used = False
 
-    # Bump total counter early; we will refine ml/fallback inside branches.
     RUNTIME_STATS["total_predictions"] = int(RUNTIME_STATS.get("total_predictions", 0)) + 1
     RUNTIME_STATS["last_prediction_at"] = timestamp
 
@@ -183,10 +217,10 @@ def predict(
     # ── Step 2: Feature engineering ────────────────────────────────────────
     try:
         fe = FeatureEngineer(fit=False)
-        fe.load_imputation_stats()  # load T1 training medians
+        fe.load_imputation_stats()
         feature_vec = fe.compute(raw_record)
-        fe.validate_feature_vector(feature_vec)  # strict validation
-        X = fe.to_dataframe([feature_vec])        # shape (1, 16), ordered
+        fe.validate_feature_vector(feature_vec)
+        X = fe.to_dataframe([feature_vec])
     except FeatureValidationError as exc:
         logger.error(f"Feature validation failed for student={student_id}: {exc}")
         result = _rule_based_fallback(student_id, raw_record, timestamp, error=str(exc))
@@ -198,21 +232,40 @@ def predict(
         RUNTIME_STATS["fallback_predictions"] = int(RUNTIME_STATS.get("fallback_predictions", 0)) + 1
         return result
 
-    # ── Step 3: Ensemble probability ───────────────────────────────────────
-    probabilities: List[float] = []
-    primary_model = None  # used for SHAP (prefer XGB, then RF)
-
-    for model_key in ["xgboost", "random_forest"]:
-        model = registry.get(model_key)
-        if model is None:
-            continue
+    # ── Step 3: Apply preprocessing pipeline ─────────────────────────────
+    if PREPROCESSING is not None and PREPROCESSING.is_fitted:
         try:
-            prob = float(model.predict_proba(X)[:, 1][0])
-            probabilities.append(prob)
-            if primary_model is None:
-                primary_model = model
+            X = PREPROCESSING.transform(X)
         except Exception as exc:
-            logger.warning(f"Model '{model_key}' predict_proba failed: {exc}")
+            logger.warning(f"Preprocessing transform failed: {exc} — using raw features")
+
+    # ── Step 4: Ensemble probability ───────────────────────────────────────
+    probabilities: List[float] = []
+    primary_model = None
+
+    # Try ensemble first
+    ensemble = registry.get("ensemble")
+    if ensemble is not None:
+        try:
+            prob = float(ensemble.predict_proba(X)[:, 1][0])
+            probabilities.append(prob)
+            primary_model = ensemble
+        except Exception as exc:
+            logger.warning(f"Ensemble predict_proba failed: {exc}")
+
+    # Fall back to individual models
+    if not probabilities:
+        for model_key in ["xgboost", "lightgbm", "catboost", "random_forest", "gradient_boosting"]:
+            model = registry.get(model_key)
+            if model is None:
+                continue
+            try:
+                prob = float(model.predict_proba(X)[:, 1][0])
+                probabilities.append(prob)
+                if primary_model is None:
+                    primary_model = model
+            except Exception as exc:
+                logger.warning(f"Model '{model_key}' predict_proba failed: {exc}")
 
     if not probabilities:
         logger.error(f"All models failed for student={student_id} — using rule-based fallback")
@@ -223,12 +276,12 @@ def predict(
     ensemble_probability = float(np.mean(probabilities))
     risk_label = _get_risk_label(ensemble_probability)
 
-    # ── Step 4: SHAP / feature importance ───────────────────────────────────
+    # ── Step 5: Feature importance ─────────────────────────────────────────
     top_features: List[Dict] = []
     if primary_model is not None:
-        top_features = _compute_shap_top_features(primary_model, X, top_n=top_n_features)
+        top_features = _compute_top_features(primary_model, X, top_n=top_n_features)
 
-    # ── Step 5: Build response ────────────────────────────────────────────
+    # ── Step 6: Build response ────────────────────────────────────────────
     response = {
         "student_id":                  student_id,
         "dropout_probability":         round(ensemble_probability, 4),
@@ -238,8 +291,7 @@ def predict(
         "prediction_timestamp":        timestamp,
         "fallback_used":               fallback_used,
         "individual_model_probabilities": {
-            "xgboost":       round(probabilities[0], 4) if len(probabilities) > 0 else None,
-            "random_forest": round(probabilities[1], 4) if len(probabilities) > 1 else None,
+            "ensemble": round(probabilities[0], 4) if len(probabilities) > 0 else None,
         },
     }
 
@@ -258,11 +310,6 @@ def predict_batch(
     """
     Predict for multiple students in one call.
     Returns a list of prediction dicts in the same order as input.
-
-    Parameters
-    ----------
-    records : list of dict
-        Each dict must have 'student_id' and raw feature values.
     """
     results = []
     for record in records:
@@ -284,13 +331,11 @@ def _rule_based_fallback(
 ) -> Dict[str, Any]:
     """
     Simple rule-based risk estimate when ML models are unavailable.
-    Uses attendance_rate, avg_quiz_score, num_logins as primary signals.
     """
     att   = _safe_float(raw_record.get("attendance_rate", None), default=50.0)
     quiz  = _safe_float(raw_record.get("avg_quiz_score", None), default=50.0)
     logins = _safe_float(raw_record.get("num_logins", None), default=10.0)
 
-    # Simple weighted score
     risk_score = 0.0
     if att < 50:    risk_score += 0.40
     elif att < 70:  risk_score += 0.20

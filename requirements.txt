@@ -8,6 +8,9 @@ matplotlib
 imbalanced-learn
 google-genai
 xgboost
+lightgbm
+catboost
+optuna
 python-multipart
 python-dotenv
 pydantic[email]

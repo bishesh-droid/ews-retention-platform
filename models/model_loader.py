@@ -1,11 +1,14 @@
 """
-Model Loader — Singleton Model Registry
-Loads RF and XGB models exactly ONCE at startup and validates feature alignment.
+Model Loader — Singleton Model Registry (v2.0)
+================================================
+Loads ensemble + individual models at startup, validates feature alignment,
+and loads the preprocessing pipeline.
 
 Usage
 -----
     from models.model_loader import ModelRegistry
     registry = ModelRegistry.get_instance()  # singleton
+    ensemble = registry.get("ensemble")
     rf_model = registry.get("random_forest")
 """
 from __future__ import annotations
@@ -66,10 +69,10 @@ class ModelRegistry:
     # ------------------------------------------------------------------ #
 
     def get(self, model_key: str) -> Optional[Any]:
-        """Return a loaded model by key ('random_forest' or 'xgboost')."""
+        """Return a loaded model by key ('random_forest', 'xgboost', 'ensemble', etc.)."""
         model = self._models.get(model_key)
         if model is None:
-            logger.warning(f"Model '{model_key}' not found in registry. Available: {list(self._models)}")
+            logger.debug(f"Model '{model_key}' not found in registry. Available: {list(self._models)}")
         return model
 
     def get_metadata(self) -> Dict:
@@ -112,7 +115,7 @@ class ModelRegistry:
         # Validate feature list against current feature_list.json
         self._validate_feature_alignment()
 
-        # Load each model
+        # Load each individual model
         model_defs = self._metadata.get("models", {})
         for model_key, model_info in model_defs.items():
             path = Path(model_info.get("path", ""))
@@ -122,7 +125,7 @@ class ModelRegistry:
                 if candidate.exists():
                     path = candidate
                 else:
-                    logger.error(f"Model file not found: {path} — '{model_key}' will be unavailable")
+                    logger.warning(f"Model file not found: {path} — '{model_key}' will be unavailable")
                     continue
 
             try:
@@ -132,26 +135,32 @@ class ModelRegistry:
             except Exception as exc:
                 logger.error(f"  ✗ Failed to load '{model_key}': {exc}")
 
+        # Load ensemble model
+        version = self._metadata.get("model_version", "v2.0")
+        ensemble_path = SAVED_MODELS_DIR / f"ensemble_{version}.pkl"
+        if not ensemble_path.exists():
+            # Try without version
+            ensemble_path = SAVED_MODELS_DIR / "ensemble.pkl"
+
+        if ensemble_path.exists():
+            try:
+                ensemble = joblib.load(ensemble_path)
+                self._models["ensemble"] = ensemble
+                logger.info(f"  ✓ Loaded 'ensemble' from {ensemble_path.name}")
+            except Exception as exc:
+                logger.error(f"  ✗ Failed to load ensemble: {exc}")
+        else:
+            logger.info("  No ensemble model found — individual models will be used")
+
         self._loaded = len(self._models) > 0
         if not self._loaded:
             logger.error("No models loaded. Predictions will fall back to rule-based scoring.")
         else:
-            logger.info(f"ModelRegistry ready — {len(self._models)} model(s) loaded")
+            logger.info(f"ModelRegistry ready — {len(self._models)} model(s) loaded: {list(self._models.keys())}")
 
     def _validate_feature_alignment(self):
         """
         Compare feature list in metadata against current feature_list.json.
-
-        This enforces that:
-        - Training feature order (saved in model_metadata.json) matches
-          the active registry in feature_list.json.
-        - Any mismatch is treated as a hard error, since it means the
-          persisted models no longer align with the current feature set.
-
-        Raises
-        ------
-        ModelVersionMismatch
-            If the feature lists differ in length or order.
         """
         feature_list_path = MODELS_DIR / "feature_list.json"
         if not feature_list_path.exists():

@@ -1,11 +1,23 @@
 """
-Model Training Pipeline — Production Grade
-Time-aware split (T1 → Train, T2 → Test), SMOTE, cross-validation,
-versioned model serialisation with full metadata.
+Model Training Pipeline v2.0 — Production Grade
+=================================================
+Structured pipeline with 10 stages:
+  1. Data ingestion
+  2. Feature engineering (28 features)
+  3. Time-aware train/test split
+  4. Preprocessing (impute → clamp → scale)
+  5. Class balancing (SMOTE-Tomek)
+  6. Hyperparameter tuning (Optuna)
+  7. Multi-model training (6 models)
+  8. Comprehensive evaluation
+  9. Ensemble creation (weighted voting)
+  10. Model export & metadata
 
 Usage
 -----
     python models/train_model.py
+    python models/train_model.py --skip-tuning   # use defaults, faster
+    python models/train_model.py --trials 20      # fewer Optuna trials
 """
 from __future__ import annotations
 
@@ -13,30 +25,15 @@ import json
 import logging
 import os
 import sys
+import time
 from datetime import datetime
 from pathlib import Path
+from typing import Dict, List, Optional, Tuple
 
 import joblib
 import numpy as np
 import pandas as pd
-from sklearn.ensemble import RandomForestClassifier
-from sklearn.metrics import (
-    classification_report,
-    f1_score,
-    precision_score,
-    recall_score,
-    roc_auc_score,
-    confusion_matrix,
-)
-from sklearn.model_selection import StratifiedKFold, cross_validate
-from xgboost import XGBClassifier
-
-try:
-    from imblearn.over_sampling import SMOTE
-    SMOTE_AVAILABLE = True
-except ImportError:
-    SMOTE_AVAILABLE = False
-    logging.warning("imbalanced-learn not installed. SMOTE will be skipped.")
+from sklearn.model_selection import train_test_split
 
 # ── Path setup ───────────────────────────────────────────────────────────
 MODELS_DIR   = Path(__file__).resolve().parent
@@ -48,6 +45,25 @@ from models.feature_engineering import (
     FEATURE_COLS,
     load_master_dataset,
 )
+from models.preprocessing import PreprocessingPipeline
+from models.model_zoo import ModelZoo
+from models.ensemble import WeightedVotingEnsemble
+from models.evaluation import ModelEvaluator
+
+# Optional imports — degrade gracefully
+try:
+    from models.hyperparameter_tuning import HyperparameterTuner
+    TUNER_AVAILABLE = True
+except ImportError:
+    TUNER_AVAILABLE = False
+
+try:
+    from imblearn.combine import SMOTETomek
+    from imblearn.over_sampling import SMOTE
+    IMBALANCE_AVAILABLE = True
+except ImportError:
+    IMBALANCE_AVAILABLE = False
+
 
 logging.basicConfig(
     level=logging.INFO,
@@ -59,239 +75,505 @@ SAVED_MODELS_DIR = MODELS_DIR / "saved_models"
 SAVED_MODELS_DIR.mkdir(parents=True, exist_ok=True)
 
 RANDOM_STATE = 42
-MODEL_VERSION = "v1.0"  # Bump this when retraining
+MODEL_VERSION = "v2.0"
 
 
-# ── SMOTE helper ──────────────────────────────────────────────────────────────
+# ══════════════════════════════════════════════════════════════════════════
+# Stage 1: Data Ingestion
+# ══════════════════════════════════════════════════════════════════════════
 
-def _apply_smote(
+def stage_data_ingestion() -> pd.DataFrame:
+    """Load the clean master dataset."""
+    logger.info("━" * 60)
+    logger.info("STAGE 1: Data Ingestion")
+    logger.info("━" * 60)
+
+    master_df = load_master_dataset()
+    if master_df.empty:
+        raise RuntimeError(
+            "No master dataset found. Run data_ingestion.master_builder first: "
+            "  python -m data_ingestion.master_builder"
+        )
+
+    logger.info(f"  Loaded: {master_df.shape[0]} rows × {master_df.shape[1]} columns")
+    if "trimester" in master_df.columns:
+        logger.info(f"  Trimesters: {master_df['trimester'].value_counts().to_dict()}")
+    return master_df
+
+
+# ══════════════════════════════════════════════════════════════════════════
+# Stage 2: Feature Engineering
+# ══════════════════════════════════════════════════════════════════════════
+
+def stage_feature_engineering(
+    master_df: pd.DataFrame,
+) -> Tuple[pd.DataFrame, pd.Series, pd.DataFrame, pd.Series, FeatureEngineer]:
+    """
+    Compute features and split into train/test using time-aware split.
+    T1 → training, T2 → testing.
+    """
+    logger.info("━" * 60)
+    logger.info("STAGE 2: Feature Engineering & Train/Test Split")
+    logger.info("━" * 60)
+
+    # Fit on T1 (training)
+    train_fe = FeatureEngineer(fit=True)
+    X_train, y_train = train_fe.fit_transform(master_df, trimester_filter="T1")
+    train_fe.save_imputation_stats()
+
+    # Transform T2 (test) using T1 imputation medians — prevents leakage
+    t2_df = master_df[master_df.get("trimester") == "T2"].copy()
+    test_fe = FeatureEngineer(fit=False)
+    test_fe._imputation_medians = dict(train_fe._imputation_medians)
+    X_test = test_fe.transform(t2_df)
+    y_test = train_fe._build_target(t2_df)
+
+    if X_train.empty:
+        raise RuntimeError("Training set empty (T1). Check clean_master_dataset.csv has T1 rows.")
+
+    if X_test.empty:
+        logger.warning("Test set empty (T2). Falling back to 20% random split from T1.")
+        X_train, X_test, y_train, y_test = train_test_split(
+            X_train, y_train, test_size=0.2,
+            random_state=RANDOM_STATE,
+            stratify=y_train if y_train.nunique() > 1 else None,
+        )
+
+    logger.info(f"  Train: {X_train.shape}, y={y_train.value_counts().to_dict()}")
+    logger.info(f"  Test:  {X_test.shape}, y={y_test.value_counts().to_dict()}")
+    logger.info(f"  Features ({len(FEATURE_COLS)}): {FEATURE_COLS[:5]}... (see feature_list.json)")
+
+    return X_train, y_train, X_test, y_test, train_fe
+
+
+# ══════════════════════════════════════════════════════════════════════════
+# Stage 3: Preprocessing
+# ══════════════════════════════════════════════════════════════════════════
+
+def stage_preprocessing(
+    X_train: pd.DataFrame,
+    X_test: pd.DataFrame,
+) -> Tuple[pd.DataFrame, pd.DataFrame, PreprocessingPipeline]:
+    """Apply sklearn preprocessing pipeline (impute → clamp outliers → scale)."""
+    logger.info("━" * 60)
+    logger.info("STAGE 3: Preprocessing (Impute → Clamp → Scale)")
+    logger.info("━" * 60)
+
+    pp = PreprocessingPipeline(outlier_factor=1.5)
+    X_train_pp = pp.fit_transform(X_train)
+    X_test_pp = pp.transform(X_test)
+    pp.save()
+
+    stats = pp.get_stats()
+    logger.info(f"  Duplicates removed: {stats.get('n_duplicates_removed', 0)}")
+    logger.info(f"  Outlier clamping: IQR × 1.5")
+    logger.info(f"  Scaling: StandardScaler (z-score)")
+
+    return X_train_pp, X_test_pp, pp
+
+
+# ══════════════════════════════════════════════════════════════════════════
+# Stage 4: Class Balancing
+# ══════════════════════════════════════════════════════════════════════════
+
+def stage_class_balancing(
     X_train: pd.DataFrame,
     y_train: pd.Series,
-) -> tuple[pd.DataFrame, pd.Series]:
-    if not SMOTE_AVAILABLE:
+) -> Tuple[pd.DataFrame, pd.Series]:
+    """Apply SMOTE-Tomek to address class imbalance."""
+    logger.info("━" * 60)
+    logger.info("STAGE 4: Class Balancing (SMOTE-Tomek)")
+    logger.info("━" * 60)
+
+    if not IMBALANCE_AVAILABLE:
+        logger.warning("  imbalanced-learn not installed — skipping resampling")
         return X_train, y_train
+
     if y_train.nunique() < 2:
-        logger.warning("SMOTE skipped: only one class in training data.")
+        logger.warning("  Only one class — skipping SMOTE")
         return X_train, y_train
 
     minority_count = y_train.value_counts().min()
     k_neighbors = min(5, minority_count - 1)
     if k_neighbors < 1:
-        logger.warning(
-            f"SMOTE skipped: minority class has only {minority_count} samples — need ≥2."
-        )
+        logger.warning(f"  Minority class has only {minority_count} samples — skipping SMOTE")
         return X_train, y_train
 
     try:
-        smote = SMOTE(random_state=RANDOM_STATE, k_neighbors=k_neighbors)
-        X_res, y_res = smote.fit_resample(X_train, y_train)
-        logger.info(
-            f"SMOTE: {len(X_train)} → {len(X_res)} samples "
-            f"(minority: {minority_count} → {y_res.sum()})"
+        resampler = SMOTETomek(
+            smote=SMOTE(random_state=RANDOM_STATE, k_neighbors=k_neighbors),
+            random_state=RANDOM_STATE,
         )
+        X_res, y_res = resampler.fit_resample(X_train, y_train)
+        logger.info(f"  Before: {len(X_train)} samples → After: {len(X_res)} samples")
+        logger.info(f"  Class distribution after: {pd.Series(y_res).value_counts().to_dict()}")
         return pd.DataFrame(X_res, columns=FEATURE_COLS), pd.Series(y_res, name="is_dropout")
     except Exception as exc:
-        logger.warning(f"SMOTE failed ({exc}) — using original training data.")
+        logger.warning(f"  SMOTE-Tomek failed ({exc}) — using original data")
         return X_train, y_train
 
 
-# ── Evaluation helper ────────────────────────────────────────────────────────────
+# ══════════════════════════════════════════════════════════════════════════
+# Stage 5: Hyperparameter Tuning
+# ══════════════════════════════════════════════════════════════════════════
 
-def _evaluate(model, X_test: pd.DataFrame, y_test: pd.Series, model_name: str) -> dict:
-    y_pred = model.predict(X_test)
-    y_prob = model.predict_proba(X_test)[:, 1]
+def stage_hyperparameter_tuning(
+    model_names: List[str],
+    X_train: pd.DataFrame,
+    y_train: pd.Series,
+    scale_pos_weight: float,
+    n_trials: int = 50,
+    skip_tuning: bool = False,
+) -> Dict[str, Dict]:
+    """Run Optuna-based hyperparameter tuning for each model."""
+    logger.info("━" * 60)
+    logger.info("STAGE 5: Hyperparameter Tuning (Optuna)")
+    logger.info("━" * 60)
 
-    metrics = {}
-    if y_test.nunique() > 1:
-        metrics["auc_roc"]   = float(roc_auc_score(y_test, y_prob))
-    else:
-        metrics["auc_roc"]   = None
-        logger.warning(f"{model_name}: only one class in test set, AUC-ROC is undefined.")
+    if skip_tuning:
+        logger.info("  Skipping tuning (--skip-tuning). Using default hyperparameters.")
+        return {name: {} for name in model_names}
 
-    metrics["f1_score"]   = float(f1_score(y_test, y_pred, zero_division=0))
-    metrics["precision"]  = float(precision_score(y_test, y_pred, zero_division=0))
-    metrics["recall"]     = float(recall_score(y_test, y_pred, zero_division=0))
-    metrics["cm"]         = confusion_matrix(y_test, y_pred).tolist()
+    if not TUNER_AVAILABLE:
+        logger.warning("  Optuna not available — using default hyperparameters")
+        return {name: {} for name in model_names}
 
-    logger.info(f"{model_name} — AUC={metrics['auc_roc']}, F1={metrics['f1_score']:.3f}")
-    print(f"\n{model_name} Classification Report:")
-    print(classification_report(y_test, y_pred, zero_division=0))
-    return metrics
-
-
-# ── Cross-validation helper ───────────────────────────────────────────────────────
-
-def _cross_validate(model, X: pd.DataFrame, y: pd.Series, model_name: str) -> dict:
-    if y.nunique() < 2 or len(X) < 10:
-        logger.warning(f"{model_name}: skipping CV (insufficient data: {len(X)} rows)")
-        return {}
-
-    cv = StratifiedKFold(n_splits=5, shuffle=True, random_state=RANDOM_STATE)
-    scores = cross_validate(
-        model, X, y, cv=cv,
-        scoring=["roc_auc", "f1", "precision", "recall"],
-        return_train_score=False,
-    )
-    summary = {
-        "cv_auc_mean":       float(np.mean(scores["test_roc_auc"])),
-        "cv_auc_std":        float(np.std(scores["test_roc_auc"])),
-        "cv_f1_mean":        float(np.mean(scores["test_f1"])),
-        "cv_precision_mean": float(np.mean(scores["test_precision"])),
-        "cv_recall_mean":    float(np.mean(scores["test_recall"])),
-    }
-    logger.info(
-        f"{model_name} 5-Fold CV — AUC={summary['cv_auc_mean']:.3f}±{summary['cv_auc_std']:.3f}, "
-        f"F1={summary['cv_f1_mean']:.3f}"
-    )
-    return summary
-
-
-# ── Model saver ──────────────────────────────────────────────────────────────────
-
-def _save_model(model, model_key: str, metrics: dict, cv_metrics: dict) -> Path:
-    filename = f"{model_key}_{MODEL_VERSION}.pkl"
-    path = SAVED_MODELS_DIR / filename
-    joblib.dump(model, path)
-    logger.info(f"Model saved → {path}")
-
-    # Save per-model metrics alongside pkl
-    metrics_path = SAVED_MODELS_DIR / f"{model_key}_{MODEL_VERSION}_metrics.json"
-    with open(metrics_path, "w") as f:
-        json.dump({"test_metrics": metrics, "cv_metrics": cv_metrics}, f, indent=2)
-
-    return path
-
-
-# ── Main training entry point ─────────────────────────────────────────────────────
-
-def train_models():
-    logger.info("=" * 70)
-    logger.info("EWS Model Training Pipeline")
-    logger.info(f"  version  : {MODEL_VERSION}")
-    logger.info(f"  date     : {datetime.now().isoformat()}")
-    logger.info(f"  features : {len(FEATURE_COLS)}")
-    logger.info("=" * 70)
-
-    # 1. Load master dataset ─────────────────────────────────────────────
-    master_df = load_master_dataset()
-    if master_df.empty:
-        logger.error(
-            "No master dataset found. Run data_ingestion.master_builder first: "
-            "  python -m data_ingestion.master_builder"
-        )
-        return
-
-    logger.info(f"Master dataset loaded: {master_df.shape}")
-    if "trimester" in master_df.columns:
-        logger.info(f"Trimester distribution:\n{master_df['trimester'].value_counts().to_dict()}")
-
-    # 2. Feature engineering (time-aware split) ─────────────────────
-    #    - T1: training set (used to learn imputations + target)
-    #    - T2: validation set (uses T1 imputations ONLY to prevent leakage)
-    train_fe = FeatureEngineer(fit=True)
-    X_train, y_train = train_fe.fit_transform(master_df, trimester_filter="T1")
-
-    # Save imputation stats from training set (T1 medians only)
-    train_fe.save_imputation_stats()
-
-    # Build T2 test set using the SAME imputation medians learned from T1.
-    # We MUST NOT refit imputation medians on T2, otherwise we leak future info.
-    t2_df = master_df[master_df.get("trimester") == "T2"].copy()
-
-    test_fe = FeatureEngineer(fit=False)
-    test_fe._imputation_medians = dict(train_fe._imputation_medians)  # anti-leakage: T1 medians
-    X_test = test_fe.transform(t2_df)
-    y_test = train_fe._build_target(t2_df)
-
-    if X_train.empty:
-        logger.error("Training set empty (T1). Check that clean_master_dataset.csv has T1 rows.")
-        return
-
-    if X_test.empty:
-        logger.warning(
-            "Test set empty (T2). Falling back to 20% random split from T1 for evaluation only."
-        )
-        from sklearn.model_selection import train_test_split
-        X_train, X_test, y_train, y_test = train_test_split(
-            X_train, y_train, test_size=0.2, random_state=RANDOM_STATE, stratify=y_train if y_train.nunique() > 1 else None
-        )
-
-    logger.info(f"Train: X={X_train.shape}, y distribution={y_train.value_counts().to_dict()}")
-    logger.info(f"Test:  X={X_test.shape},  y distribution={y_test.value_counts().to_dict()}")
-
-    # 3. SMOTE on training data only (NEVER on test) ──────────────────
-    X_train_res, y_train_res = _apply_smote(X_train, y_train)
-
-    # 4. Train RandomForest ─────────────────────────────────────────────
-    logger.info("Training RandomForest...")
-    rf = RandomForestClassifier(
-        n_estimators=200,
-        max_depth=12,
-        min_samples_leaf=3,
-        class_weight="balanced",
+    tuner = HyperparameterTuner(
+        n_trials=n_trials,
+        cv_folds=5,
+        scoring="roc_auc",
         random_state=RANDOM_STATE,
-        n_jobs=-1,
     )
-    rf.fit(X_train_res, y_train_res)
-    rf_cv   = _cross_validate(rf, X_train, y_train, "RandomForest")
-    rf_test = _evaluate(rf, X_test, y_test, "RandomForest")
-    rf_path = _save_model(rf, "random_forest", rf_test, rf_cv)
 
-    # 5. Train XGBoost ───────────────────────────────────────────────
-    logger.info("Training XGBoost...")
-    xgb = XGBClassifier(
-        n_estimators=200,
-        max_depth=6,
-        learning_rate=0.05,
-        subsample=0.8,
-        colsample_bytree=0.8,
-        eval_metric="logloss",
-        scale_pos_weight=(
-            len(y_train_res[y_train_res == 0]) / max(len(y_train_res[y_train_res == 1]), 1)
-        ),
-        random_state=RANDOM_STATE,
-        n_jobs=-1,
+    all_params = tuner.tune_all(model_names, X_train.values, y_train.values, scale_pos_weight)
+
+    for name, params in all_params.items():
+        logger.info(f"  {name}: {params or 'defaults'}")
+
+    return all_params
+
+
+# ══════════════════════════════════════════════════════════════════════════
+# Stage 6: Multi-Model Training
+# ══════════════════════════════════════════════════════════════════════════
+
+def stage_training(
+    model_names: List[str],
+    tuned_params: Dict[str, Dict],
+    X_train: pd.DataFrame,
+    y_train: pd.Series,
+    scale_pos_weight: float,
+) -> Dict[str, object]:
+    """Train all models with tuned (or default) hyperparameters."""
+    logger.info("━" * 60)
+    logger.info("STAGE 6: Multi-Model Training")
+    logger.info("━" * 60)
+
+    zoo = ModelZoo(random_state=RANDOM_STATE)
+    trained_models = {}
+
+    for name in model_names:
+        params = tuned_params.get(name, {})
+        try:
+            if name == "random_forest":
+                model = zoo.get_random_forest(**params)
+            elif name == "xgboost":
+                model = zoo.get_xgboost(scale_pos_weight=scale_pos_weight, **params)
+            elif name == "lightgbm":
+                model = zoo.get_lightgbm(scale_pos_weight=scale_pos_weight, **params)
+            elif name == "catboost":
+                model = zoo.get_catboost(**params)
+            elif name == "gradient_boosting":
+                model = zoo.get_gradient_boosting(**params)
+            elif name == "mlp":
+                model = zoo.get_mlp(**params)
+            else:
+                logger.warning(f"  Unknown model: {name} — skipping")
+                continue
+
+            t0 = time.time()
+            model.fit(X_train, y_train)
+            elapsed = time.time() - t0
+            trained_models[name] = model
+            logger.info(f"  ✓ {name} trained in {elapsed:.1f}s")
+
+        except ImportError as exc:
+            logger.warning(f"  ✗ {name} unavailable: {exc}")
+        except Exception as exc:
+            logger.error(f"  ✗ {name} training failed: {exc}")
+
+    logger.info(f"  Successfully trained: {list(trained_models.keys())}")
+    return trained_models
+
+
+# ══════════════════════════════════════════════════════════════════════════
+# Stage 7: Evaluation
+# ══════════════════════════════════════════════════════════════════════════
+
+def stage_evaluation(
+    trained_models: Dict[str, object],
+    X_train: pd.DataFrame,
+    y_train: pd.Series,
+    X_test: pd.DataFrame,
+    y_test: pd.Series,
+) -> Tuple[Dict[str, Dict], Dict[str, Dict]]:
+    """Evaluate all trained models with full metrics and plots."""
+    logger.info("━" * 60)
+    logger.info("STAGE 7: Comprehensive Evaluation")
+    logger.info("━" * 60)
+
+    evaluator = ModelEvaluator(random_state=RANDOM_STATE)
+    test_reports = {}
+    cv_reports = {}
+
+    for name, model in trained_models.items():
+        logger.info(f"  Evaluating {name}...")
+        report = evaluator.evaluate(model, X_test, y_test, name, feature_names=FEATURE_COLS)
+        test_reports[name] = report
+
+        cv = evaluator.cross_validate(model, X_train, y_train, name)
+        cv_reports[name] = cv
+
+    # Model comparison table
+    comparison = evaluator.compare_models(test_reports)
+    logger.info("\n  Model Comparison:")
+    logger.info(f"\n{comparison.to_string(index=False)}")
+
+    return test_reports, cv_reports
+
+
+# ══════════════════════════════════════════════════════════════════════════
+# Stage 8: Ensemble Creation
+# ══════════════════════════════════════════════════════════════════════════
+
+def stage_ensemble(
+    trained_models: Dict[str, object],
+    X_test: pd.DataFrame,
+    y_test: pd.Series,
+    top_n: int = 3,
+) -> Tuple[WeightedVotingEnsemble, Dict]:
+    """Create weighted voting ensemble from top-N models."""
+    logger.info("━" * 60)
+    logger.info(f"STAGE 8: Ensemble Creation (Top-{top_n} Models)")
+    logger.info("━" * 60)
+
+    ensemble = WeightedVotingEnsemble(power=2.0, threshold=0.5)
+    ensemble.fit(trained_models, X_test, y_test, top_n=top_n)
+
+    # Evaluate ensemble
+    evaluator = ModelEvaluator(random_state=RANDOM_STATE)
+    ensemble_report = evaluator.evaluate(
+        ensemble, X_test, y_test, "ensemble", feature_names=FEATURE_COLS
     )
-    xgb.fit(X_train_res, y_train_res)
-    xgb_cv   = _cross_validate(xgb, X_train, y_train, "XGBoost")
-    xgb_test = _evaluate(xgb, X_test, y_test, "XGBoost")
-    xgb_path = _save_model(xgb, "xgboost", xgb_test, xgb_cv)
 
-    # 6. Save shared model metadata ───────────────────────────────────
+    meta = ensemble.get_metadata()
+    meta["test_metrics"] = ensemble_report["metrics"]
+
+    logger.info(f"  Ensemble AUC: {ensemble_report['metrics'].get('roc_auc')}")
+    logger.info(f"  Ensemble F1:  {ensemble_report['metrics'].get('f1_score'):.3f}")
+
+    return ensemble, meta
+
+
+# ══════════════════════════════════════════════════════════════════════════
+# Stage 9: Model Export
+# ══════════════════════════════════════════════════════════════════════════
+
+def stage_export(
+    trained_models: Dict[str, object],
+    ensemble: WeightedVotingEnsemble,
+    ensemble_meta: Dict,
+    test_reports: Dict[str, Dict],
+    cv_reports: Dict[str, Dict],
+    preprocessing_pipeline: PreprocessingPipeline,
+    n_train: int,
+    n_test: int,
+) -> None:
+    """Save all trained models, ensemble, and metadata."""
+    logger.info("━" * 60)
+    logger.info("STAGE 9: Model Export")
+    logger.info("━" * 60)
+
+    # Save individual models
+    model_paths = {}
+    for name, model in trained_models.items():
+        filename = f"{name}_{MODEL_VERSION}.pkl"
+        path = SAVED_MODELS_DIR / filename
+        joblib.dump(model, path)
+        model_paths[name] = str(path)
+        logger.info(f"  ✓ {name} → {filename}")
+
+    # Save ensemble
+    ensemble_path = SAVED_MODELS_DIR / f"ensemble_{MODEL_VERSION}.pkl"
+    joblib.dump(ensemble, ensemble_path)
+    logger.info(f"  ✓ ensemble → {ensemble_path.name}")
+
+    # Build comprehensive metadata
     metadata = {
-        "model_version":      MODEL_VERSION,
-        "training_date":      datetime.now().isoformat(),
+        "model_version": MODEL_VERSION,
+        "training_date": datetime.now().isoformat(),
         "training_trimester": "T1",
-        "test_trimester":     "T2",
-        "feature_list":       FEATURE_COLS,
-        "n_features":         len(FEATURE_COLS),
-        "n_train_samples":    len(X_train_res),
-        "n_test_samples":     len(X_test),
-        "random_state":       RANDOM_STATE,
-        "smote_applied":      SMOTE_AVAILABLE,
-        "models": {
-            "random_forest": {
-                "path":       str(rf_path),
-                "test_metrics": rf_test,
-                "cv_metrics":   rf_cv,
-            },
-            "xgboost": {
-                "path":       str(xgb_path),
-                "test_metrics": xgb_test,
-                "cv_metrics":   xgb_cv,
-            },
-        },
+        "test_trimester": "T2",
+        "feature_list": FEATURE_COLS,
+        "n_features": len(FEATURE_COLS),
+        "n_train_samples": n_train,
+        "n_test_samples": n_test,
+        "random_state": RANDOM_STATE,
+        "smote_applied": IMBALANCE_AVAILABLE,
+        "preprocessing": preprocessing_pipeline.get_stats(),
+        "ensemble": ensemble_meta,
+        "models": {},
     }
 
+    for name in trained_models:
+        metadata["models"][name] = {
+            "path": model_paths.get(name, ""),
+            "test_metrics": test_reports.get(name, {}).get("metrics", {}),
+            "cv_metrics": cv_reports.get(name, {}),
+        }
+
+    # Save metadata
     metadata_path = SAVED_MODELS_DIR / "model_metadata.json"
     with open(metadata_path, "w") as f:
         json.dump(metadata, f, indent=2, default=str)
+    logger.info(f"  ✓ metadata → {metadata_path.name}")
 
-    logger.info(f"Metadata saved → {metadata_path}")
-    logger.info("Training pipeline complete.")
-    logger.info(f"  RF  AUC: {rf_test.get('auc_roc')}")
-    logger.info(f"  XGB AUC: {xgb_test.get('auc_roc')}")
+    # Save evaluation report
+    evaluator = ModelEvaluator(random_state=RANDOM_STATE)
+    evaluator.save_report(test_reports, cv_reports, ensemble_meta)
 
+    # Save backward-compatible individual model files (no version suffix)
+    # so existing model_loader.py can find them
+    for name, model in trained_models.items():
+        compat_name = f"{name}.pkl"
+        compat_path = SAVED_MODELS_DIR / compat_name
+        joblib.dump(model, compat_path)
+
+    # Also save xgboost as xgboost_model.pkl for legacy compat
+    if "xgboost" in trained_models:
+        joblib.dump(trained_models["xgboost"], SAVED_MODELS_DIR / "xgboost_model.pkl")
+
+    logger.info("  All models and metadata exported successfully.")
+
+
+# ══════════════════════════════════════════════════════════════════════════
+# Main Orchestrator
+# ══════════════════════════════════════════════════════════════════════════
+
+def train_models(skip_tuning: bool = False, n_trials: int = 50):
+    """
+    Run the complete training pipeline.
+
+    Parameters
+    ----------
+    skip_tuning : bool
+        If True, skip Optuna hyperparameter tuning and use defaults.
+    n_trials : int
+        Number of Optuna trials per model.
+    """
+    start_time = time.time()
+
+    logger.info("=" * 60)
+    logger.info("EWS Model Training Pipeline v2.0")
+    logger.info(f"  Version    : {MODEL_VERSION}")
+    logger.info(f"  Date       : {datetime.now().isoformat()}")
+    logger.info(f"  Features   : {len(FEATURE_COLS)}")
+    logger.info(f"  Tuning     : {'Optuna' if not skip_tuning else 'Disabled'}")
+    logger.info("=" * 60)
+
+    # Stage 1: Data Ingestion
+    master_df = stage_data_ingestion()
+
+    # Stage 2: Feature Engineering
+    X_train, y_train, X_test, y_test, train_fe = stage_feature_engineering(master_df)
+
+    # Stage 3: Preprocessing
+    X_train_pp, X_test_pp, pp = stage_preprocessing(X_train, X_test)
+
+    # Stage 4: Class Balancing
+    X_train_bal, y_train_bal = stage_class_balancing(X_train_pp, y_train)
+
+    # Compute scale_pos_weight for algorithms that support it
+    n_neg = (y_train_bal == 0).sum()
+    n_pos = max((y_train_bal == 1).sum(), 1)
+    scale_pos_weight = float(n_neg / n_pos)
+
+    # Determine available models
+    model_names = ["random_forest", "xgboost", "gradient_boosting", "mlp"]
+    from models.model_zoo import LGBM_AVAILABLE, CATBOOST_AVAILABLE
+    if LGBM_AVAILABLE:
+        model_names.append("lightgbm")
+    if CATBOOST_AVAILABLE:
+        model_names.append("catboost")
+
+    # Stage 5: Hyperparameter Tuning
+    tuned_params = stage_hyperparameter_tuning(
+        model_names, X_train_bal, y_train_bal,
+        scale_pos_weight, n_trials=n_trials, skip_tuning=skip_tuning,
+    )
+
+    # Stage 6: Training
+    trained_models = stage_training(
+        model_names, tuned_params, X_train_bal, y_train_bal, scale_pos_weight,
+    )
+
+    if not trained_models:
+        logger.error("No models trained successfully. Aborting.")
+        return
+
+    # Stage 7: Evaluation
+    test_reports, cv_reports = stage_evaluation(
+        trained_models, X_train_pp, y_train, X_test_pp, y_test,
+    )
+
+    # Stage 8: Ensemble
+    ensemble, ensemble_meta = stage_ensemble(
+        trained_models, X_test_pp, y_test, top_n=min(3, len(trained_models)),
+    )
+
+    # Stage 9: Export
+    stage_export(
+        trained_models, ensemble, ensemble_meta,
+        test_reports, cv_reports, pp,
+        n_train=len(X_train_bal), n_test=len(X_test_pp),
+    )
+
+    elapsed = time.time() - start_time
+    logger.info("=" * 60)
+    logger.info("TRAINING PIPELINE COMPLETE")
+    logger.info(f"  Total time     : {elapsed:.1f}s")
+    logger.info(f"  Models trained : {len(trained_models)}")
+    logger.info(f"  Ensemble       : {ensemble.get_model_names()}")
+    logger.info(f"  Model version  : {MODEL_VERSION}")
+    logger.info("=" * 60)
+
+    # Print final results
+    print("\n" + "=" * 60)
+    print("FINAL MODEL PERFORMANCE")
+    print("=" * 60)
+    for name, report in test_reports.items():
+        m = report.get("metrics", {})
+        print(f"  {name:20s}  AUC={m.get('roc_auc', 'N/A'):>7}  F1={m.get('f1_score', 0):.3f}  Recall={m.get('recall', 0):.3f}")
+
+    ens_m = ensemble_meta.get("test_metrics", {})
+    print(f"  {'ENSEMBLE':20s}  AUC={ens_m.get('roc_auc', 'N/A'):>7}  F1={ens_m.get('f1_score', 0):.3f}  Recall={ens_m.get('recall', 0):.3f}")
+    print("=" * 60)
+
+
+# ── CLI ──────────────────────────────────────────────────────────────────
 
 if __name__ == "__main__":
-    train_models()
+    import argparse
+
+    parser = argparse.ArgumentParser(description="EWS Model Training Pipeline v2.0")
+    parser.add_argument(
+        "--skip-tuning", action="store_true",
+        help="Skip Optuna hyperparameter tuning (use defaults for faster training)",
+    )
+    parser.add_argument(
+        "--trials", type=int, default=50,
+        help="Number of Optuna trials per model (default: 50)",
+    )
+    args = parser.parse_args()
+
+    train_models(skip_tuning=args.skip_tuning, n_trials=args.trials)

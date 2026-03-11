@@ -1,7 +1,7 @@
 {
-  "version": "1.0",
-  "training_date": "2026-03-02",
-  "description": "Canonical feature registry for the EWS dropout prediction model. All features must appear in this exact order during both training and inference.",
+  "version": "2.0",
+  "training_date": "2026-03-11",
+  "description": "Canonical feature registry v2.0 for the EWS dropout prediction model. Includes advanced derived features for improved accuracy. All features must appear in this exact order during both training and inference.",
   "features": [
     {
       "name": "attendance_rate",
@@ -114,6 +114,90 @@
       "range": [-100.0, 100.0],
       "description": "Linear regression slope over [attendance_rate, avg_quiz_score, assignment_avg]. Positive = improving.",
       "missing_strategy": "zero_fill"
+    },
+    {
+      "name": "attendance_trend",
+      "type": "float",
+      "range": [-100.0, 100.0],
+      "description": "Rate of change in attendance over recent periods. Negative = declining attendance.",
+      "missing_strategy": "zero_fill"
+    },
+    {
+      "name": "gpa_improvement_rate",
+      "type": "float",
+      "range": [-100.0, 100.0],
+      "description": "Rate of change in academic scores (quiz + assignment avg). Positive = improving grades.",
+      "missing_strategy": "zero_fill"
+    },
+    {
+      "name": "assignment_completion_ratio",
+      "type": "float",
+      "range": [0.0, 1.0],
+      "description": "Ratio of assignments submitted vs total assignments available.",
+      "missing_strategy": "zero_fill"
+    },
+    {
+      "name": "engagement_activity_freq",
+      "type": "float",
+      "range": [0.0, 999.0],
+      "description": "Average number of platform engagement activities per week.",
+      "missing_strategy": "zero_fill"
+    },
+    {
+      "name": "weekly_study_hours_trend",
+      "type": "float",
+      "range": [-999.0, 999.0],
+      "description": "Slope of weekly time spent on platform. Negative = decreasing study time.",
+      "missing_strategy": "zero_fill"
+    },
+    {
+      "name": "attendance_rolling_avg_3",
+      "type": "float",
+      "range": [0.0, 100.0],
+      "description": "3-period rolling average of attendance rate. Smooths short-term fluctuations.",
+      "missing_strategy": "median_impute"
+    },
+    {
+      "name": "quiz_score_rolling_avg_3",
+      "type": "float",
+      "range": [0.0, 100.0],
+      "description": "3-period rolling average of quiz scores. Smooths short-term fluctuations.",
+      "missing_strategy": "median_impute"
+    },
+    {
+      "name": "login_streak_max",
+      "type": "integer",
+      "range": [0, 9999],
+      "description": "Maximum consecutive login days. Higher = more consistent platform usage.",
+      "missing_strategy": "zero_fill"
+    },
+    {
+      "name": "late_submission_ratio",
+      "type": "float",
+      "range": [0.0, 1.0],
+      "description": "Fraction of assignments submitted after deadline.",
+      "missing_strategy": "zero_fill"
+    },
+    {
+      "name": "engagement_score_composite",
+      "type": "float",
+      "range": [0.0, 100.0],
+      "description": "Weighted composite of logins, time, content, quizzes, and discussions.",
+      "missing_strategy": "zero_fill"
+    },
+    {
+      "name": "risk_behavior_index",
+      "type": "float",
+      "range": [0.0, 100.0],
+      "description": "Composite index combining low attendance, late submissions, low logins, and declining scores.",
+      "missing_strategy": "zero_fill"
+    },
+    {
+      "name": "performance_consistency",
+      "type": "float",
+      "range": [0.0, 999.0],
+      "description": "Standard deviation of academic scores (quiz, assignment, exam). Lower = more consistent.",
+      "missing_strategy": "zero_fill"
     }
   ],
   "target": {
@@ -123,12 +207,16 @@
     "description": "Binary dropout risk label. 1 = at-risk / dropped out, 0 = retained. Ground truth from institution."
   },
   "metadata": {
-    "n_features": 16,
+    "n_features": 28,
     "feature_names": [
       "attendance_rate", "avg_quiz_score", "assignment_avg", "exam_score",
       "num_logins", "time_spent_minutes", "content_completed", "content_completion_rate",
       "quiz_completion_rate", "quiz_attempts", "discussion_posts", "submission_delay_avg",
-      "engagement_frequency", "engagement_decay", "activity_variance", "performance_trend"
+      "engagement_frequency", "engagement_decay", "activity_variance", "performance_trend",
+      "attendance_trend", "gpa_improvement_rate", "assignment_completion_ratio",
+      "engagement_activity_freq", "weekly_study_hours_trend", "attendance_rolling_avg_3",
+      "quiz_score_rolling_avg_3", "login_streak_max", "late_submission_ratio",
+      "engagement_score_composite", "risk_behavior_index", "performance_consistency"
     ]
   }
 }
