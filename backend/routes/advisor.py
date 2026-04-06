@@ -1,19 +1,25 @@
 """
-AI Academic Advisor API Routes (Stubbed)
-Provides mock responses for AI-powered academic advising features.
+AI Academic Advisor API Routes
+Provides AI-powered academic advising features.
+
+All endpoints require authentication; study-plan/summary endpoints that
+access per-student PII require a staff-level role.
 """
 
-from fastapi import APIRouter, HTTPException, Header
+from fastapi import APIRouter, Depends, HTTPException
 from typing import Optional, Dict, Any
 from pydantic import BaseModel
 from datetime import datetime
 
-from backend.api.deps import get_db
+from backend.api.deps import get_db, get_current_user, require_role
+from backend.database.models.user import User
 from backend.services.student_service import StudentService
 from fastapi import Depends
 from sqlalchemy.orm import Session
 
 router = APIRouter(prefix="/advisor", tags=["AI Academic Advisor"])
+
+_STAFF_ROLES = ["faculty", "admin", "retention team"]
 
 
 class StudyPlanRequest(BaseModel):
@@ -24,9 +30,10 @@ class StudyPlanRequest(BaseModel):
 def get_study_plan(
     student_id: str,
     request: Optional[StudyPlanRequest] = None,
-    db: Session = Depends(get_db)
+    db: Session = Depends(get_db),
+    _user: User = Depends(require_role(_STAFF_ROLES)),
 ):
-    """Generate a personalized study plan for a student."""
+    """Generate a personalized study plan for a student. Staff only."""
     student = StudentService.get_student_by_id(db, student_id)
     if not student:
         raise HTTPException(status_code=404, detail=f"Student {student_id} not found")
@@ -60,9 +67,10 @@ def get_study_plan(
 def get_faculty_summary(
     student_id: str,
     include_talking_points: bool = True,
-    db: Session = Depends(get_db)
+    db: Session = Depends(get_db),
+    _user: User = Depends(require_role(_STAFF_ROLES)),
 ):
-    """Generate a faculty-appropriate student summary."""
+    """Generate a faculty-appropriate student summary. Staff only."""
     student = StudentService.get_student_by_id(db, student_id)
     if not student:
         raise HTTPException(status_code=404, detail=f"Student {student_id} not found")
@@ -95,9 +103,10 @@ def get_faculty_summary(
 @router.get("/context/{student_id}")
 def get_advisor_context(
     student_id: str,
-    db: Session = Depends(get_db)
+    db: Session = Depends(get_db),
+    _user: User = Depends(require_role(_STAFF_ROLES)),
 ):
-    """Get the advisor context for a student."""
+    """Get the advisor context for a student. Staff only."""
     student = StudentService.get_student_by_id(db, student_id)
     if not student:
         raise HTTPException(status_code=404, detail=f"Student {student_id} not found")
@@ -133,9 +142,10 @@ def get_advisor_context(
 def get_motivational_message(
     student_id: str,
     tone: str = "encouraging",
-    db: Session = Depends(get_db)
+    db: Session = Depends(get_db),
+    _user: User = Depends(require_role(_STAFF_ROLES)),
 ):
-    """Generate a motivational message for a student."""
+    """Generate a motivational message for a student. Staff only."""
     student = StudentService.get_student_by_id(db, student_id)
     if not student:
         raise HTTPException(status_code=404, detail=f"Student {student_id} not found")

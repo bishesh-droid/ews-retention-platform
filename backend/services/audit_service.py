@@ -26,7 +26,8 @@ class AuditService:
             timestamp=datetime.utcnow()
         )
         db.add(audit)
-        db.commit()
+        # Caller commits the transaction.
+        db.flush()
         db.refresh(audit)
         return audit
 

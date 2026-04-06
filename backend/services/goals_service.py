@@ -20,7 +20,8 @@ class GoalsService:
             status="active"
         )
         db.add(db_goal)
-        db.commit()
+        # Caller commits the transaction.
+        db.flush()
         db.refresh(db_goal)
         return db_goal
 
@@ -57,8 +58,8 @@ class GoalsService:
                 goal.status = "failed"
             
             db.add(goal)
-        
-        db.commit()
+        # Caller commits the transaction.
+        db.flush()
 
     @staticmethod
     def get_student_goals(db: Session, student_id: str) -> List[Goal]:

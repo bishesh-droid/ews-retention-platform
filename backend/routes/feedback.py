@@ -9,11 +9,13 @@ from typing import Optional
 from datetime import datetime, timedelta
 from pydantic import BaseModel
 
-from backend.api.deps import get_db
+from backend.api.deps import get_db, get_current_user
 from backend.database import StudentResponse, Intervention
+from fastapi import Depends
 
 router = APIRouter(
     responses={404: {"description": "Not found"}},
+    dependencies=[Depends(get_current_user)],
 )
 
 

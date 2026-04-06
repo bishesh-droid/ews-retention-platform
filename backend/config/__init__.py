@@ -37,10 +37,18 @@ DATABASE_URL: str = os.getenv(
 # ---------------------------------------------------------------------------
 # Security / Auth
 # ---------------------------------------------------------------------------
-SECRET_KEY: str = os.getenv(
-    "SECRET_KEY",
-    "CHANGE_ME_IN_PRODUCTION_a3f9c2e1b7d4e8f0a1b2c3d4e5f60718"
-)
+_INSECURE_DEFAULT_KEY = "CHANGE_ME_IN_PRODUCTION_a3f9c2e1b7d4e8f0a1b2c3d4e5f60718"
+ENVIRONMENT: str = os.getenv("ENVIRONMENT", "development").lower()
+
+SECRET_KEY: str = os.getenv("SECRET_KEY", _INSECURE_DEFAULT_KEY)
+
+# Fail-fast: never allow the default key in production.
+if ENVIRONMENT == "production" and SECRET_KEY == _INSECURE_DEFAULT_KEY:
+    raise RuntimeError(
+        "SECRET_KEY environment variable must be set to a strong, unique value in "
+        "production. The hardcoded development default is NOT acceptable."
+    )
+
 ALGORITHM: str = os.getenv("ALGORITHM", "HS256")
 ACCESS_TOKEN_EXPIRE_MINUTES: int = int(os.getenv("ACCESS_TOKEN_EXPIRE_MINUTES", "60"))
 
@@ -73,11 +81,14 @@ REDIS_URL: str = os.getenv("REDIS_URL", "redis://localhost:6379/0")
 CACHE_EXPIRE_SECONDS: int = int(os.getenv("CACHE_EXPIRE_SECONDS", "300"))
 
 # ---------------------------------------------------------------------------
-# ML / Risk thresholds
+# ML / Risk thresholds  (0-100 scale — matches RiskScorer output)
 # ---------------------------------------------------------------------------
-RISK_THRESHOLD_HIGH: float = float(os.getenv("RISK_THRESHOLD_HIGH", "0.7"))
-RISK_THRESHOLD_MEDIUM: float = float(os.getenv("RISK_THRESHOLD_MEDIUM", "0.4"))
-RISK_THRESHOLD_LOW: float = float(os.getenv("RISK_THRESHOLD_LOW", "0.2"))
+# High  : risk_score >= 70  → urgent intervention
+# Medium: risk_score >= 40  → proactive outreach
+# Low   : risk_score <  40  → monitoring only
+RISK_THRESHOLD_HIGH: float = float(os.getenv("RISK_THRESHOLD_HIGH", "70.0"))
+RISK_THRESHOLD_MEDIUM: float = float(os.getenv("RISK_THRESHOLD_MEDIUM", "40.0"))
+RISK_THRESHOLD_LOW: float = float(os.getenv("RISK_THRESHOLD_LOW", "20.0"))
 
 DEFAULT_MODEL_TYPE: str = os.getenv("DEFAULT_MODEL_TYPE", "xgboost")
 
@@ -92,10 +103,10 @@ SIGNAL_WEIGHTS: dict = {
 # Intervention thresholds & business logic
 # ---------------------------------------------------------------------------
 INTERVENTION_THRESHOLDS: dict = {
-    "no_action": float(os.getenv("THRESHOLD_NO_ACTION", "0.30")),
-    "gentle_reminder": float(os.getenv("THRESHOLD_GENTLE", "0.30")),
-    "mentor_outreach": float(os.getenv("THRESHOLD_MENTOR", "0.60")),
-    "urgent": float(os.getenv("THRESHOLD_URGENT", "0.80")),
+    "no_action": float(os.getenv("THRESHOLD_NO_ACTION", "30.0")),
+    "gentle_reminder": float(os.getenv("THRESHOLD_GENTLE", "40.0")),
+    "mentor_outreach": float(os.getenv("THRESHOLD_MENTOR", "60.0")),
+    "urgent": float(os.getenv("THRESHOLD_URGENT", "80.0")),
 }
 
 INTERVENTION_COOLDOWN_DAYS: int = int(os.getenv("INTERVENTION_COOLDOWN_DAYS", "7"))

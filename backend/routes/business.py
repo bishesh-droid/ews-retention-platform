@@ -8,13 +8,13 @@ Endpoints for business intelligence and executive reporting:
 - Retention funnel data
 """
 
-from fastapi import APIRouter, HTTPException, Header, Query, Depends
+from fastapi import APIRouter, HTTPException, Query, Depends
 from typing import Optional, List, Dict, Any
 from pydantic import BaseModel
 from datetime import datetime
 from sqlalchemy.orm import Session
 
-from backend.api.deps import get_db
+from backend.api.deps import get_db, get_current_user
 from backend.services.student_service import StudentService
 from backend.config import (
     AVERAGE_STUDENT_LTV,
@@ -25,7 +25,11 @@ from backend.config import (
 )
 from backend.utils.api import success_response
 
-router = APIRouter(prefix="/business", tags=["Business Intelligence"])
+router = APIRouter(
+    prefix="/business",
+    tags=["Business Intelligence"],
+    dependencies=[Depends(get_current_user)],
+)
 
 
 # Response Models

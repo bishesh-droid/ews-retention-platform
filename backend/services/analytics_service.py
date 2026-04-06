@@ -40,7 +40,8 @@ class AnalyticsService:
             timestamp=datetime.utcnow()
         )
         db.add(snapshot)
-        db.commit()
+        # Caller commits the transaction.
+        db.flush()
         db.refresh(snapshot)
         return snapshot
 

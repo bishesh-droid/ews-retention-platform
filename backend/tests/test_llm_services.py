@@ -207,9 +207,9 @@ class TestAuditLogger:
             sources=["attendance_records", "grade_data"]
         )
         
-        # Verify db.add and db.commit were called
+        # Verify db.add and db.flush were called
         assert self.db.add.called
-        assert self.db.commit.called
+        assert self.db.flush.called
     
     def test_compliance_report_structure(self):
         """Test compliance report generation."""

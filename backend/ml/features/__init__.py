@@ -1,11 +1,7 @@
 """
-ML Features Package
-------------------
-Feature engineering and extraction modules.
+ML Features package.
+feature_engineering.py was removed — the canonical feature engineering
+lives in backend/services/feature_engineering.py (DB-derived LMS features).
 """
 
-from backend.ml.features.feature_engineering import create_features
-
-__all__ = [
-    "create_features",
-]
+__all__ = []

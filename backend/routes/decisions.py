@@ -7,12 +7,14 @@ from fastapi import APIRouter, Depends, HTTPException, Query
 from sqlalchemy.orm import Session
 from datetime import date
 
-from backend.api.deps import get_db
+from backend.api.deps import get_db, get_current_user
 from backend.services.student_service import StudentService
 from backend.database import Student, Intervention
+from fastapi import Depends
 
 router = APIRouter(
     responses={404: {"description": "Not found"}},
+    dependencies=[Depends(get_current_user)],
 )
 
 

@@ -27,8 +27,13 @@ RANDOM_STATE = 42
 TEST_SIZE = 0.2
 CROSS_VALIDATION_FOLDS = 5
 
-# Prediction thresholds (imported from main config)
+# Prediction thresholds — imported from main config (0-100 scale)
 from backend.config import RISK_THRESHOLD_HIGH, RISK_THRESHOLD_MEDIUM, RISK_THRESHOLD_LOW
+
+# Normalised 0-1 versions for any ML model that outputs probability
+RISK_PROB_HIGH: float = RISK_THRESHOLD_HIGH / 100.0
+RISK_PROB_MEDIUM: float = RISK_THRESHOLD_MEDIUM / 100.0
+RISK_PROB_LOW: float = RISK_THRESHOLD_LOW / 100.0
 
 # Model versioning
 MODEL_VERSION = os.getenv("MODEL_VERSION", "v1.0")

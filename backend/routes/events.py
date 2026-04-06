@@ -10,11 +10,13 @@ from pydantic import BaseModel
 from typing import Optional, Dict, Any
 import json
 
-from backend.api.deps import get_db
+from backend.api.deps import get_db, get_current_user
 from backend.database import RawEvent
+from fastapi import Depends
 
 router = APIRouter(
     responses={404: {"description": "Not found"}},
+    dependencies=[Depends(get_current_user)],
 )
 
 

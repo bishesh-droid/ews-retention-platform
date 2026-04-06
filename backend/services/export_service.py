@@ -48,4 +48,5 @@ class ExportService:
             timestamp=datetime.utcnow()
         )
         db.add(audit)
-        db.commit()
+        # Caller commits the transaction.
+        db.flush()

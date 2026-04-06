@@ -15,12 +15,16 @@ from pydantic import BaseModel
 from sqlalchemy.orm import Session
 from sqlalchemy import desc
 
-from backend.api.deps import get_db
+from backend.api.deps import get_db, get_current_user
 from backend.database import Intervention, Student
 from backend.utils.api import success_response
+from fastapi import Depends
 
-
-router = APIRouter(prefix="/interventions", tags=["interventions"])
+router = APIRouter(
+    prefix="/interventions",
+    tags=["interventions"],
+    dependencies=[Depends(get_current_user)],
+)
 
 
 class InterventionCreateRequest(BaseModel):

@@ -258,6 +258,8 @@ def generate_report(
         },
     )
 
+    db.commit()
+
     return success_response(
         {
             "id": audit.id,
@@ -331,6 +333,8 @@ def export_students(
     ]
     
     ExportService.log_export(db, current_user.id, current_user.role, f"students_{format}")
+
+    db.commit()
     
     if format == "csv":
         content = ExportService.to_csv(data)
@@ -358,6 +362,8 @@ def export_risk_summary(
     ]
     
     ExportService.log_export(db, current_user.id, current_user.role, f"risk_summary_{format}")
+
+    db.commit()
     
     # ... logic similar to above ...
     return {"message": "Export initiated"}

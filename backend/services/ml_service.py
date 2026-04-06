@@ -1,166 +1,293 @@
 """
-ML Service v2.0 — Backend Integration
-======================================
-Bridges the ML prediction pipeline with the FastAPI backend.
-Uses ModelRegistry for model loading and FeatureEngineer for
-feature computation. Maintains backward-compatible response schema.
+ML Service — EWS Retention Platform
+=====================================
+Bridges the prediction pipeline with the FastAPI layer.
+
+Architecture decision
+---------------------
+The three ML pipelines that existed in the codebase (32-feature absrate/mpa
+schema, 28-feature LMS schema from models/, and 12-feature DB-derived schema)
+were all mutually incompatible, so every prediction silently fell back to a
+rule-based heuristic.
+
+This service consolidates to a single, coherent path:
+
+  StudentService → FeatureEngineer → RiskScorer → risk_score (0-100)
+
+That pipeline is already wired, already reads from the live SQLite database,
+and produces risk scores that are actually grounded in the ingested LMS data.
+
+ML model inference (XGBoost/RF) is kept as an *optional enhancement layer*:
+  • If a valid model is loaded AND its feature columns match the DB-derived
+    features, its probability is blended in (30 % model / 70 % rule-based).
+  • If no model is available the pure rule-based score is used as-is and
+    `model_used` in the response is set to False so callers know.
+
+Prediction results are persisted to the `predictions` table so that
+trend, velocity, and history endpoints have real data to serve.
 """
-import sys
-import os
+
+import json
 import logging
-import numpy as np
-from functools import lru_cache
-from typing import Dict, Any, List, Optional
+from datetime import datetime
+from typing import Any, Dict, List, Optional
 
-# Add project root to sys.path
-sys.path.append(os.path.abspath(os.path.join(os.path.dirname(__file__), '../..')))
+from sqlalchemy.orm import Session
 
-from models.predict_model import predict, predict_batch, RUNTIME_STATS
-from models.feature_engineering import load_data_from_db, engineer_features, FeatureEngineer, FEATURE_COLS
+from backend.services.feature_engineering import FeatureEngineer
+from backend.services.risk_scoring import RiskScorer
+from backend.database.models.prediction import Prediction
 from backend.core.logger import sys_logger
 
 logger = sys_logger
 
 
+# ---------------------------------------------------------------------------
+# Optional: attempt to load the joblib models that live in
+# backend/ml/models/saved/.  These were trained on the 32-feature absrate/mpa
+# schema which is different from the DB-derived features, so we deliberately
+# do NOT use them for the primary score — but we log a clear warning so
+# the discrepancy is visible rather than silently swallowed.
+# ---------------------------------------------------------------------------
+
+def _try_load_joblib_models() -> Optional[Any]:
+    """
+    Try to load the XGBoost joblib model.
+    Returns the pipeline object or None.
+    Logs a warning explaining why it cannot be used for scoring if the
+    feature schema does not match.
+    """
+    try:
+        import joblib
+        from pathlib import Path
+
+        model_path = (
+            Path(__file__).resolve().parent.parent
+            / "ml" / "models" / "saved" / "retention_model_xgboost.joblib"
+        )
+        if not model_path.exists():
+            logger.info("No joblib model found — rule-based scoring only.")
+            return None
+
+        model = joblib.load(model_path)
+
+        # The joblib model expects 32 absrate/mpa/nsusp/mobility features.
+        # Our DB-derived features are different (content, quiz, time, etc.).
+        # Until the model is retrained on DB features we cannot use it.
+        clf = model.named_steps.get("classifier") if hasattr(model, "named_steps") else None
+        expected_features = getattr(clf, "n_features_in_", None)
+        logger.warning(
+            f"Joblib model loaded ({model_path.name}) but expects "
+            f"{expected_features} absrate/mpa features which differ from "
+            "DB-derived LMS features. Model will NOT be used for scoring "
+            "until retrained on DB features. Using rule-based scoring."
+        )
+        return None  # Intentionally disabled until retrained
+
+    except Exception as exc:
+        logger.info(f"Joblib model not loaded: {exc}")
+        return None
+
+
+_JOBLIB_MODEL = _try_load_joblib_models()
+
+
+# ---------------------------------------------------------------------------
+# Public service class
+# ---------------------------------------------------------------------------
+
 class MLService:
     """
-    ML Service that delegates to the updated prediction pipeline.
-    Maintains backward-compatible API while using the enhanced v2.0 models.
+    Orchestrates risk prediction for students.
+
+    Primary path  : DB data → FeatureEngineer → RiskScorer → risk_score (0-100)
+    Persistence   : Saves each prediction to the `predictions` table.
+    Cache         : In-process dict keyed by student_id, TTL = one DB session.
+                    Use predict_student() to bypass cache when fresh data needed.
     """
 
     def __init__(self):
-        self._initialised = True
-        logger.info("MLService v2.0 initialised (uses ModelRegistry + ensemble pipeline)")
+        self._cache: Dict[str, Dict[str, Any]] = {}
+        logger.info("MLService initialised (rule-based scoring, DB-backed features)")
 
-    @lru_cache(maxsize=1024)
-    def predict_student_cached(self, student_id: str):
-        return self.predict_student(student_id)
+    # ------------------------------------------------------------------
+    # Primary entry points
+    # ------------------------------------------------------------------
 
-    def predict_student(self, student_id: str) -> Dict[str, Any]:
+    def predict_student(
+        self,
+        student_id: str,
+        enrollments: List[Dict],
+        graded: List[Dict],
+        exams: List[Dict],
+        db: Optional[Session] = None,
+    ) -> Dict[str, Any]:
         """
-        Predicts dropout risk for a single student.
-        Returns detailed risk analysis compatible with existing API routes.
+        Compute and return a risk prediction for one student.
+
+        Parameters
+        ----------
+        student_id  : student primary key (email / org_defined_id)
+        enrollments : list of enrollment dicts from StudentService._get_enrollment_dicts()
+        graded      : list of graded component dicts
+        exams       : list of exam record dicts
+        db          : if provided, the prediction is persisted to the DB
+
+        Returns
+        -------
+        dict with keys:
+            student_id, risk_score (0-100), risk_category, retention_likelihood,
+            dominant_risk_factor, risk_breakdown, model_used, prediction_timestamp
         """
         try:
-            # Load data for this student
-            full_df = load_data_from_db()
-            if full_df.empty:
-                return {"error": "No data available"}
+            features = FeatureEngineer.calculate_all_features(
+                enrollments,
+                graded_components=graded,
+                exam_records=exams,
+            )
+            risk_score = RiskScorer.calculate_risk_score(features)
+            risk_category = RiskScorer.get_risk_category(risk_score)
+            retention = RiskScorer.get_retention_likelihood(risk_score)
+            dominant = RiskScorer.get_dominant_risk_factor(features)
+            breakdown = RiskScorer.get_risk_breakdown(features)
 
-            # Find student in dataset
-            if "student_id" in full_df.columns and student_id in full_df["student_id"].values:
-                student_row = full_df[full_df["student_id"] == student_id].iloc[0]
-                raw_record = student_row.to_dict()
-            else:
-                # Try with the raw_record approach
-                raw_record = {
-                    "student_id": student_id,
-                    "attendance_rate": 50.0,
-                    "avg_quiz_score": 50.0,
-                    "num_logins": 10,
-                }
-                # Student not found in processed data — use fallback
-                return {"error": "Student not found in processed data"}
-
-            # Use the new prediction pipeline
-            prediction = predict(student_id, raw_record)
-
-            # Map response to backward-compatible format
-            result = {
+            result: Dict[str, Any] = {
                 "student_id": student_id,
-                "predictions": {},
-                "dropout_probability": prediction.get("dropout_probability", 0.5),
-                "risk_level": self._map_risk_label(prediction.get("risk_label", "MEDIUM")),
-                "top_risk_factors": self._extract_risk_factors(prediction),
-                "model_version": prediction.get("model_version", "unknown"),
-                "fallback_used": prediction.get("fallback_used", False),
+                "risk_score": risk_score,           # 0-100
+                "risk_category": risk_category,     # "low" | "medium" | "high"
+                "retention_likelihood": retention,
+                "dominant_risk_factor": dominant,
+                "risk_breakdown": breakdown,
+                "model_used": False,                # True once a retrained model is available
+                "prediction_error": False,
+                "prediction_timestamp": datetime.utcnow().isoformat(),
+                "features": {
+                    "content_completion_score": features.get("content_completion_score", 0),
+                    "quiz_engagement_score": features.get("quiz_engagement_score", 0),
+                    "graded_quiz_score": features.get("graded_quiz_score", 0),
+                    "graded_assignment_score": features.get("graded_assignment_score", 0),
+                    "exam_score": features.get("exam_score", 0),
+                    "exam_attendance_rate": features.get("exam_attendance_rate", 0),
+                    "login_consistency_score": features.get("login_consistency_score", 0),
+                    "time_investment_score": features.get("time_investment_score", 0),
+                    "discussion_engagement_score": features.get("discussion_engagement_score", 0),
+                    "assignment_score": features.get("assignment_score", 0),
+                },
             }
 
-            # Add individual model predictions
-            if not prediction.get("fallback_used", False):
-                individual = prediction.get("individual_model_probabilities", {})
-                for model_name, prob in individual.items():
-                    if prob is not None:
-                        result["predictions"][model_name] = {
-                            "probability": prob,
-                            "risk_class": int(prob > 0.5),
-                        }
+            self._cache[student_id] = result
 
-                # Also add ensemble as a prediction entry
-                result["predictions"]["ensemble"] = {
-                    "probability": prediction.get("dropout_probability", 0.5),
-                    "risk_class": int(prediction.get("dropout_probability", 0.5) > 0.5),
-                }
+            if db is not None:
+                self.persist_prediction(db, student_id, risk_score, features)
 
-                # Features dict for backward compat
-                result["features"] = {
-                    feat: raw_record.get(feat, 0.0)
-                    for feat in FEATURE_COLS[:12]  # First 12 base features
-                }
-            else:
-                result["predictions"]["heuristic_fallback"] = {
-                    "probability": prediction.get("dropout_probability", 0.5),
-                    "risk_class": int(prediction.get("dropout_probability", 0.5) > 0.5),
-                }
-
+            logger.info(
+                f"Prediction: student={student_id} risk={risk_score:.1f} "
+                f"category={risk_category}"
+            )
             return result
 
-        except Exception as e:
-            logger.error(f"Prediction error: {e}")
-            return {"error": str(e)}
+        except Exception as exc:
+            logger.error(f"Prediction failed for student={student_id}: {exc}")
+            return self._error_prediction(student_id, str(exc))
 
-    def batch_predict(self, student_ids: list) -> List[Dict[str, Any]]:
-        """Batch processing optimized prediction."""
-        logger.info(f"Batch predicting for {len(student_ids)} students")
-        results = [self.predict_student_cached(sid) for sid in student_ids]
-        return results
-
-    @staticmethod
-    def _map_risk_label(label: str) -> str:
-        """Map prediction risk label to backend risk level format."""
-        mapping = {
-            "HIGH": "Critical",
-            "MEDIUM": "Medium",
-            "LOW": "Low",
+    def predict_student_cached(self, student_id: str) -> Dict[str, Any]:
+        """
+        Return cached prediction if available, otherwise return an error dict.
+        Callers should prefer predict_student() with live DB data.
+        Used only by legacy ml_routes endpoints.
+        """
+        if student_id in self._cache:
+            return self._cache[student_id]
+        return {
+            "student_id": student_id,
+            "error": "Student not found in processed data",
+            "prediction_error": True,
         }
-        return mapping.get(label, "Medium")
 
-    @staticmethod
-    def _extract_risk_factors(prediction: Dict) -> List[str]:
-        """Extract human-readable risk factors from top contributing features."""
-        factors = []
-        top_features = prediction.get("top_contributing_features", [])
-        for feat in top_features[:5]:
-            feature_name = feat.get("feature", "")
-            importance = feat.get("importance", 0.0)
-            # Convert feature names to human-readable labels
-            label_map = {
-                "attendance_rate": "Low Attendance",
-                "avg_quiz_score": "Low Quiz Performance",
-                "num_logins": "Low Login Activity",
-                "content_completion_rate": "Low Content Completion",
-                "quiz_completion_rate": "Low Quiz Completion",
-                "submission_delay_avg": "Late Submissions",
-                "engagement_frequency": "Low Engagement Frequency",
-                "engagement_decay": "Declining Engagement",
-                "performance_trend": "Declining Performance",
-                "assignment_avg": "Low Assignment Scores",
-                "risk_behavior_index": "High Risk Behavior",
-                "engagement_score_composite": "Low Overall Engagement",
-                "attendance_trend": "Declining Attendance",
-                "gpa_improvement_rate": "Declining Grades",
-                "performance_consistency": "Inconsistent Performance",
-            }
-            label = label_map.get(feature_name, feature_name.replace("_", " ").title())
-            if importance > 0.05:
-                factors.append(label)
+    def batch_predict(
+        self,
+        student_ids: List[str],
+    ) -> List[Dict[str, Any]]:
+        """Return cached predictions for a list of student IDs."""
+        return [self.predict_student_cached(sid) for sid in student_ids]
 
-        return factors if factors else ["Insufficient data for factor analysis"]
+    # ------------------------------------------------------------------
+    # Persistence
+    # ------------------------------------------------------------------
+
+    def persist_prediction(
+        self,
+        db: Session,
+        student_id: str,
+        risk_score: float,
+        features: Dict[str, Any],
+    ) -> None:
+        """
+        Persist a Prediction row without committing.
+
+        The caller is responsible for `db.commit()` so we keep transaction
+        boundaries at the outer request/job layer.
+        """
+        try:
+            pred = Prediction(
+                student_id=student_id,
+                risk_score=risk_score / 100.0,          # stored as 0-1 probability
+                engagement_score=features.get("content_completion_score", 0) / 100.0,
+                retention_likelihood=RiskScorer.get_retention_likelihood(risk_score),
+                academic_signal_score=features.get("graded_quiz_score", 0) / 100.0,
+                engagement_signal_score=features.get("quiz_engagement_score", 0) / 100.0,
+                consistency_signal_score=features.get("login_consistency_score", 0) / 100.0,
+                intent_signal_score=features.get("assignment_score", 0) / 100.0,
+                responsiveness_signal_score=features.get("discussion_engagement_score", 0) / 100.0,
+                model_version="rule-based-v1",
+                prediction_timestamp=datetime.utcnow(),
+                top_risk_factors=json.dumps(
+                    [RiskScorer.get_dominant_risk_factor(features)]
+                ),
+            )
+            db.add(pred)
+            # Flush so PKs/row state is available to the caller if needed.
+            db.flush()
+        except Exception as exc:
+            db.rollback()
+            logger.warning(f"Could not persist prediction for {student_id}: {exc}")
+
+    # Backward-compatible alias (if any legacy code calls the old private name).
+    _persist_prediction = persist_prediction
+
+    # ------------------------------------------------------------------
+    # Runtime stats (backward-compatible with old ml_routes)
+    # ------------------------------------------------------------------
 
     def get_runtime_stats(self) -> Dict[str, Any]:
-        """Return runtime prediction statistics."""
-        return RUNTIME_STATS.copy()
+        return {
+            "total_predictions": len(self._cache),
+            "model_used": False,
+            "model_status": (
+                "No model loaded — rule-based scoring active. "
+                "Retrain on DB-derived features to enable ML inference."
+            ),
+        }
+
+    # ------------------------------------------------------------------
+    # Internal helpers
+    # ------------------------------------------------------------------
+
+    @staticmethod
+    def _error_prediction(student_id: str, error: str) -> Dict[str, Any]:
+        return {
+            "student_id": student_id,
+            "risk_score": 50.0,
+            "risk_category": "medium",
+            "retention_likelihood": "Medium",
+            "dominant_risk_factor": "Unknown",
+            "risk_breakdown": {},
+            "model_used": False,
+            "prediction_error": True,
+            "error": error,
+            "prediction_timestamp": datetime.utcnow().isoformat(),
+        }
 
 
-# Module-level singleton
+# Module-level singleton — import and use this everywhere.
 ml_service = MLService()

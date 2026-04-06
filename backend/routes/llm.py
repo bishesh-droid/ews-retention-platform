@@ -10,11 +10,12 @@ from typing import Optional, Dict, Any
 from pydantic import BaseModel
 from datetime import datetime
 
-from backend.api.deps import get_db
+from backend.api.deps import get_db, get_current_user
 from backend.services.student_service import StudentService
 from backend.utils.api import success_response
+from fastapi import Depends
 
-router = APIRouter()
+router = APIRouter(dependencies=[Depends(get_current_user)])
 
 
 class RiskExplanationRequest(BaseModel):

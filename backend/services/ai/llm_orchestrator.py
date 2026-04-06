@@ -44,11 +44,13 @@ class LLMOrchestrator:
         self.llm_provider = LLM_PROVIDER
         self.llm_model_name = None
         self.llm_client = None
+        self.model = None
 
         if self.llm_provider == "gemini":
             if GENAI_AVAILABLE and GEMINI_API_KEY:
                 self.llm_model_name = GEMINI_MODEL
                 self.llm_client = genai.GenerativeModel(self.llm_model_name)
+                self.model = self.llm_client
         elif self.llm_provider == "claude":
             if ANTHROPIC_AVAILABLE and CLAUDE_API_KEY:
                 self.llm_model_name = CLAUDE_MODEL
@@ -105,6 +107,49 @@ class LLMOrchestrator:
         
         return None
     
+    def _invoke_llm(self, prompt: str, system_message: Optional[str] = None) -> str:
+        """Unified provider-agnostic LLM invocation."""
+        if self.llm_provider == "gemini":
+            try:
+                full_prompt = prompt
+                if system_message:
+                    full_prompt = f"{system_message.strip()}\n\n{prompt}"
+                response = self.llm_client.generate_content(full_prompt)
+                text = getattr(response, "text", None)
+                if isinstance(text, str) and text.strip():
+                    return text.strip()
+                raise ValueError("Gemini returned an empty response body")
+            except Exception as e:
+                raise RuntimeError(f"Gemini generation failed: {str(e)}") from e
+        
+        if self.llm_provider == "claude":
+            try:
+                response = self.llm_client.messages.create(
+                    model=self.llm_model_name,
+                    max_tokens=LLM_MAX_TOKENS,
+                    temperature=LLM_TEMPERATURE,
+                    system=system_message or "",
+                    messages=[{"role": "user", "content": prompt}],
+                )
+                blocks = getattr(response, "content", []) or []
+                text_parts: List[str] = []
+                for block in blocks:
+                    block_text = getattr(block, "text", None)
+                    if isinstance(block_text, str) and block_text.strip():
+                        text_parts.append(block_text.strip())
+                combined = "\n".join(text_parts).strip()
+                if combined:
+                    return combined
+                raise ValueError("Claude returned an empty response body")
+            except Exception as e:
+                raise RuntimeError(f"Claude generation failed: {str(e)}") from e
+        
+        raise RuntimeError(f"Unsupported LLM provider configured: {self.llm_provider}")
+    
+    def _generate_content(self, system_message: str, user_message: str) -> str:
+        """Backward-compatible helper for existing internal call sites."""
+        return self._invoke_llm(prompt=user_message, system_message=system_message)
+    
     def explain_risk_change(self, student_id: str, time_period: str = "recent") -> Dict[str, Any]:
         """
         Explain why a student's risk score changed.
@@ -136,8 +181,7 @@ class LLMOrchestrator:
         
         # Generate response
         try:
-            response = self.model.generate_content(prompt)
-            explanation = response.text
+            explanation = self._invoke_llm(prompt)
             
             # Validate response
             validation = GuardrailValidator.validate_response(explanation, student_context)
@@ -149,7 +193,7 @@ class LLMOrchestrator:
                 "content": explanation,
                 "confidence": confidence,
                 "sources": student_context.get("data_sources", []),
-                "timestamp": student_context["retrieved_at"],
+                "timestamp": student_context.get("retrieved_at"),
                 "student_id": student_id,
                 "validation": validation
             }
@@ -182,14 +226,14 @@ class LLMOrchestrator:
             return {
                 "content": "I don't have enough information about your academic progress to provide specific advice.",
                 "confidence": "low",
-                "sources": []
+                "sources": [],
+                "error": student_context.get("error", "Student context unavailable")
             }
         
         prompt = self._build_student_advice_prompt(student_context, question)
         
         try:
-            response = self.model.generate_content(prompt)
-            advice = response.text
+            advice = self._invoke_llm(prompt)
             
             validation = GuardrailValidator.validate_response(advice, student_context)
             confidence = self._calculate_confidence(validation, student_context)
@@ -198,7 +242,7 @@ class LLMOrchestrator:
                 "content": advice,
                 "confidence": confidence,
                 "sources": student_context.get("data_sources", []),
-                "timestamp": student_context["retrieved_at"]
+                "timestamp": student_context.get("retrieved_at")
             }
         except Exception as e:
             return {
@@ -229,7 +273,8 @@ class LLMOrchestrator:
             return {
                 "content": "Student profile unavailable.",
                 "confidence": "low",
-                "sources": []
+                "sources": [],
+                "error": student_context.get("error", "Student context unavailable")
             }
         
         system_message_profile_summary = f"You are an AI assistant helping {for_role} quickly understand a student's situation."
@@ -276,7 +321,8 @@ class LLMOrchestrator:
             return {
                 "content": [],
                 "confidence": "low",
-                "sources": []
+                "sources": [],
+                "error": student_context.get("error", "Student context unavailable")
             }
         
         system_message_interventions = "You are an intervention specialist suggesting evidence-based actions for at-risk students."
@@ -319,7 +365,8 @@ class LLMOrchestrator:
             return {
                 "content": "Insufficient cohort data for analysis.",
                 "confidence": "low",
-                "sources": []
+                "sources": [],
+                "error": cohort_context.get("error", "Cohort context unavailable")
             }
         
         system_message_cohort_analysis = "You are a retention analyst translating academic risk into business insights for sales/retention teams."
@@ -363,7 +410,8 @@ class LLMOrchestrator:
             return {
                 "content": "Can't simulate scenarios without student data.",
                 "confidence": "low",
-                "sources": []
+                "sources": [],
+                "error": student_context.get("error", "Student context unavailable")
             }
         
         system_message_what_if = "You are an academic advisor explaining the likely impact of behavior changes."

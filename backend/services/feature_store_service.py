@@ -15,8 +15,8 @@ class FeatureStoreService:
         students = db.query(Student).all()
         for student in students:
             FeatureStoreService.compute_student_features(db, student.id)
-        
-        db.commit()
+        # Persist pending changes to the DB transaction; caller commits.
+        db.flush()
 
     @staticmethod
     def compute_student_features(db: Session, student_id: str):

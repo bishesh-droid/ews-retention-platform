@@ -36,7 +36,9 @@ def create_goal(
     """
     Create a new goal for a student (Faculty/Admin only).
     """
-    return GoalsService.create_goal(db, student_id, goal_type, title, target_value, end_date)
+    goal = GoalsService.create_goal(db, student_id, goal_type, title, target_value, end_date)
+    db.commit()
+    return goal
 
 @router.post("/{student_id}/sync")
 def sync_goal_progress(
@@ -48,4 +50,5 @@ def sync_goal_progress(
     Manually trigger progress sync for a student's goals.
     """
     GoalsService.update_goal_progress(db, student_id)
+    db.commit()
     return {"status": "success"}

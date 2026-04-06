@@ -61,7 +61,8 @@ class AuditLogger:
         )
         
         self.db.add(audit_entry)
-        self.db.commit()
+        # Caller commits the transaction.
+        self.db.flush()
         self.db.refresh(audit_entry)
         
         return audit_entry.id

@@ -1,97 +1,132 @@
-from fastapi import Depends, Header, HTTPException, status
+"""
+FastAPI dependency injection helpers.
+
+Security model
+--------------
+* Authentication  – `get_current_user` validates the Bearer JWT and returns the
+                    database User row.  Missing / invalid token → 401.
+* Authorization   – `require_role(["Admin", "Faculty"])` is a dependency factory
+                    that wraps `get_current_user`.  Wrong role → 403.
+                    Superusers (is_superuser=True) bypass role checks.
+
+REMOVED (was a critical vulnerability):
+  - `get_current_user_role` — read role from a forgeable X-User-Role header and
+    defaulted to "admin" when absent, granting admin access to every anonymous request.
+  - `require_role` that called the above instead of verifying the JWT.
+"""
+
+from typing import List, Optional
+
+from fastapi import Depends, HTTPException, status
 from fastapi.security import OAuth2PasswordBearer
-from jose import jwt, JWTError
+from jose import JWTError, jwt
 from sqlalchemy.orm import Session
-from typing import Generator, Optional
 
-from backend.database import SessionLocal, User
-from backend.config import SECRET_KEY, ALGORITHM
-from backend.core.auth import pwd_context
+from backend.config import ALGORITHM, SECRET_KEY
+from backend.database.session import get_db, get_db_async
+from backend.database.models.user import User
 
-reusable_oauth2 = OAuth2PasswordBearer(
-    tokenUrl="/api/v1/auth/login"
-)
+# Re-exported so routes can write `deps.User` without an extra import.
+__all__ = ["get_db", "get_db_async", "get_current_user", "require_role", "User"]
 
-def get_db() -> Generator:
-    try:
-        db = SessionLocal()
-        yield db
-    finally:
-        db.close()
+# auto_error=True: FastAPI returns a standards-compliant 401 + WWW-Authenticate
+# header automatically when no Bearer token is present, before our code runs.
+reusable_oauth2 = OAuth2PasswordBearer(tokenUrl="/api/v1/auth/login", auto_error=True)
+
+
+# ---------------------------------------------------------------------------
+# Database session
+# ---------------------------------------------------------------------------
+
+
+# ---------------------------------------------------------------------------
+# Authentication
+# ---------------------------------------------------------------------------
 
 def get_current_user(
-    db: Session = Depends(get_db), token: str = Depends(reusable_oauth2)
+    db: Session = Depends(get_db),
+    token: str = Depends(reusable_oauth2),
 ) -> User:
+    """
+    Decode a Bearer JWT and return the corresponding User row.
+
+    Raises:
+      401 Unauthorized — token absent, malformed, expired, or signature invalid.
+      403 Forbidden    — token is valid but the account is inactive.
+
+    Using 401 (not 403) for token failures is the correct HTTP semantics:
+    401 = "you are not authenticated", 403 = "authenticated but not allowed".
+    """
+    credentials_exc = HTTPException(
+        status_code=status.HTTP_401_UNAUTHORIZED,
+        detail="Could not validate credentials",
+        headers={"WWW-Authenticate": "Bearer"},
+    )
+
     try:
-        payload = jwt.decode(
-            token, SECRET_KEY, algorithms=[ALGORITHM]
-        )
-        user_id: str = payload.get("sub")
+        payload = jwt.decode(token, SECRET_KEY, algorithms=[ALGORITHM])
+        user_id: Optional[str] = payload.get("sub")
         if user_id is None:
-            raise HTTPException(
-                status_code=status.HTTP_403_FORBIDDEN,
-                detail="Could not validate credentials",
-            )
+            raise credentials_exc
     except JWTError:
+        # Covers expired tokens, bad signature, malformed payload, etc.
+        raise credentials_exc
+
+    try:
+        uid = int(user_id)
+    except (ValueError, TypeError):
+        raise credentials_exc
+
+    user = db.query(User).filter(User.id == uid).first()
+    if user is None:
+        # Do not reveal whether the user existed; treat as invalid token.
+        raise credentials_exc
+
+    if not user.is_active:
         raise HTTPException(
             status_code=status.HTTP_403_FORBIDDEN,
-            detail="Could not validate credentials",
+            detail="Account is inactive.",
         )
-    user = db.query(User).filter(User.id == int(user_id)).first()
-    if not user:
-        raise HTTPException(status_code=404, detail="User not found")
+
     return user
 
-def require_role(required_roles: list[str]):
+
+# ---------------------------------------------------------------------------
+# Authorization
+# ---------------------------------------------------------------------------
+
+def require_role(required_roles: List[str]):
     """
-    Dependency that checks if the current user has one of the required roles.
+    Role-checking dependency factory **tied to the JWT identity**.
+
+    Usage (in a route):
+
+        # Gate the whole endpoint:
+        @router.get("/...", dependencies=[Depends(require_role(["admin", "faculty"]))])
+
+        # Get the authenticated user too:
+        current_user: User = Depends(require_role(["admin"]))
+
+    Role comparison is case-insensitive.
+    Users with `is_superuser=True` bypass the role check entirely.
+
+    Raises:
+      401 — no valid JWT (propagated from get_current_user).
+      403 — valid JWT but role is not in the allowed list.
     """
-    def role_checker(current_user: User = Depends(get_current_user)):
-        if current_user.role not in required_roles and current_user.role != "Admin":
+    required_lower = {r.lower() for r in required_roles}
+
+    def checker(current_user: User = Depends(get_current_user)) -> User:
+        # Superusers are exempt from role restrictions.
+        if current_user.is_superuser:
+            return current_user
+
+        user_role = (current_user.role or "").lower()
+        if user_role not in required_lower:
             raise HTTPException(
                 status_code=status.HTTP_403_FORBIDDEN,
-                detail=f"Operation not permitted for role: {current_user.role}. Required: {required_roles}"
+                detail=f"Access denied. Required roles: {required_roles}",
             )
         return current_user
-    return role_checker
 
-def get_db():
-    """
-    FastAPI dependency for database session.
-    Yields a database session and ensures it's closed after use.
-    """
-    db = SessionLocal()
-    try:
-        yield db
-    finally:
-        db.close()
-
-def get_current_user_role(x_user_role: Optional[str] = Header(None, alias="X-User-Role")):
-    """
-    Simulates authentication by trusting a header.
-    In production, this would verify a JWT token.
-    """
-    # Default to 'admin' for development ease if not provided, 
-    # OR strictly require it. Let's strictly require it for the task demonstration,
-    # but default to 'student' if missing to be safe? 
-    # Actually, for this demo, let's default to 'admin' so the UI works without complex header injection setup in frontend right now,
-    # but we will enforce it in the 'require_role' dependency.
-    return x_user_role or "admin"
-
-def require_role(required_role: str):
-    def role_checker(current_role: str = Depends(get_current_user_role)):
-        # Simple hierarchy: admin > faculty > student
-        roles = ["student", "faculty", "admin"]
-        
-        try:
-            user_level = roles.index(current_role)
-            req_level = roles.index(required_role)
-            
-            if user_level < req_level:
-                raise HTTPException(status_code=403, detail=f"Insufficient permissions. Required: {required_role}")
-        except ValueError:
-             # If role is unknown, deny
-             raise HTTPException(status_code=403, detail="Invalid role")
-             
-        return current_role
-    return role_checker
+    return checker

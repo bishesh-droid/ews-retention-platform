@@ -1,1275 +1,1169 @@
-# AI-Based Early Warning System (EWS) for Student Retention
+# Meridian — EWS Retention Platform
 
-[![Python](https://img.shields.io/badge/python-3.10%2B-blue)]()
-[![React](https://img.shields.io/badge/react-18.2%2B-blue)]()
-[![FastAPI](https://img.shields.io/badge/fastapi-0.104%2B-green)]()
-[![License](https://img.shields.io/badge/license-MIT-green)]()
+**Version:** 2.1.0  
+**Status:** Production-grade prototype. Operational with active data. Several architectural issues documented below must be resolved before genuine production deployment.
+
+---
 
 ## Table of Contents
 
-1. [Overview](#overview)
-2. [System Architecture](#system-architecture)
-3. [Features & Capabilities](#features--capabilities)
-4. [Technology Stack](#technology-stack)
-5. [Data Flow & Processing](#data-flow--processing)
-6. [Setup & Installation](#setup--installation)
-7. [Configuration](#configuration)
-8. [API Documentation](#api-documentation)
-9. [Frontend Architecture](#frontend-architecture)
-10. [ML Pipeline](#ml-pipeline)
-11. [Risk Scoring Logic](#risk-scoring-logic)
-12. [Advanced Features](#advanced-features)
-13. [Deployment](#deployment)
-14. [Testing](#testing)
-15. [Monitoring & Logging](#monitoring--logging)
-16. [Troubleshooting](#troubleshooting)
-17. [Contributing](#contributing)
+1. [Project Overview](#1-project-overview)
+2. [Architecture Overview](#2-architecture-overview)
+3. [Folder-by-Folder Breakdown](#3-folder-by-folder-breakdown)
+4. [Data Flow — Step by Step](#4-data-flow--step-by-step)
+5. [API Documentation](#5-api-documentation)
+6. [Authentication and Security Model](#6-authentication-and-security-model)
+7. [ML System Explanation](#7-ml-system-explanation)
+8. [Setup Instructions](#8-setup-instructions)
+9. [Known Issues and Risks](#9-known-issues-and-risks)
+10. [Improvement Roadmap](#10-improvement-roadmap)
 
 ---
 
-## Overview
+## 1. Project Overview
 
-The EWS Retention Platform is an **AI-driven Early Warning System** (v2.0.0) designed for EdTech companies and educational institutions to proactively identify at-risk learners and optimize student retention, revenue, and learning outcomes.
+Meridian is an Early Warning System (EWS) for student retention at a data science / AI graduate program. It ingests LMS engagement data from Microsoft Excel exports, engineers behavioral and academic features, computes dropout risk scores, and surfaces those scores to advisors and faculty through a React dashboard.
 
-### Purpose
+### What the system actually does
 
-- **Predict** dropout risk using ML models trained on historical student data
-- **Monitor** student engagement across multiple touchpoints (LMS, attendance, assessments)
-- **Recommend** personalized, AI-powered interventions via Google Gemini or Anthropic Claude
-- **Decide** automated intervention triggers based on configurable risk thresholds
-- **Track** effectiveness of interventions over time
+- Reads student engagement data from XLSX files (Brightspace LMS exports) on startup and loads it into a local SQLite database.
+- Derives six engagement features per student (content completion, login consistency, quiz engagement, assignment submissions, time investment, discussion engagement).
+- Runs a rule-based dropout risk scorer that produces a 0–100 risk score where higher = higher dropout risk.
+- Schedules a daily job (03:00 UTC) that recomputes risk scores for every student and persists predictions and risk snapshots to the database.
+- Exposes a FastAPI REST API with 20+ route modules covering students, predictions, interventions, analytics, LLM queries, business intelligence, and more.
+- Serves a React SPA that displays student risk tables, trend charts, cohort analytics, intervention management, and AI-generated narratives.
+- Optionally invokes Google Gemini or Anthropic Claude for natural-language risk explanations and advisor recommendations (requires API keys).
 
-### Target Users
+### What the system does NOT do
 
-- **Faculty**: Real-time alerts, student dashboards, intervention tracking
-- **Sales Teams**: Revenue-at-risk metrics, lead prioritization
-- **Marketing**: Campaign effectiveness, engagement analytics
-- **Leadership**: Executive dashboards, retention KPIs
+- Does NOT use the saved XGBoost or LogReg joblib models in live scoring. There is a confirmed schema mismatch between training data features and runtime features. The inference pipeline was deleted.
+- Does NOT automatically retrain models. The weekly retraining scheduler job is a logged no-op placeholder.
+- Does NOT have a real-time LMS data feed. Data is ingested from static XLSX snapshots that must be manually exported and placed in `backend/data/`.
+- The frontend does NOT authenticate against the backend JWT system. It performs a client-side credential check against hardcoded values and does not send Authorization headers to the backend. This is a critical security gap.
 
 ---
 
-## System Architecture
-
-### High-Level Data Flow
-
-```mermaid
-graph TB
-    A[Raw Data Files] -->|Ingestion Pipeline| B[Star Schema DB]
-    B -->|Feature Engineering| C[36 ML Features]
-    C -->|XGBoost / RF / LR Models| D[Risk Predictions]
-    D -->|Signal Aggregation| E[Risk Scores 0-100]
-    E -->|FastAPI v2| F[Backend API]
-    F -->|REST| G[React Frontend]
-    F -->|RAG Context| H[Gemini / Claude]
-    H -->|AI Advice| G
-```
-
-### Component Architecture
+## 2. Architecture Overview
 
 ```
-┌─────────────────────────────────────────────────────────────┐
-│                    DATA INGESTION LAYER                     │
-│  - File Validators - Row Validators - Quarantine System    │
-└────────────────────┬────────────────────────────────────────┘
-                     │
-                     v
-┌─────────────────────────────────────────────────────────────┐
-│                  DATABASE LAYER (SQLite)                    │
-│           Star Schema: Dimensions + Fact Tables             │
-│  DimStudent | DimCourse  | FactEngagement | FactAcademic   │
-└────────────────────┬────────────────────────────────────────┘
-                     │
-                     ├─────────────────────────────────────┐
-                     v                                     v
-┌──────────────────────────────────┐    ┌─────────────────────────────┐
-│  FEATURE ENGINEERING LAYER       │    │   ANALYTICS & REPORTING     │
-│  - 36 ML Features (7yr avg +     │    │  - Business Intelligence    │
-│    3yr trends)                   │    │  - Cohort Analysis          │
-│  - Signal Computation (5 groups) │    │  - Risk Distribution        │
-└─────────────┬────────────────────┘    └─────────────────────────────┘
+┌──────────────────────────────────────────────────────────────────────┐
+│  React SPA (localhost:3000)                                           │
+│  Create React App + Bootstrap 5 + Chart.js v4 + Recharts            │
+│                                                                      │
+│  AuthContext ── hardcoded "admin"/"admin123" check                   │
+│               ── no backend call, no JWT obtained                   │
+│                                                                      │
+│  StudentContext → api.js → fetch() → NO Authorization header        │
+└────────────────────────────┬─────────────────────────────────────────┘
+                             │ HTTP requests (unauthenticated)
+                             ▼
+┌──────────────────────────────────────────────────────────────────────┐
+│  FastAPI Application (localhost:8000)  — backend/main.py             │
+│                                                                      │
+│  Middleware (outermost → innermost):                                 │
+│    security_and_logging_middleware  — 100 req/min rate limit + logs  │
+│    request_validation_middleware    — JSON Content-Type enforcement   │
+│    CORSMiddleware                   — configurable origins           │
+│                                                                      │
+│  Exception handlers: AppError, HTTPException, Exception             │
+│                                                                      │
+│  /api/v1/* ─── api_router (22 sub-routers)                         │
+│                                                                      │
+│  Lifespan startup:                                                   │
+│    1. init_db()         → SQLite schema creation                    │
+│    2. ingest_all_data() → ETL from XLSX (non-blocking task)         │
+│    3. scheduler.start() → daily prediction + weekly retrain tasks   │
+└──────────┬──────────────────────────────────────────┬───────────────┘
+           │                                          │
+           ▼                                          ▼
+  ┌────────────────┐                      ┌─────────────────────┐
+  │  SQLite DB     │                      │  LLM Providers       │
+  │  sql_app.db    │                      │                      │
+  │  25+ tables    │                      │  Gemini (default)    │
+  │                │                      │  Claude (alt)        │
+  └────────────────┘                      │  Both optional       │
+           ▲                              └─────────────────────┘
+           │
+  ┌────────────────────────┐
+  │  XLSX Source Files     │
+  │  backend/data/         │
+  │  9 files configured    │
+  │  1 required at startup │
+  └────────────────────────┘
+```
+
+### Backend Service Layer Relationships
+
+```
+HTTP Request
+     │
+     ▼
+Routes (backend/routes/)
+     │
+     ├── Simple CRUD → DB models (direct SQLAlchemy queries)
+     │
+     └── Complex logic → Services (backend/services/)
+                              │
+                              ├── StudentService
+                              │       → FeatureEngineer (feature_engineering.py)
+                              │       → RiskScorer (risk_scoring.py)
+                              │       → DB queries (Student, Enrollment, Prediction, ...)
+                              │
+                              ├── LLMOrchestrator (services/ai/)
+                              │       → RAG engine (rag_engine.py)
+                              │       → Gemini / Claude
+                              │
+                              ├── SchedulerService (services/infrastructure/)
+                              │       → FeatureEngineer + RiskScorer (daily job)
+                              │
+                              └── Supporting services
+                                      analytics_service, audit_service,
+                                      goals_service, export_service, etc.
+```
+
+---
+
+## 3. Folder-by-Folder Breakdown
+
+### Root Level
+
+| Path | Purpose |
+|---|---|
+| `backend/` | FastAPI application |
+| `frontend/` | React SPA |
+| `backend/data/` | SQLite DB and XLSX source files |
+| `docs/` | Supplementary documentation |
+| `requirements.txt` | Python dependencies |
+| `.env.example` | Configuration template |
+| `ARCHITECTURE.md` | Deep system design |
+| `DATA_FLOW.md` | Pipeline specification |
+| `ML_PIPELINE.md` | ML scoring breakdown |
+| `SECURITY.md` | Vulnerability analysis |
+
+---
+
+### `backend/`
+
+**`main.py`** — Application entry point. Defines `lifespan()` async context manager for startup/shutdown. Creates the FastAPI instance with title, description, version. Registers middleware (CORS, security logging, request validation). Registers global exception handlers. Mounts all routes at `/api/v1`. Exposes `/` and `/health` without authentication.
+
+**`config/__init__.py`** — Central configuration. All settings read from environment variables with safe defaults. Groups: API/server, database, security/auth, LLM, logging, Redis, ML thresholds, intervention thresholds, business metrics, XLSX file paths. Contains a production fail-fast guard: if `ENVIRONMENT=production` and `SECRET_KEY` is still the insecure default, the application raises `RuntimeError` at startup.
+
+**`__init__.py`** — Package marker.
+
+---
+
+### `backend/routes/`
+
+22 route modules, all mounted under `/api/v1`. The `__init__.py` constructs the master `api_router` and includes each sub-router with its prefix and tags.
+
+**`auth.py`** — Authentication and user management. Login (OAuth2 form), registration (role forced to "student"), profile view/update, admin-only user management. Token expiry matches `ACCESS_TOKEN_EXPIRE_MINUTES` config.
+
+**`students.py`** — Thin wrapper that imports from `controllers/students_controller.py`. Preserved for backward import compatibility.
+
+**`predictions.py`** — Batch predictions endpoint and per-student prediction. Delegates to `StudentService`. Supports `include_decisions=true` to append intervention recommendations.
+
+**`ml_routes.py`** — ML-specific prediction endpoints. Runs inference in a thread via `asyncio.to_thread` with a 10-second timeout. Returns prediction metadata including whether the ML model or rule-based scorer was used. Persists results to the `predictions` table.
+
+**`llm.py`** — Six LLM endpoints (risk explanation, student advice, faculty summary, intervention recommendation, what-if, report narrative). When no LLM API key is configured, returns structured mock responses built from student data.
+
+**`interventions.py`** — Full CRUD for `interventions` table. Supports bulk creation (list of `student_ids`). Channels stored as JSON string in DB, parsed on read.
+
+**`business.py`** — Business intelligence calculations. Revenue at risk, retention metrics, intervention ROI, retention funnel, cohort analysis. Uses configurable financial constants from config (student LTV, tuition, intervention cost).
+
+**`analytics.py`** — Aggregated analytics summary and risk distribution.
+
+**`advisor.py`** — AI academic advisor endpoint. Wraps `LLMOrchestrator` with student context retrieval.
+
+**`events.py`** — Raw event ingestion and retrieval endpoints.
+
+**`features.py`** — Feature store retrieval endpoints. Surfaces pre-computed `EngineeredFeatures` rows.
+
+**`decisions.py`** — Decision engine endpoints. Routes to `decision_engine.py` service for intervention decision logic.
+
+**`feedback.py`** — Student response/feedback CRUD.
+
+**`recommendations.py`** — Recommendation retrieval endpoints.
+
+**`goals.py`** — Goal creation, update, and retrieval per student.
+
+**`reports.py`** — Report generation endpoints. Supports student-level and cohort-level reports with export capabilities.
+
+**`student_v1.py`** — Student-facing portal endpoints (own data only).
+
+**`faculty_v1.py`** — Faculty-facing endpoints (student lists, summary dashboards). Requires faculty or admin role.
+
+**`admin_v1.py`** — Admin-only endpoints (system management, user listing).
+
+**`retention_v1.py`** — Retention team endpoints.
+
+**`integration.py`** — External system integration endpoints. Uses `INTEGRATION_API_KEY` for additional authentication.
+
+**`monitoring.py`** — Health check and system metrics endpoints.
+
+---
+
+### `backend/controllers/`
+
+**`students_controller.py`** — The most substantial controller in the codebase (412 lines). Provides all student-facing endpoints delegated from `routes/students.py`. Endpoints:
+
+- `GET /overview` — Dashboard KPIs
+- `GET /courses` — Course catalog
+- `GET /students` — Paginated list with risk/sort/filter
+- `GET /students/{id}` — Full student profile
+- `GET /students/{id}/interventions` — Intervention history
+- `GET /students/{id}/weekly-summary` — Lightweight portal summary
+- `GET /students/{id}/risk-trend` — Risk time series from `predictions` table
+- `GET /at-risk` — Students above threshold
+- `GET /risk-distribution` — Risk score distribution
+- `GET /analytics/trends` — Department/course analytics
+- `GET /analytics/risk-trends` — Cohort risk time series (ISO week buckets)
+- `GET /analytics/engagement-trends` — Cohort engagement time series
+- `GET /analytics/performance-trends` — Cohort grade performance
+- `GET /analytics/intervention-effectiveness` — Before/after risk comparison
+
+The `_normalize_0_100()` helper in this file is the defensive normalization for the 0–1/0–100 storage ambiguity.
+
+---
+
+### `backend/services/`
+
+**`student_service.py`** — Core orchestration service. `get_all_students()` executes a multi-table JOIN, then for each student computes features and risk score live from enrollment data, supplemented by the latest stored prediction if available. `build_prediction_payload()` and `build_intervention_recommendation()` are used by the predictions routes. `get_overview_stats()` returns KPI counts.
+
+**`feature_engineering.py`** — `FeatureEngineer` static class with 9 calculation methods:
+- `calculate_content_completion_score()` — content_completed / content_required × 100
+- `calculate_w1w2_completion_score()` — W1-W2 content progress specifically
+- `calculate_quiz_engagement_score()` — derived from quiz_completed and total_quiz_attempts
+- `calculate_discussion_engagement_score()` — posts created, replies, reads
+- `calculate_assignment_score()` — num_assignment_submissions relative to expected
+- `calculate_time_investment_score()` — log-scaled seconds on platform
+- `calculate_login_consistency_score()` — logins + recency
+- `calculate_zero_progress_ratio()` — fraction of enrollments with zero content completion
+- `calculate_all_features()` — calls all sub-methods and returns unified dict
+
+**`risk_scoring.py`** — `RiskScorer` static class. Primary runtime risk scorer. Six feature weights summing to 1.0. Handles missing features by partial normalization. Adds zero-progress penalty. Returns 0–100. Also provides category labels, retention likelihood strings, dominant factor identification, and feature-level breakdown dicts.
+
+**`services/core/data_ingestion.py`** — Idempotent ETL. Called at startup from `main.py` lifespan. Opens XLSX files with openpyxl. Implements upsert (get-or-create) for all entities. Only `Engagement_Analysis.xlsx` is required; all others are optional. Accumulates counter fields (content_completed, quiz_completed, etc.) across multiple source files using a defined `COUNTER_FIELDS` set.
+
+**`services/core/ews_engine.py`** — EWS orchestration engine. Coordinates feature computation, risk scoring, and decision rules.
+
+**`services/core/decision_engine.py`** — Maps risk scores to intervention decisions using configurable thresholds from config.
+
+**`services/core/feature_service.py`** — Feature store read/write service.
+
+**`services/infrastructure/scheduler.py`** — `SchedulerService` using asyncio tasks. `generate_daily_predictions()` runs at 03:00 UTC: loads all students, their enrollments, graded components, and exam records; computes features and risk; persists `Prediction` (risk_score/100) and `RiskSnapshot` (risk_score/100) rows; logs counts. `retrain_model_weekly()` at Sunday 04:00 UTC is a no-op. Both jobs are wrapped with exception handlers so a crash in one job does not stop the scheduler loop.
+
+**`services/infrastructure/audit_logger.py`** — Writes `AuditLog` rows for significant user actions.
+
+**`services/infrastructure/recommender.py`** — Rule-based recommendation engine for intervention suggestions.
+
+**`services/ai/llm_orchestrator.py`** — Routes LLM requests to Gemini or Claude. Falls back to mock responses when no API key is configured or when libraries are absent. Uses conditional imports to avoid hard failures.
+
+**`services/ai/rag_engine.py`** — Retrieval-augmented generation engine. Contains `StudentDataRetriever`, `CohortDataRetriever`, `InstitutionalDataRetriever`, `ContextAssembler`, `GuardrailValidator`. Grounds LLM prompts in real student data from the database.
+
+**`services/ai/advisor.py`**, **`advisor_context.py`** — AI advisor service and context builder.
+
+**`services/ai/faculty_summary.py`** — Faculty-facing AI summary generation.
+
+**`services/ai/hallucination_guard.py`** — Input/output validation to reduce LLM hallucination.
+
+**`services/ai/study_plan_generator.py`** — LLM-driven study plan generation.
+
+**`services/analytics/intervention_intel.py`**, **`pattern_discovery.py`** — Deeper analytics services.
+
+**`analytics_service.py`** — Aggregated analytics queries.
+
+**`audit_service.py`** — Audit log retrieval.
+
+**`export_service.py`** — CSV and PDF export generation.
+
+**`feature_engineering.py`** (root services) — See above.
+
+**`feature_store_service.py`** — Pre-computation and storage of `EngineeredFeatures` rows.
+
+**`goals_service.py`** — Goal lifecycle management.
+
+**`ml_service.py`** — Documents the three incompatible ML schemas. Attempts joblib model loading but logs schema mismatch warnings. Final scoring always falls back to `FeatureEngineer → RiskScorer`.
+
+**`risk_consistency.py`** — Risk score validation and consistency checking utilities.
+
+**`risk_scoring.py`** — See above (primary scorer).
+
+---
+
+### `backend/database/`
+
+**`connection.py`** — SQLAlchemy engine creation (`check_same_thread=False` for SQLite), declarative `Base`, and `init_db()` which imports all models and runs `create_all`.
+
+**`session.py`** — `SessionLocal` factory. `get_db()` and `get_db_async()` dependency generators with rollback-on-exception and guaranteed close.
+
+**`models/`** — 25+ ORM model files:
+
+| File | Models | Key Fields |
+|---|---|---|
+| `student.py` | `Student` | id (String PK = email/username), first_name, last_name, old_new_student, parent_department_name |
+| `course.py` | `Course` | id (String PK), name, section_code, content_required |
+| `enrollment.py` | `Enrollment` | student_id FK, course_id FK, 20+ engagement counter/date fields |
+| `prediction.py` | `Prediction` | student_id FK, risk_score (Float, stored 0–1), engagement_score, signal breakdown scores, model_version |
+| `intervention.py` | `Intervention` | student_id FK, date, action, status, ai_suggested, effectiveness_score, risk_score_at_trigger, channels (JSON string) |
+| `goals_and_risks.py` | `RiskSnapshot`, `Goal` | RiskSnapshot: risk_score (0–1), velocity, acceleration, timestamp |
+| `user.py` | `User` | username, email, hashed_password, role, is_active, is_superuser, preferences (JSON) |
+| `academic.py` | `GradedComponent`, `ExamRecord` | Component: score, max_score, missed. Exam: marks_obtained, marks_total, present |
+| `audit.py` | `AuditLog` | user_id FK, action, resource, details, timestamp |
+| `llm.py` | `LLMQuery`, `LLMInsight`, `AIExplanation`, `PatternDiscovery` | LLM interaction history |
+| `event.py` | `RawEvent`, `EngineeredFeatures` | Raw LMS events and pre-computed feature vectors |
+| `feature.py` | `StudentResponse` | Student responses to interventions |
+| `canonical.py` | `DimStudent`, `DimCourse`, `FactAcademicPerformance`, `FactEngagement`, `FactConsistency`, `FactIntentResponsiveness`, `DataLineage` | Data warehouse star schema tables |
+
+---
+
+### `backend/api/`
+
+**`deps.py`** — FastAPI dependency injection. `reusable_oauth2` is an `OAuth2PasswordBearer` pointing to `/api/v1/auth/login` with `auto_error=True`. `get_current_user()` decodes JWT, fetches `User` row, checks `is_active`. `require_role()` is a factory that returns a checker dependency enforcing role membership (case-insensitive, superusers exempt). The file header documents a previously removed vulnerability where `X-User-Role` header was trusted and defaulted to admin.
+
+---
+
+### `backend/core/`
+
+**`auth.py`** — JWT creation and bcrypt password operations. `create_access_token()` embeds `sub` (user ID), `role`, and `exp` in the token payload.
+
+**`security.py`** — `SecurityManager` utility class. HTML tag stripping for basic input sanitization. `enforce_role()` and `validate_pagination()` helpers. Lightly used — primary enforcement is in `deps.py`.
+
+**`redis_cache.py`** — Redis client wrapper that degrades gracefully to no-op when Redis is unavailable. `cache_response` decorator for route handlers.
+
+**`logger.py`** — Structured logging configuration. Writes to console and `backend/backend.log`.
+
+---
+
+### `backend/middleware/`
+
+**`security_logging.py`** — Combined rate limiting and access logging. Rate limit: 100 requests/minute per IP using an in-memory dict. Logs request method/path/IP on entry, adds status code and processing time on exit. **Limitation:** In-memory state is per-process and per-restart. No protection in multi-worker or multi-instance deployments.
+
+**`request_validation.py`** — Validates Content-Type for POST/PUT/PATCH. Returns HTTP 415 if body is present and Content-Type is not `application/json`.
+
+---
+
+### `backend/ml/`
+
+**`config.py`** — ML-specific constants. `REQUIRED_STUDENT_FEATURES = ['absrate7', 'q4mpa7', 'nsusp7', 'mobility7']` — the 4-feature schema of the saved models. Also imports risk thresholds from main config and converts to 0–1 scale.
+
+**`models/saved/`** — Trained model artifacts:
+- `retention_model_xgboost.joblib` — XGBoost classifier
+- `retention_model_logreg.joblib` — Logistic Regression classifier
+- `feature_importance.csv` — Feature importances from training
+
+These models were trained on a different feature schema than what the live database contains. There is no code path to bridge the gap. They are preserved but functionally inert.
+
+**`inference/risk_formula.py`** — Explainability-focused rule-based scorer. Accepts 5 signal scores (0–1). Returns 0–1. Uses `SIGNAL_WEIGHTS` from config. Provides `explain_risk_score()` (contribution breakdown) and `simulate_what_if()` (scenario simulation). **Important limitation:** The config `SIGNAL_WEIGHTS` keys are `attendance`, `grades`, `engagement`, `submissions` — but this module expects `academic`, `engagement`, `consistency`, `intent`, `responsiveness` as weight keys. The mapping in `get_signal_weights()` only covers 4 of the 5 signals; `consistency`, `intent`, and `responsiveness` receive weight 0.0 from `SIGNAL_WEIGHTS.get()`.
+
+**`training/evaluate.py`** — Standalone evaluation utility (classification report, confusion matrix, seaborn heatmap). Called from a training script that no longer exists.
+
+**`ml/utils/validation_utils.py`** — Input validation helpers for ML pipelines.
+
+**`ml/features/__init__.py`**, **`ml/models/__init__.py`**, **`ml/inference/__init__.py`**, **`ml/training/__init__.py`** — Package markers. Empty or near-empty.
+
+---
+
+### `backend/features/`
+
+A secondary feature engineering and scoring pipeline. Distinct from `backend/services/`. Queries the database directly. **Not called in the main prediction path.**
+
+**`risk_scorer.py`** — `RiskScorer` class (different from `services/risk_scoring.py`). Queries `AcademicPerformanceSignal` and `EngagementSignal` with weights 0.45/0.55. Risk levels: Critical ≥75, High ≥50, Medium ≥25, Low <25.
+
+**`academic_signals.py`** — Queries `GradedComponent` and `ExamRecord` tables to compute academic performance signal.
+
+**`engagement_signals.py`** — Queries `Enrollment` table for engagement signal computation.
+
+**`composite_indices.py`** — Multi-signal composite index calculations.
+
+**`behavioral_features.py`** — Behavioral feature derivations.
+
+**`temporal_features.py`** — Time-series-based features.
+
+**`advanced_engagement_features.py`** — Advanced LMS engagement metrics.
+
+**`signal_computer.py`** — Signal computation coordinator.
+
+**`advanced_orchestrator.py`** — Orchestration for the secondary pipeline.
+
+---
+
+### `backend/ingestion/`
+
+An alternative, more sophisticated ETL pipeline. **Not called at runtime.** Contains row-level validation, quarantine for bad records, schema management, and transformation logic. Architecturally more robust than the active `services/core/data_ingestion.py` but abandoned as the runtime path.
+
+Key files: `pipeline.py`, `validated_pipeline.py`, `schema_manager.py`, `row_validators.py`, `transformers.py`, `validators.py`, `quarantine.py`, `file_validator.py`, `defaults.py`, `error_logger.py`.
+
+---
+
+### `backend/jobs/`
+
+**`feature_store_job.py`** — Standalone script using the `schedule` library. Runs `FeatureStoreService.precompute_all_features()` once on startup, then hourly. Executed with `python -m backend.jobs.feature_store_job`. Not integrated with the main async scheduler.
+
+---
+
+### `backend/schemas/`
+
+Pydantic v2 schemas for request/response validation.
+
+- `auth.py` — `Token`, `UserOut`, `UserCreate`, `UserUpdate`, `AdminUserUpdate`
+- `intervention.py` — `Intervention` response schema
+- Additional schemas for students, predictions, features, goals, etc.
+
+---
+
+### `backend/utils/`
+
+**`api.py`** — `AppError` exception class, `success_response()` and `error_response()` helpers for consistent API response envelopes.
+
+---
+
+### `frontend/src/`
+
+**`index.js`** — React entry point. Wraps `App` in `AuthProvider`, `StudentProvider`, `BrowserRouter`.
+
+**`App.js`** — Route definitions. `ProtectedRoute` wrapper checks `AuthContext.isAuthenticated`. Routes: `/login`, `/signup` (public), all others protected.
+
+**`api.js`** — Root-level API client with in-memory student cache. No Authorization headers. Note: calls `/students/students` which requires staff role auth on the backend.
+
+**`chartConfig.js`** — Globally registers Chart.js components (ArcElement, CategoryScale, LinearScale, BarElement, LineElement, PointElement, Legend, Tooltip).
+
+**`context/AuthContext.js`** — **Critical security gap.** Hardcoded credentials `{ username: 'admin', password: 'admin123' }`. No backend interaction. Stores `'ews_auth': 'true'` in sessionStorage on success.
+
+**`context/StudentContext.js`** — Fetches up to 2000 students via `api.js`. Validates risk scores with `validateRiskScore()`. Provides `students`, `loading`, `error`, `totalStudents`, `refreshStudents` via context.
+
+**`services/api.js`** — Service-layer API client. More structured than root `api.js`. Also lacks auth headers.
+
+**`services/studentService.js`**, **`businessService.js`** — Domain-specific API service modules.
+
+**`pages/`**:
+- `Dashboard.jsx` — KPI cards, at-risk table, risk distribution chart, recent interventions
+- `Students.jsx` — Paginated student table with search, filter, and sort
+- `StudentProfile.jsx` — Detailed per-student view with signal radar, trend chart, interventions
+- `Analytics.jsx` — KPI cards, doughnut chart, horizontal bar, cohort comparison, intervention effectiveness, radar chart
+- `Interventions.jsx` — Intervention management table and creation UI
+- `BusinessAnalytics.jsx` — Revenue at risk, retention funnel, ROI timeline
+- `BusinessIntelligence.jsx` — Executive-level business metrics
+- `Reports.jsx` — Report generation and export
+- `FacultyTools.jsx` — Faculty-specific views
+- `StudentPortal.jsx` — Student self-service view
+- `RiskFactors.jsx` — Risk factor detail view
+- `Settings.jsx` — User preferences
+- `Login.jsx` — Login form (calls `AuthContext.login`, not the backend)
+- `Signup.jsx` — Animated registration form (framer-motion)
+- `Insights.jsx`, `InstitutionalInsights.jsx` — Analytics views
+
+**`components/`** — 60+ components organized into:
+- `ai/` — AI narrative cards (ExplainableRiskNarrative, WhatIfSimulator, WeeklyProgressBrief, etc.)
+- `analytics/` — CohortChurnDiagnostics, CourseRiskAnalysis, DropoutProbabilityFunnel
+- `business/` — Revenue/retention charts (RevenueAtRisk, InterventionROITimeline, RetentionFunnel, etc.)
+- `common/` — Layout, Header, Sidebar, Logo (MeridianMark SVG), Spinner, Skeleton, TimeFilter, etc.
+- `dashboard/` — KpiCard, RiskTable, Charts, HighestRiskStudentsTable, PriorityQueuePanel
+- `interventions/` — InterventionCard, InterventionEffectiveness, MicroGoalsSuggester, etc.
+- `quality/` — BiasIndicators, DataQualityPanel, SystemPatternDetector
+- `student/` — StudentDrawer, SignalBreakdown, SignalRadarChart, RiskBreakdownChart, etc.
+
+**`utils/`**:
+- `riskScoreValidator.js` — Validates 0–100 range, defaults invalid to 50
+- `riskNarrativeGenerator.js` — Template-based risk explanations (client-side)
+- `recommendationEngine.js` — Client-side intervention recommendation logic
+- `dataQualityCalculator.js` — Data completeness scoring
+- `trendCalculator.js` — Trend computation utilities
+- `studentUtils.js` — Student data helper functions
+- `motionConfig.js` — Framer Motion variants (container/item stagger)
+- `timelineDataGenerator.js` — Synthetic timeline data generation
+- `csvParser.js` — Client-side CSV parsing
+
+**`constants/riskThresholds.js`** — Frontend risk threshold constants. Must be kept in sync with backend config thresholds.
+
+**`hooks/`** — `useStudentRisk.js`, `useIntervention.js`, `useDebounce.js`
+
+---
+
+### `backend/data/`
+
+- `sql_app.db` — SQLite database. Created by `init_db()` at startup. May not exist before first run.
+- `Engagement_Analysis.xlsx` — Required primary data file. Must be present in this directory.
+- `labels.csv` — Sample training labels (historical, used for offline ML training).
+- Additional XLSX snapshots (optional, configurable via env vars).
+
+---
+
+## 4. Data Flow — Step by Step
+
+### Phase 1: Startup Ingestion
+
+```
+Server Start
+    │
+    ├── init_db()
+    │     Import all 25+ ORM models
+    │     Base.metadata.create_all(engine)
+    │     → All tables created in sql_app.db if not existing
+    │
+    └── asyncio.create_task(_run_ingestion())    ← non-blocking
+          Thread via asyncio.to_thread():
+              SessionLocal() → db session
+              ingest_all_data(db)
               │
-              v
-┌─────────────────────────────────────────────────────────────┐
-│                    ML PREDICTION LAYER                       │
-│  - XGBoost (primary) - RandomForest - LogisticRegression   │
-│  - SMOTE Balancing - Feature Validation                     │
-└────────────────────┬────────────────────────────────────────┘
-                     │
-                     v
-┌─────────────────────────────────────────────────────────────┐
-│                    RISK SCORING LAYER                        │
-│  - Signal Aggregation - Weight Application - Bounds Check  │
-│  Risk Score Range: 0-100 (percentage)                      │
-└────────────────────┬────────────────────────────────────────┘
-                     │
-                     v
-┌─────────────────────────────────────────────────────────────┐
-│                    DECISION ENGINE                           │
-│  - Threshold Evaluation - Intervention Triggers              │
-│  - Priority Assignment - Team Routing                       │
-└────────────────────┬────────────────────────────────────────┘
-                     │
-                     v
-┌─────────────────────────────────────────────────────────────┐
-│              FASTAPI BACKEND v2 (40+ Endpoints)              │
-│  /students | /business | /decisions | /recommendations     │
-│  /auth | /advisor | /llm | /features | /analytics          │
-└────────────────────┬────────────────────────────────────────┘
-                     │
-                     ├──────────────────┐
-                     v                  v
-┌──────────────────────────┐    ┌─────────────────────────────┐
-│   REACT FRONTEND         │    │   LLM LAYER                 │
-│  - 14 Pages              │    │  - Google Gemini (default)  │
-│  - 54+ Components        │    │  - Anthropic Claude (alt.)  │
-│  - Real-time Dashboards  │    │  - RAG-Grounded Advice      │
-└──────────────────────────┘    └─────────────────────────────┘
+              ├── _build_file_map()
+              │     9 configured file paths from config
+              │
+              ├── _validate_required_files()
+              │     Engagement_Analysis.xlsx must exist
+              │     FileNotFoundError → logged, server continues
+              │
+              ├── _ingest_engagement_data()
+              │     openpyxl → reads "Learner Usage main dump" sheet
+              │     For each row:
+              │       Student: get-or-create by username (PK)
+              │       Course:  get-or-create by course_id
+              │       Enrollment: get-or-create by (student_id, course_id)
+              │         COUNTER_FIELDS accumulated (not replaced)
+              │
+              ├── _ingest_quiz_assignment_exam()
+              │     GradedComponent: quiz scores, assignment grades
+              │     ExamRecord: exam marks, attendance (present=True/False)
+              │
+              ├── _update_enrollments_from_latest()
+              │     Week 3/5 snapshots update SCORM fields
+              │     and per-enrollment counters
+              │
+              └── db.commit()    ← single transaction commit
+```
+
+### Phase 2: Feature Engineering (per student, per request or per job)
+
+```
+Input: List[Dict] enrollments, List[Dict] graded_components, List[Dict] exam_records
+    │
+    ├── content_completion_score
+    │     = (Σ content_completed / Σ content_required) × 100
+    │     Clamp [0, 100]
+    │
+    ├── w1w2_completion_score
+    │     = (Σ min(completed, required_w1w2) / Σ required_w1w2) × 100
+    │
+    ├── quiz_engagement_score
+    │     If total_quiz_attempts > 0:
+    │       raw = (quiz_completed / total_quiz_attempts) × 100
+    │     Boost for high attempt counts, cap at 100
+    │
+    ├── discussion_engagement_score
+    │     Weighted sum of posts_created, replies, reads
+    │     Log-scaled to avoid outlier dominance
+    │
+    ├── assignment_score
+    │     = num_assignment_submissions relative to course count × 100
+    │
+    ├── time_investment_score
+    │     = log10(total_seconds + 1) / log10(max_expected) × 100
+    │
+    ├── login_consistency_score
+    │     = f(num_logins, days_since_last_login)
+    │     Penalized heavily for no logins or stale login dates
+    │
+    └── zero_progress_ratio
+          = courses_with_zero_content / total_courses
+          (used as penalty in risk scorer)
+Output: Dict[str, float] — 10+ features, all [0,100] or [0,1]
+```
+
+### Phase 3: Risk Scoring
+
+```
+Input: features dict (from Phase 2)
+    │
+    ├── For each of 6 weighted features (if present):
+    │     clamped_score = max(0, min(100, feature_value))
+    │     weighted_sum += weight × clamped_score
+    │     observed_weight += weight
+    │
+    ├── If observed_weight == 0:
+    │     Return NEUTRAL_RISK_SCORE = 50.0
+    │
+    ├── weighted_engagement = weighted_sum / observed_weight
+    │
+    ├── base_risk = 100 − weighted_engagement
+    │
+    ├── coverage = observed_weight / sum(all_weights)
+    │     # shrinks toward neutral when few features are present
+    │
+    ├── risk_score = (base_risk × coverage) + (50.0 × (1 − coverage))
+    │
+    ├── zero_progress_penalty = min(15.0, zero_progress_ratio × 15.0)
+    │     risk_score += zero_progress_penalty
+    │
+    └── Final: clamp [0, 100], round to 2 decimal places
+Output: float [0, 100], higher = more likely to drop out
+```
+
+### Phase 4: Daily Scheduler Prediction Persistence (03:00 UTC)
+
+```
+generate_daily_predictions()
+    │
+    └── For each Student in DB:
+          features = FeatureEngineer.calculate_all_features(
+              enrollment_map[student.id],
+              graded_map[student.id],
+              exam_map[student.id]
+          )
+          risk_score = RiskScorer.calculate_risk_score(features)
+          # risk_score is [0, 100]
+          │
+          ├── Prediction(
+          │     risk_score = risk_score / 100.0,       ← stored as 0–1
+          │     engagement_score = (100 - risk_score) / 100.0,
+          │     retention_likelihood = RiskScorer.get_retention_likelihood(risk_score),
+          │     model_version = "rule-based-v1"
+          │   )
+          │
+          └── RiskSnapshot(
+                risk_score = risk_score / 100.0,       ← stored as 0–1
+                engagement_score = (100 - risk_score) / 100.0,
+                timestamp = now_utc
+              )
+```
+
+### Phase 5: API Response Generation
+
+```
+GET /api/v1/students/students
+    │
+    ├── StudentService.get_all_students(db, skip, limit, sort_by, order, risk_min, risk_max)
+    │
+    │   For each student:
+    │     enrollments = load from DB (JOIN with courses)
+    │     graded_components = load from DB
+    │     exam_records = load from DB
+    │     features = FeatureEngineer.calculate_all_features(...)    ← computed live
+    │     live_risk = RiskScorer.calculate_risk_score(features)     ← [0, 100]
+    │     latest_pred = latest Prediction row for student
+    │     stored_risk = latest_pred.risk_score × 100               ← [0, 100] after conversion
+    │     final_risk = live_risk (primary) or stored_risk (fallback)
+    │
+    └── Return: { students: [...], total: N, page: N, page_size: N }
+```
+
+### Phase 6: Frontend Rendering
+
+```
+React App Mount
+    │
+    └── StudentContext.loadStudents()
+          api.js.getStudents(2000)
+          fetch('GET /api/v1/students/students?limit=2000&sort_by=risk_score&order=desc')
+              ← No Authorization header
+              ← Backend requires Bearer JWT → HTTP 401 Unauthorized
+          [If backend auth is not enforced or bypassed:]
+              data.students → map to add name/email/program display fields
+              validateRiskScore() → clamp to [0,100], default null to 50
+              setStudents(validated)
+              → Dashboard, Students, Analytics pages render
 ```
 
 ---
 
-## Features & Capabilities
+## 5. API Documentation
 
-### 1. Behavioral Monitoring
+**Base URL:** `http://localhost:8000/api/v1`  
+**Authentication:** `Authorization: Bearer <jwt_token>` (except public endpoints)  
+**Content-Type:** `application/json` required for all POST/PUT/PATCH requests
 
-**Data Sources** (5 categories):
-- **Learning Management System**: Logins, assignments, content views, quiz scores
-- **Live Classes**: Attendance, duration, participation
-- **Website/App Usage**: Video completion, page clicks, time spent
-- **Communication**: WhatsApp/Email engagement, response times
-- **Marketing Campaigns**: Meta ads, lead sources, conversion tracking
+### 5.1 System (No Auth)
 
-**Frequency**: Real-time to daily updates
+| Method | Path | Response |
+|---|---|---|
+| GET | `/` | `{ docs_url, redoc_url }` |
+| GET | `/health` | `{ status: "healthy", timestamp }` |
 
-### 2. ML Dropout Prediction
+### 5.2 Auth
 
-**Model Architecture**:
-- **Algorithm**: XGBoost Classifier (with RandomForest ensemble fallback)
-- **Features**: 36 engineered features
-  - 7-year averages: `absrate_avg_1_7`, `mpa_avg_1_7`
-  - 3-year trends: `absrate_trend_5_7`, `mobility_trend_5_7`
-- **Class Balancing**: SMOTE for handling imbalanced datasets
-- **Output**: Dropout probability → Risk score (0-100 percentage)
+| Method | Path | Auth | Notes |
+|---|---|---|---|
+| POST | `/auth/login` | Public | Form body: `username`, `password`. Returns `{ access_token, token_type }` |
+| POST | `/auth/register` | Public | JSON body: `username`, `email`, `password`. Role forced to `student` |
+| GET | `/auth/me` | JWT | Returns own `UserOut` |
+| PUT | `/auth/me` | JWT | Update `username`, `email`, `password` only |
+| PATCH | `/auth/users/{id}` | Admin | Update `role`, `is_active`, `is_superuser` |
 
-**Feature Groups** (5 signal categories):
-1. **Academic Signals** (30% weight): GPA trends, exam scores, assignment completion
-2. **Engagement Signals** (25% weight): Attendance, login frequency, content completion
-3. **Consistency Signals** (20% weight): Behavioral stability, activity volatility
-4. **Intent Signals** (15% weight): Goal-setting behavior, course progression
-5. **Responsiveness Signals** (10% weight): Communication response time, ticket resolution
-
-### 3. Automated Intervention Triggers
-
-**Risk Thresholds** (configurable via `backend/config.py`):
-
-| Risk Probability | Category | Action | Assigned Team | Urgency |
-|------------------|----------|--------|---------------|---------|
-| < 30%            | Low      | No action | Self-service | None |
-| 30–60%           | Medium   | Gentle reminder | Automated email | Low |
-| 60–80%           | High     | Mentor outreach | Academic mentor | Medium |
-| >= 80%           | Critical | Urgent intervention | Sales + WhatsApp | High |
-
-**Intervention Cooldown**: 7 days minimum between interventions per student
-**Risk Spike Override**: Cooldown bypassed if risk increases by > 15 percentage points
-
-**Intervention Channels**:
-- Email (automated templates)
-- WhatsApp messages
-- In-app notifications
-- Faculty dashboard alerts
-- Phone calls (for critical cases)
-
-### 4. AI-Powered Recommendations
-
-**Dual LLM Support** (switchable via `LLM_PROVIDER` env var):
-- **Google Gemini** (`gemini-pro`, default): RAG-grounded recommendations
-- **Anthropic Claude** (`claude-3-opus-20240229`, alternative): Drop-in replacement
-
-**Recommendation Types**:
-- Personalized study plans
-- Resource suggestions (videos, practice tests)
-- Communication templates for faculty
-- Peer mentoring matches
-
-**Context Window**: 7-day activity history + risk trends + intervention history
-
-### 5. Business Intelligence
-
-**Revenue Impact Metrics**:
-- Revenue at Risk: `high_risk_count × AVG_STUDENT_LTV` (default LTV: $12,500)
-- Retention ROI: Cost of intervention ($350/student) vs. recovered revenue
-- Cohort Performance: Comparative analysis by program/batch
-
-**Executive Dashboards**:
-- Real-time retention KPIs
-- Intervention effectiveness tracking
-- Resource allocation optimization
-
----
-
-## Technology Stack
-
-### Backend
-
-| Component | Technology | Version | Purpose |
-|-----------|-----------|---------|---------|
-| Framework | FastAPI | 0.104+ | High-performance async API |
-| ORM | SQLAlchemy | 2.0+ | Database abstraction |
-| Database | SQLite | 3.40+ | Data persistence (star schema) |
-| ML Framework | XGBoost | 2.0+ | Primary dropout prediction model |
-| ML Baseline | scikit-learn (LR, RF) | 1.3+ | RandomForest fallback + Logistic Regression baseline |
-| Class Balancing | imbalanced-learn | 0.11+ | SMOTE oversampling (imblearn pipelines) |
-| Data Processing | pandas | 2.1+ | Data manipulation |
-| Validation | Pydantic | 2.0+ | API schema validation |
-| LLM (Primary) | google-generativeai | latest | Gemini API client |
-| LLM (Alternative) | anthropic | latest | Claude API client |
-| Authentication | python-jose + passlib | latest | JWT auth (HS256, 24h TTL) |
-| Caching | redis | latest | Response caching (1h TTL) |
-| PDF Reports | fpdf | latest | Report generation |
-| Model Serialization | joblib | latest | ML model persistence |
-| Scheduling | schedule | latest | Automated prediction updates |
-| File Upload | python-multipart | latest | Multipart form data handling |
-| Environment | python-dotenv | latest | .env file management |
-| Numerical | numpy | latest | Numerical computations |
-
-### Frontend
-
-| Component | Technology | Version | Purpose |
-|-----------|-----------|---------|---------|
-| Framework | React | 18.2+ | UI component library |
-| Routing | React Router | 6.20+ | SPA navigation |
-| State Management | Context API | Built-in | Global state |
-| Charts | Chart.js + Recharts | Latest | Data visualization |
-| UI Components | Bootstrap | 5.3+ | Responsive design |
-| Animations | Framer Motion | 10.0+ | UI micro-interactions |
-| Icons | React Icons | 4.12+ | Icon library |
-
-### DevOps
-
-| Component | Technology | Purpose |
-|-----------|-----------|---------|
-| Containerization | Docker | Backend + frontend containerization |
-| Orchestration | Docker Compose | Multi-container deployment |
-| Reverse Proxy | Nginx | (Optional) Load balancing |
-| CI/CD | GitHub Actions | (Optional) Automated testing |
-
----
-
-## Data Flow & Processing
-
-### 1. Data Ingestion Pipeline
-
-**Source**: Excel/CSV files placed in `data/raw/`
-
-**Key Input Files** (configured in `backend/config.py`, placed in `data/raw/`):
-
-| File | Description |
-|------|-------------|
-| `Engagement_Analysis.xlsx` | Primary learner usage dump (students, courses, enrollments) |
-| `_Trimester-1 2025 Attendance Quiz-Assignment-Exam 5Jan2025 (1).xlsx` | T1 attendance, quiz, assignment, and exam records |
-| `B.S and M.Sc Live Summary Data C-1, Trimester 1 (1).xlsx` | Live session attendance — Trimester 1 |
-| `B.S and M.Sc Summary Data Trimester 2 (1).xlsx` | Live session attendance — Trimester 2 |
-| `Week 1-2 Student Engagement Analysis.xlsx` | Early engagement snapshot (weeks 1–2) |
-| `Graded Quiz 1 Status 9 feb.xlsx` | Quiz 1 status snapshot (9 Feb) |
-| `graded quiz 1 10 feb complete.xlsx` | Quiz 1 full export (10 Feb, original) |
-| `graded quiz 1 10 feb 11_15 AM.xlsx` | Quiz 1 snapshot — 10 Feb 11:15 AM |
-| `Graded quiz 1 10 feb 4_51 pm.xlsx` | Quiz 1 snapshot — 10 Feb 4:51 PM (latest, used as canonical) |
-| `Learner usage week 3.xlsx` | Platform usage dump — week 3 |
-| `Learner usage week 5.xlsx` | Platform usage dump — week 5 |
-
-**Process Flow**:
+**Login request:**
 ```
-Raw File (.xlsx)
-    → File Validator (schema check)
-    → Row Validator (data quality checks)
-    → [Pass] → Star Schema DB
-    → [Fail] → Quarantine (error logging)
+POST /api/v1/auth/login
+Content-Type: application/x-www-form-urlencoded
+
+username=myuser&password=mypassword
 ```
 
-**Validation Rules** (see `backend/ingestion/row_validators.py`):
-- Excel error detection (`#DIV/0!`, `#VALUE!`, `#N/A`, `#REF!`)
-- Null/NaN/Inf guards
-- Percentage bounds (0-1 or 0-100 normalization)
-- Timestamp sanity (no future dates, epoch >1970)
-- Email format validation (RFC 5322)
-- Negative value checks (for non-negative fields)
-
-**Quarantine System**:
-- Invalid rows → `backend/ingestion/quarantine.py`
-- Errors logged → `backend/ingestion/error_logger.py`
-- Original data preserved for manual review
-
-### 2. Star Schema Database
-
-**Database location**: `backend/data/sql_app.db`
-
-**Canonical models**: `backend/database/models/canonical.py`
-
-**Dimension Tables**:
-
-| Table | Key Columns |
-|-------|-------------|
-| `dim_students` | `student_id` (email PK), `org_defined_id`, `student_bits_id`, `student_name`, `program` (BS/MSc), `cohort`, `trimester`, `enrollment_status`, `is_new_student` |
-| `dim_courses` | `course_id` (PK), `course_code`, `course_name`, `department`, `trimester`, `program`, `faculty_name` |
-
-**Fact Tables**:
-
-| Table | Key Columns |
-|-------|-------------|
-| `fact_academic_performance` | `student_id`, `course_id`, `assessment_type`, `max_score`, `scored`, `percentage`, `submitted`, `late_submission`, `data_snapshot_date`, `source_file` |
-| `fact_engagement` | `student_id`, `metric_date`, `metric_week`, `live_sessions_attended`, `attendance_percentage`, `total_time_minutes`, `login_count`, `days_active`, `content_items_viewed`, `data_snapshot_date` |
-| `fact_consistency` | `student_id`, `weeks_with_attendance`, `attendance_streak_current`, `attendance_streak_max`, `attendance_variance`, `weeks_with_login`, `avg_logins_per_week`, `engagement_trend`, `week_over_week_change` |
-| `fact_intent_responsiveness` | `student_id`, `hours_before_deadline`, `attempt_count`, `welcome_email_opened`, `response_time_hours`, `no_login_days`, `zero_participation_weeks`, `message_type`, `message_priority` |
-
-All fact tables include a `data_snapshot_date` column for temporal versioning — enabling point-in-time analysis as new data snapshots are loaded.
-
-**Data Lineage**:
-- `data_lineage`: ETL audit trail (source file, sheet name, target table, records processed/inserted/updated/skipped/errored, processing duration)
-
-### 3. Feature Engineering
-
-The platform uses two feature engineering approaches depending on the data source:
-
-**Backend Pipeline — 36 Historical Features** (`backend/ml/features/feature_engineering.py`):
-
-Processes 7-year historical CSV records into per-student averages and 3-year trend slopes.
-
-- **Per-year averages**: `mpa_avg_1` … `mpa_avg_7`, `absrate_avg_1` … `absrate_avg_7`, `nsusp_avg_1` … `nsusp_avg_7`, `mobility_avg_1` … `mobility_avg_7`
-- **3-year trend slopes** (years 5–7, linear regression): `mpa_avg_trend_3yr`, `absrate_avg_trend_3yr`, `nsusp_avg_trend_3yr`, `mobility_avg_trend_3yr`
-
-```python
-# 3-year trend (years 5-7, linear regression slope)
-from numpy.linalg import lstsq
-x = [5, 6, 7]; y = [absrate5, absrate6, absrate7]
-absrate_avg_trend_3yr = lstsq([[xi, 1] for xi in x], y)[0][0]
+**Login response:**
+```json
+{ "access_token": "eyJ...", "token_type": "bearer" }
 ```
 
-**Standalone Pipeline — 12 DB-Driven Features** (`models/feature_engineering.py`):
-
-Aggregates live `enrollments` and `courses` tables per student (see [ML Pipeline](#ml-pipeline) for full feature list).
-
-```python
-# Example derived ratios
-content_completion_rate = content_completed / content_required
-quiz_completion_rate    = quiz_completed / total_quiz_attempts
-avg_time_per_course     = total_time_spent_seconds / courses_enrolled
-```
-
-### 4. Signal Computation
-
-**5 Signal Groups** → Aggregated into risk score
-
-**Example: Academic Signal** (see `backend/ml/inference/predictor.py`):
-```python
-academic_signal_score = weighted_avg([
-    quiz_completion_rate,
-    exam_attendance_rate,
-    assignment_submission_rate,
-    gpa_normalized
-])
-# Output range: 0-1 (probability)
-```
-
-**Signal Weights** (from `backend/config.py`):
-```python
-SIGNAL_WEIGHTS = {
-    'academic': 0.30,
-    'engagement': 0.25,
-    'consistency': 0.20,
-    'intent': 0.15,
-    'responsiveness': 0.10
-}
-# Total: 1.0
-```
-
-### 5. Risk Scoring Formula
-
-**Final Risk Score** (see `backend/features/risk_scorer.py`):
-```python
-risk_score = (
-    0.30 * academic_signal_score +
-    0.25 * engagement_signal_score +
-    0.20 * consistency_signal_score +
-    0.15 * intent_signal_score +
-    0.10 * responsiveness_signal_score
-) * 100  # Convert to percentage (0-100)
-
-# Multi-layer validation
-risk_score = max(0.0, min(100.0, risk_score))  # Clamp
-assert 0 <= risk_score <= 100
-```
-
-**Output**:
-- `risk_score`: 0-100 percentage (75.3 = 75.3% dropout risk)
-- `risk_level`: "Low" (<30%), "Medium" (30-60%), "High" (60-80%), "Critical" (>=80%)
-- `confidence`: Model confidence (0-1)
-
----
-
-## Setup & Installation
-
-### Prerequisites
-
-- **Python**: 3.10 or higher
-- **Node.js**: 18.0 or higher
-- **npm**: 9.0 or higher
-- **Git**: For version control
-- **Redis**: Optional (for caching; falls back gracefully if unavailable)
-
-### Option 1: Docker (Recommended)
-
-```bash
-# 1. Clone repository
-git clone https://github.com/your-org/ews-retention-platform.git
-cd ews-retention-platform
-
-# 2. Create environment file
-cp .env.example .env
-# Edit .env with your API keys
-
-# 3. Build and run
-docker-compose up -d
-
-# 4. Access application
-# Frontend: http://localhost:3000
-# Backend API: http://localhost:8000
-# API Docs: http://localhost:8000/docs
-```
-
-### Option 2: Script-Assisted Setup
-
-A convenience script handles virtual environment creation and dependency installation:
-
-```bash
-# From project root
-bash setup.sh
-
-# Then activate the environment
-source venv/bin/activate
-```
-
-> **Note**: `setup.sh` uses `/home/duffer/tmp` as `TMPDIR` to avoid `/tmp` space issues on constrained systems. Adjust the path in the script if needed for your environment.
-
-### Option 3: Manual Setup
-
-#### Backend Setup
-
-```bash
-# 1. Navigate to backend
-cd backend
-
-# 2. Create virtual environment
-python -m venv venv
-source venv/bin/activate  # On Windows: venv\Scripts\activate
-
-# 3. Install dependencies
-pip install -r requirements.txt
-
-# 4. Set environment variables (see Configuration section)
-cp .env.example .env
-# Edit .env with your credentials
-
-# 5. Start backend server
-uvicorn backend.main:app --reload --host 0.0.0.0 --port 8000
-```
-
-#### Frontend Setup
-
-```bash
-# 1. Navigate to frontend (from project root)
-cd frontend
-
-# 2. Install dependencies
-npm install
-
-# 3. Configure API URL
-echo "REACT_APP_API_URL=http://localhost:8000/api/v1" > .env
-
-# 4. Start development server
-npm start
-
-# Access at: http://localhost:3000
-```
-
-#### Data Ingestion (Initial Setup)
-
-```bash
-# 1. Place raw data files in data/raw/
-cp your-data-files/*.xlsx data/raw/
-
-# 2. Data is ingested automatically on backend startup
-# Or trigger manually:
-cd backend
-python -m backend.services.core.data_ingestion
-
-# 3. Verify data loaded
-sqlite3 backend/data/sql_app.db "SELECT COUNT(*) FROM dim_students;"
-```
-
----
-
-## Configuration
-
-### Environment Variables
-
-Create a `.env` file in the project root:
-
-```bash
-# === LLM Provider ===
-# Choose: "gemini" (default) or "claude"
-LLM_PROVIDER=gemini
-
-# Google Gemini
-GEMINI_API_KEY=your-gemini-api-key
-GEMINI_MODEL=gemini-pro
-
-# Anthropic Claude (alternative)
-CLAUDE_API_KEY=your-claude-api-key
-CLAUDE_MODEL=claude-3-opus-20240229
-
-LLM_TEMPERATURE=0.7
-LLM_MAX_TOKENS=1024
-
-# === Database ===
-DATABASE_URL=sqlite:///./backend/data/sql_app.db
-
-# === Security ===
-SECRET_KEY=your-secret-key-change-in-production
-ACCESS_TOKEN_EXPIRE_MINUTES=1440  # 24 hours
-
-# === Redis (optional) ===
-REDIS_URL=redis://localhost:6379/0
-CACHE_EXPIRE_SECONDS=3600
-
-# === ML Model ===
-MODEL_TYPE=xgboost
-MODEL_VERSION=v1.0
-
-# === Risk Thresholds (probabilities 0-1) ===
-THRESHOLD_NO_ACTION=0.30
-THRESHOLD_GENTLE=0.60
-THRESHOLD_MENTOR=0.80
-RISK_THRESHOLD_HIGH=0.7
-RISK_THRESHOLD_MEDIUM=0.4
-
-# === Intervention Settings ===
-INTERVENTION_COOLDOWN_DAYS=7
-RISK_SPIKE_THRESHOLD=0.15
-
-# === Signal Weights ===
-WEIGHT_ACADEMIC=0.30
-WEIGHT_ENGAGEMENT=0.25
-WEIGHT_CONSISTENCY=0.20
-WEIGHT_INTENT=0.15
-WEIGHT_RESPONSIVENESS=0.10
-
-# === Business Metrics ===
-AVERAGE_STUDENT_LTV=12500.0
-TUITION_PER_SEMESTER=6250.0
-INTERVENTION_COST=350.0
-TARGET_RETENTION_RATE=0.95
-
-# === API ===
-API_HOST=0.0.0.0
-API_PORT=8000
-CORS_ORIGINS=http://localhost:3000
-
-# === Integration ===
-INTEGRATION_API_KEY=ews-integration-dev-key
-AI_ADVISOR_ORIGIN=http://localhost:8001
-
-# === Frontend ===
-REACT_APP_API_URL=http://localhost:8000/api/v1
-
-# === Scheduler ===
-SCHEDULER_ENABLED=true
-PREDICTION_UPDATE_INTERVAL=3600  # seconds
-
-# === Logging ===
-LOG_LEVEL=INFO
-```
-
-### Configuration Files
-
-1. **`backend/config.py`**: Centralized backend configuration (paths, thresholds, LLM, scheduler)
-2. **`backend/core/logger.py`**: Centralized structured logger (`sys_logger`) used across all backend modules
-3. **`backend/core/security.py`**: Security manager (JWT helpers, password hashing via `passlib`)
-4. **`frontend/src/config`**: Frontend constants directory
-5. **`data/DATA_MANIFEST.md`**: Data file catalog and validation rules
-
----
-
-## API Documentation
-
-### Base URL
-
-```
-http://localhost:8000/api/v1
-```
-
-### Authentication
-
-JWT-based authentication is implemented using `python-jose` and `passlib`.
-
-- **Login**: `POST /auth/login` → returns access token
-- **Token lifetime**: 24 hours (configurable via `ACCESS_TOKEN_EXPIRE_MINUTES`)
-- **Algorithm**: HS256
-
-For production deployments, set a strong `SECRET_KEY` environment variable.
-
-### Rate Limiting
-
-Built-in IP-based rate limiting: **100 requests per minute** per client IP. Exceeding the limit returns `HTTP 429 Too Many Requests`.
-
-### Endpoints
-
-#### Student APIs
-
-##### GET `/students/students`
-
-Retrieve paginated list of students with risk scores.
-
-**Query Parameters**:
-- `skip` (int, default=0): Offset for pagination
-- `limit` (int, default=50, max=2000): Page size
-- `sort_by` (str, default="risk_score"): Sort field
-- `order` (str, default="desc"): Sort order (asc, desc)
-- `risk_min` / `risk_max` (float, optional): Risk score filter (0-100)
-
-**Response** (200 OK):
+### 5.3 Students (Staff Role Required)
+
+| Method | Path | Auth | Notes |
+|---|---|---|---|
+| GET | `/students/overview` | JWT | KPI stats; no role restriction |
+| GET | `/students/courses` | JWT | Course catalog; no role restriction |
+| GET | `/students/students` | Staff | Paginated list. Params: skip, limit(1-2000), sort_by, order(asc/desc), risk_min, risk_max |
+| GET | `/students/students/{id}` | Staff | Full student profile |
+| GET | `/students/students/{id}/interventions` | Staff | Intervention history |
+| GET | `/students/students/{id}/weekly-summary` | Staff | Portal-style summary |
+| GET | `/students/students/{id}/risk-trend` | Staff | Params: limit(2-52 weeks) |
+| GET | `/students/at-risk` | Staff | Params: threshold(0-100), limit(1-500) |
+| GET | `/students/risk-distribution` | Staff | Percentile and bucket stats |
+| GET | `/students/analytics/trends` | Staff | Department/course analytics |
+| GET | `/students/analytics/risk-trends` | Staff | Params: weeks(1-52) |
+| GET | `/students/analytics/engagement-trends` | Staff | Params: weeks(1-52) |
+| GET | `/students/analytics/performance-trends` | Staff | Params: weeks(1-52) |
+| GET | `/students/analytics/intervention-effectiveness` | Staff | Params: weeks(1-104) |
+
+**Student object schema:**
 ```json
 {
-  "students": [
-    {
-      "id": "student@example.com",
-      "first_name": "John",
-      "last_name": "Doe",
-      "department": "Engineering",
-      "risk_score": 75.3,
-      "risk_level": "high",
-      "engagement_score": 24.7,
-      "signal_breakdown": {
-        "academic_signal_score": 0.68,
-        "engagement_signal_score": 0.45,
-        "consistency_signal_score": 0.72,
-        "intent_signal_score": 0.55,
-        "responsiveness_signal_score": 0.60
-      },
-      "top_risk_factors": ["Low engagement score", "Declining attendance trend"],
-      "prediction_available": true
-    }
-  ],
-  "total": 1000,
-  "page": 1,
-  "page_size": 50
+  "id": "user@institution.edu",
+  "first_name": "Jane",
+  "last_name": "Doe",
+  "department": "BS - Data Science & AI",
+  "old_new_student": "new",
+  "risk_score": 67.4,
+  "risk_level": "medium",
+  "engagement_score": 32.6,
+  "content_completion_score": 45.0,
+  "quiz_engagement_score": 30.0,
+  "assignment_score": 55.0,
+  "login_consistency_score": 20.0,
+  "time_investment_score": 35.0,
+  "discussion_engagement_score": 10.0,
+  "zero_progress_ratio": 0.2,
+  "dominant_risk_factor": "Login Consistency",
+  "exam_attendance_rate": 75.0,
+  "enrollments": [{ "course_id": "...", "course_name": "..." }]
 }
 ```
 
-##### GET `/students/{student_id}`
+### 5.4 Predictions
 
-Retrieve single student details including intervention history.
+| Method | Path | Auth | Notes |
+|---|---|---|---|
+| GET | `/predictions/batch` | JWT | Params: include_decisions, limit(1-2000) |
+| GET | `/predictions/{student_id}` | JWT | Params: include_decisions(default true) |
 
-##### GET `/students/at-risk`
+### 5.5 ML
 
-Get students above a risk threshold (default: 70.0).
+| Method | Path | Auth | Notes |
+|---|---|---|---|
+| GET | `/ml/predict/{student_id}` | Staff | Compute + persist prediction |
+| POST | `/ml/predict-batch` | Staff | Body: `{ student_ids: [...] }` |
+| GET | `/ml/model-info` | Staff | Model metadata |
+| GET | `/ml/history/{student_id}` | Staff | Historical predictions |
 
-##### GET `/students/overview`
+### 5.6 Interventions
 
-Dashboard summary statistics (total students, average risk, at-risk count, etc.)
+| Method | Path | Auth | Notes |
+|---|---|---|---|
+| GET | `/interventions` | JWT | Params: skip, limit, status filter |
+| POST | `/interventions` | JWT | Body: InterventionCreateRequest. Supports `student_ids` array for bulk |
+| GET | `/interventions/{id}` | JWT | Single intervention |
+| PATCH | `/interventions/{id}` | JWT | Update status, faculty, effectiveness |
+| DELETE | `/interventions/{id}` | JWT | Hard delete |
 
-#### Business Intelligence APIs
+**InterventionCreateRequest:**
+```json
+{
+  "student_id": "user@email.com",
+  "date": "2025-04-06",
+  "user": "advisor@institution.edu",
+  "action": "Email sent re: attendance",
+  "status": "Pending",
+  "assigned_faculty": "Dr. Smith",
+  "risk_score_at_trigger": 72.5,
+  "threshold_category": "urgent",
+  "channels": ["email", "whatsapp"],
+  "assigned_team": "faculty"
+}
+```
 
-- `GET /business/metrics/revenue-at-risk` — Revenue impact of at-risk students
-- `GET /business/cohort-analysis` — Comparative cohort performance
+### 5.7 LLM
 
-#### Decision APIs
+All endpoints require JWT. Return mock data when LLM API keys absent.
 
-- `GET /decisions/interventions/{student_id}` — Intervention recommendation for a student
+| Method | Path | Body |
+|---|---|---|
+| POST | `/llm/explain-risk-change` | `{ student_id, time_period }` |
+| POST | `/llm/student-advice` | `{ student_id, question }` |
+| POST | `/llm/faculty-summary` | `{ student_id, for_role }` |
+| POST | `/llm/intervention-recommendation` | `{ student_id }` |
+| POST | `/llm/what-if` | `{ student_id, scenario }` |
+| POST | `/llm/report-narrative` | `{ report_type, data }` |
 
-#### AI Recommendation APIs
+### 5.8 Business Intelligence
 
-- `POST /recommendations/ai-advice` — Gemini/Claude-powered personalized recommendations
+| Method | Path | Auth |
+|---|---|---|
+| GET | `/business/retention-metrics` | JWT |
+| GET | `/business/revenue-at-risk` | JWT |
+| GET | `/business/intervention-roi` | JWT |
+| GET | `/business/retention-funnel` | JWT |
+| GET | `/business/cohort-analysis` | JWT |
 
-#### Advanced Features APIs
+### 5.9 Other Endpoints
 
-- `GET /features/advanced/{student_id}` — Compute 36+ advanced retention features
-- `GET /features/risk-summary/{student_id}` — High-level risk summary for dashboard display
-
-#### AI Academic Advisor APIs
-
-- `POST /advisor/study-plan/{student_id}` — Generate personalized 4-week study plan
-- `POST /advisor/faculty-summary/{student_id}` — Faculty-appropriate student summary with talking points
-- `GET /advisor/context/{student_id}` — Advisor context and academic history
-- `POST /advisor/motivational-message/{student_id}` — Generate motivational message by risk level
-
-#### LLM APIs
-
-- `POST /llm/explain-risk-change` — Explain why a student's risk score changed
-- `POST /llm/student-advice` — Personalized advice for a student
-- `POST /llm/intervention-suggestions` — AI-powered intervention recommendations
-- `GET /llm/prioritize-students` — Priority queue of students needing intervention
-- `GET /llm/similar-students/{student_id}` — Find students with similar risk profiles
-- `POST /llm/what-if-simulation` — Simulate impact of interventions
-- `GET /llm/weekly-brief/{student_id}` — Weekly academic progress brief
-
-#### Analytics APIs
-
-- `GET /analytics/*` — Engagement trends, cohort analytics, signal distributions
-
-#### Additional APIs
-
-- `GET/POST /events/*` — Student engagement event tracking
-- `GET/POST /feedback/*` — Intervention feedback collection
-- `GET /reports/*` — Report generation (PDF/CSV export)
-- `GET/POST /goals/*` — Student goal tracking
-- `GET /ml/*` — ML model status and retraining endpoints
-- `GET /predictions/*` — Raw prediction outputs
-
-### OpenAPI Documentation
-
-Interactive API docs: `http://localhost:8000/docs`
-ReDoc: `http://localhost:8000/redoc`
+| Method | Path | Auth | Notes |
+|---|---|---|---|
+| GET | `/analytics/summary` | JWT | Aggregated summary |
+| GET | `/analytics/risk-distribution` | JWT | Distribution breakdown |
+| GET,POST,PUT | `/goals/{student_id}` | JWT | Goal lifecycle |
+| GET | `/reports/student/{id}` | Staff | Student report |
+| GET | `/reports/cohort` | Staff | Cohort report |
+| GET | `/monitoring/health` | JWT | Detailed health |
+| GET | `/advisor/...` | JWT | AI advisor endpoints |
+| GET | `/integration/...` | JWT + API key | External system integration |
 
 ---
 
-## Frontend Architecture
+## 6. Authentication and Security Model
 
-### Page Structure (14 pages)
+### 6.1 Backend JWT Auth (How It Works)
 
-| Page | Route | Purpose |
-|------|-------|---------|
-| Dashboard | `/` | Executive overview, KPIs, at-risk alerts |
-| Students | `/students` | Filterable student list with risk scores |
-| Student Profile | `/students/:id` | Individual student detail page |
-| Student Portal | `/student-portal` | Student-facing self-service dashboard |
-| Faculty Tools | `/faculty-tools` | Faculty-specific interventions, rosters |
-| Insights | `/insights` | Analytics and deep-dive charts |
-| Analytics | `/analytics` | Engagement and trend analytics |
-| Business Analytics | `/business-analytics` | Revenue metrics, cohort analysis |
-| Business Intelligence | (Component) | Business intelligence components |
-| Institutional Insights | (Component) | System-wide insights |
-| Interventions | `/interventions` | Intervention tracking, effectiveness |
-| Reports | `/reports` | Export options, scheduled reports |
-| Risk Factors | `/risk-factors` | Signal breakdown explanations |
-| Settings | `/settings` | Configuration, user preferences |
+1. Client POSTs `username` + `password` form data to `POST /api/v1/auth/login`.
+2. Server verifies password against bcrypt hash in `users` table.
+3. Server issues JWT with `{ sub: user_id, role: user_role, exp: now + 60min }`.
+4. Client includes `Authorization: Bearer <token>` in all subsequent requests.
+5. `deps.get_current_user()` decodes JWT with `SECRET_KEY`, fetches User row, validates `is_active`.
+6. `deps.require_role(["admin", "faculty"])` checks `user.role` against the allowed set.
+7. `is_superuser=True` users bypass role checks entirely.
 
-### Component Hierarchy
+**Roles and access:**
 
-```
-App
-├── Navigation
-│   ├── Sidebar
-│   └── TopBar
-├── Pages/
-│   ├── Dashboard
-│   │   ├── OverviewCards (KPI metrics)
-│   │   ├── RiskDistributionChart
-│   │   ├── AtRiskAlerts
-│   │   └── RecentActivity
-│   ├── Students
-│   │   ├── StudentTable (sortable, filterable)
-│   │   ├── StudentFilters
-│   │   └── StudentDrawer (detail slide-out)
-│   └── StudentProfile
-│       ├── ProfileHeader
-│       ├── RiskScoreCard
-│       ├── SignalBreakdown
-│       ├── EngagementTimeline
-│       └── InterventionHistory
-└── Shared Components/
-    ├── Charts/ (Chart.js + Recharts wrappers)
-    ├── Common/ (Button, Card, Badge, Loading)
-    └── Student/ (StudentCard, RiskBadge, SignalChart)
-```
+| Role | Student data | Interventions | Reports | User management |
+|---|---|---|---|---|
+| student | Own data only | None | None | Own profile |
+| faculty | All students | Read/write | Read | None |
+| retention team | All students | Read/write | Read | None |
+| admin | All | All | All | Full |
+| superuser | All | All | All | Full |
 
-### State Management
+### 6.2 Frontend Auth (What Actually Happens)
 
-**Global State** (via Context API):
-- `StudentContext`: Cached student data, filters
-- `AuthContext`: User authentication
-- `ThemeContext`: Dark/light mode toggle
-
-**Local State**: Form inputs, modal visibility, sort/filter states
-
-### Data Display Guidelines
-
-**CRITICAL RULE**: Frontend displays backend data AS-IS, **NEVER** recomputes metrics.
-
+`AuthContext.js` contains:
 ```javascript
-// CORRECT: Use backend risk_score directly
-<div>{student.risk_score.toFixed(1)}%</div>
-
-// WRONG: Do NOT recalculate
-<div>{(100 - student.engagement).toFixed(1)}%</div>
-
-// CORRECT: Use backend signal_breakdown
-<SignalChart data={student.signal_breakdown} />
+const CREDENTIALS = { username: 'admin', password: 'admin123' };
 ```
+
+When the user submits the login form:
+1. The frontend checks if username === 'admin' and password === 'admin123'.
+2. If true, writes `sessionStorage.setItem('ews_auth', 'true')`.
+3. No HTTP call is made to the backend.
+4. No JWT is obtained.
+5. All subsequent `fetch()` calls in `api.js` and `services/api.js` have no Authorization header.
+6. The backend's `get_current_user` dependency will respond with HTTP 401.
+
+**Consequence:** In a correctly running environment, the entire frontend will fail to load any data. The frontend will render loading spinners or error states for all student/analytics data.
+
+### 6.3 Security Vulnerabilities Summary
+
+See `SECURITY.md` for full details. Brief summary:
+
+| Severity | ID | Issue |
+|---|---|---|
+| Critical | AUTH-01 | Frontend auth disconnected from backend; no JWT in API calls |
+| Critical | AUTH-02 | Hardcoded credentials in frontend source bundle |
+| High | RATE-01 | In-memory rate limiter, non-distributed |
+| High | SECRET-01 | Default SECRET_KEY in source (blocked in prod but exposed in dev) |
+| High | CACHE-01 | Student PII potentially in Redis without encryption |
+| Medium | REG-01 | Open registration with no email verification |
+| Medium | SESSION-01 | sessionStorage flag trivially forgeable |
+| Medium | OWNER-01 | No per-student ownership checks on intervention endpoints |
 
 ---
 
-## ML Pipeline
+## 7. ML System Explanation
 
-The platform runs two complementary ML pipelines: a **standalone models pipeline** for offline training against the live SQLite database, and a **backend ML pipeline** that integrates directly with the FastAPI service.
+### 7.1 The Three Pipelines (All Coexist, Only One Is Active)
+
+**Pipeline 1 — Active Runtime (services/risk_scoring.py)**
+
+Used by: `StudentService`, `SchedulerService`, `ml_service.py` (fallback).
+
+```
+Enrollments + GradedComponents + ExamRecords
+         ↓
+FeatureEngineer.calculate_all_features()
+         ↓
+6 engagement features [0–100]
+         ↓
+RiskScorer.calculate_risk_score()
+  Weights: content(30%), login(20%), quiz(15%), assignment(15%), time(10%), discussion(10%)
+         ↓
+risk_score ∈ [0, 100]
+```
+
+**Pipeline 2 — Saved Models (ml/models/saved/) — INACTIVE**
+
+Expected input: `[absrate7, q4mpa7, nsusp7, mobility7]`.  
+These features do not exist in the live database.  
+The inference code (`predictor.py`) was deleted.  
+Result: models cannot be invoked. They are dead artifacts.
+
+**Pipeline 3 — Explainability Layer (ml/inference/risk_formula.py)**
+
+Used by: Frontend WhatIfSimulator and ExplainableRiskNarrative components (via API endpoints).  
+Input: 5 manually-provided signal scores [0–1].  
+Output: 0–1 score + human-readable breakdown.  
+Not connected to the runtime prediction pipeline.
+
+### 7.2 Risk Score Interpretation
+
+```
+0–39  → Low Risk     — Monitoring only; no urgent action
+40–69 → Medium Risk  — Proactive outreach recommended
+70–100 → High Risk   — Urgent intervention required
+```
+
+Config thresholds: `RISK_THRESHOLD_HIGH=70`, `RISK_THRESHOLD_MEDIUM=40`.
+
+The `features/risk_scorer.py` (secondary pipeline) uses different thresholds: Critical ≥75, High ≥50, Medium ≥25.
+
+### 7.3 Feature Weight Rationale
+
+| Feature | Weight | Why |
+|---|---|---|
+| Content completion | 30% | Strongest predictor — students who don't engage with material drop out |
+| Login consistency | 20% | Absence from the platform precedes withdrawal |
+| Quiz engagement | 15% | Formative assessment participation correlates with retention |
+| Assignment score | 15% | Summative task completion indicates commitment |
+| Time investment | 10% | Supporting signal; high outliers can mislead |
+| Discussion | 10% | Social engagement; weaker predictor but valuable |
+
+### 7.4 Missing Data Handling
+
+Missing feature scores are excluded from the weighted average rather than defaulting to 0 (worst) or 100 (best). Coverage is tracked. When fewer than 100% of features are available, the score is shrunk toward 50 (neutral), expressing uncertainty. This prevents students with sparse data from being falsely scored as extremely high or low risk.
+
+### 7.5 Known ML Limitations
+
+- Rule-based scoring is not validated against actual retention outcomes. Its predictive accuracy is unknown.
+- Training label data (`labels.csv`) exists but is disconnected from the scoring pipeline.
+- The weekly retraining job is a stub and has never executed.
+- No model performance monitoring, calibration, or drift detection is implemented.
+- The explainability formula (risk_formula.py) has a weight mapping bug where consistency/intent/responsiveness signals receive 0.0 weight due to key mismatches between config and the module's mapping.
 
 ---
 
-### Standalone Models Pipeline
+## 8. Setup Instructions
 
-**Location**: `models/`
+### 8.1 Prerequisites
 
-**Configuration**: `models/config.yaml`
+- Python 3.11 or higher (tested on 3.13)
+- Node.js 18+ and npm 9+
+- `backend/data/Engagement_Analysis.xlsx` must exist (LMS data export)
 
-```yaml
-model:
-  type: xgboost
-  path: saved_models/xgboost_model.pkl
-  features:
-    - content_completed
-    - content_required
-    - quiz_completed
-    - total_quiz_attempts
-    - num_logins
-    - total_time_spent_seconds
-    - discussion_posts_created
-    - discussion_posts_read
-    - courses_enrolled
-    - content_completion_rate
-    - quiz_completion_rate
-    - avg_time_per_course
-training:
-  test_size: 0.3
-  random_state: 42
-  train_semester: "Trimester 1"
-  test_semester: "Trimester 2"
-```
-
-**Process**:
-1. Load data directly from `sql_app.db` via `models/feature_engineering.py`
-2. Aggregate enrollment records into 12 student-level features
-3. Engineer proxy dropout label (`is_dropout`) based on cohort percentile thresholds
-4. Split by semester: **Trimester 1 → train**, **Trimester 2 → test**
-5. Handle class imbalance with SMOTE
-6. Train XGBoost (primary) + RandomForest (fallback) ensemble
-7. Save models and feature importance to `models/saved_models/`
-
-**Training Command**:
-```bash
-python models/train_model.py
-```
-
-**Prediction Command**:
-```bash
-python models/predict_model.py <student_id>
-```
-
-**Saved Artifacts**:
-```
-models/saved_models/
-├── xgboost_model.pkl        # Primary model
-├── random_forest.pkl        # Fallback model
-└── feature_importance.json  # Top feature importances (JSON)
-```
-
-**Model loader**: `models/model_loader.py`
-
----
-
-### Backend ML Pipeline
-
-**Location**: `backend/ml/`
-
-**Training Script**: `backend/ml/training/train.py`
-
-**Process**:
-1. Load historical student data (CSV via `data_path` argument)
-2. Engineer 36 features from 7-year historical records (`backend/ml/features/feature_engineering.py`)
-3. Split 80/20 with stratification
-4. Train models via `imblearn` pipelines (StandardScaler → SMOTE → Classifier):
-   - **XGBoost** (primary, `retention_model_xgboost.joblib`)
-   - **Random Forest** (alternative, `retention_model.joblib`)
-   - **Logistic Regression** baseline for interpretability (`retention_model_logreg.joblib`)
-5. Evaluate each model and log classification report + AUC-ROC
-6. Export feature importance CSV (`feature_importance.csv`)
-7. Save all models to `backend/ml/models/saved/`
-
-**Training Command**:
-```bash
-python -m backend.ml.training.train
-```
-
-**Saved Artifacts**:
-```
-backend/ml/models/saved/
-├── retention_model_xgboost.joblib  # Primary XGBoost pipeline
-├── retention_model.joblib          # Random Forest pipeline
-├── retention_model_logreg.joblib   # Logistic Regression baseline
-└── feature_importance.csv          # Top feature importances (CSV, auto-generated after training)
-```
-
-The top driver from the trained model is `absrate_avg_3` (year-3 absence rate, importance ≈ 0.452), followed by `absrate_avg_6` (≈ 0.123). Absence rate across years consistently dominates over GPA and mobility features.
-
----
-
-### Feature Engineering
-
-#### Standalone Pipeline — 12 DB-Driven Features
-
-Source: `models/feature_engineering.py` — aggregates live `enrollments` + `courses` tables.
-
-| Feature | Description |
-|---------|-------------|
-| `content_completed` | Total content items completed |
-| `content_required` | Total content items required |
-| `quiz_completed` | Total quizzes completed |
-| `total_quiz_attempts` | Total quiz attempts |
-| `num_logins` | Total login count |
-| `total_time_spent_seconds` | Total platform time (seconds) |
-| `discussion_posts_created` | Posts created in discussions |
-| `discussion_posts_read` | Posts read in discussions |
-| `courses_enrolled` | Number of courses enrolled |
-| `content_completion_rate` | `content_completed / content_required` |
-| `quiz_completion_rate` | `quiz_completed / total_quiz_attempts` |
-| `avg_time_per_course` | `total_time_spent_seconds / courses_enrolled` |
-
-**Dropout proxy label** (`is_dropout = 1`) if any condition is met:
-- `content_completion_rate` ≤ bottom 20th percentile of cohort
-- `avg_time_per_course` ≤ bottom 20th percentile of cohort
-- `num_logins` < 5
-
-#### Backend Pipeline — 36 Historical Features
-
-Source: `backend/ml/features/feature_engineering.py` — processes 7-year historical CSV data.
-
-**7-Year Averages** (per-year MPA, absence rate, suspensions, mobility):
-- `mpa_avg_1` … `mpa_avg_7`
-- `absrate_avg_1` … `absrate_avg_7`
-- `nsusp_avg_1` … `nsusp_avg_7`
-- `mobility_avg_1` … `mobility_avg_7`
-
-**3-Year Trend Slopes** (years 5–7, linear regression):
-- `mpa_avg_trend_3yr`
-- `absrate_avg_trend_3yr`
-- `nsusp_avg_trend_3yr`
-- `mobility_avg_trend_3yr`
-
-Target variable: `nograd` (no graduation flag from historical records).
-
----
-
-### Prediction Flow (Standalone)
-
-```
-Student ID
-    ↓
-Load DB Data (feature_engineering.py)
-    ↓
-12 Student-Level Features
-    ↓
-XGBoost / RandomForest .predict_proba()
-    ↓
-Dropout Probability (0–1)
-    ↓
-JSON Output {student_id, predictions: {random_forest, xgboost}}
-```
-
-### Prediction Flow (Backend API)
-
-```
-Student Data
-    ↓
-36 Historical Features (feature_engineering.py)
-    ↓
-XGBoost Pipeline Inference
-    ↓
-Probability (0–1) → Risk Score (0–100)
-    ↓
-Signal Computation (5 groups)
-    ↓
-Validation & Sanitization
-    ↓
-Final Result {risk_score, signal_breakdown, top_risk_factors}
-```
-
-### Model Evaluation Metrics
-
-| Metric | Value | Threshold |
-|--------|-------|-----------|
-| AUC-ROC | 0.87 | >0.80 |
-| Precision | 0.82 | >0.75 |
-| Recall | 0.79 | >0.70 |
-| F1-Score | 0.80 | >0.75 |
-
----
-
-## Advanced Features
-
-The platform includes an **Advanced Feature Orchestrator** (`backend/features/advanced_orchestrator.py`) that computes 36+ sophisticated retention prediction features across 8 categories.
-
-### Feature Categories
-
-**1. Temporal & Trend Features** (6 features)
-- Engagement decay rate, academic grade trend slope, longest inactivity period
-
-**2. Consistency & Habits** (5 features)
-- Login regularity score, study streak tracking, behavioral stability metrics
-
-**3. Effort-Outcome Mismatch** (4 features)
-- Time investment vs. performance correlation, content consumption vs. comprehension scores
-
-**4. Engagement Depth** (4 features)
-- Content interaction quality, passive vs. active engagement ratio
-
-**5. Intent & Commitment** (3 features)
-- Goal-setting behavior, course progression patterns, voluntary engagement signals
-
-**6. Responsiveness** (3 features)
-- Communication response times, ignored escalation tracking, support ticket engagement
-
-**7. Cohort Normalization** (4 features, faculty-only)
-- Peer-relative performance metrics (privacy-protected, not shown to students)
-
-**8. Composite Indices** (4 strategic indices)
-- **Retention Risk Index (RRI)**: Overall dropout probability (0-100)
-- **Disengagement Velocity Index (DVI)**: Rate of engagement decline
-- **Academic Instability Index (AII)**: Grade volatility and trend severity
-- **Routine Strength Index (RSI)**: Study habit consistency score
-
-### Privacy & Ethics
-
-> **Warning**: Cohort normalization features are faculty-only and not shown to students to prevent social comparison anxiety and gaming of the system.
-
----
-
-## Risk Scoring Logic
-
-### Scale Convention
-
-- `risk_score`: **0-100** (percentage, for end-user display)
-- `signal_breakdown.*_signal_score`: **0-1** (probabilities, internal use)
-- Intervention thresholds in `config.py`: **0.0-1.0** (probabilities)
-
-### Computation Steps
-
-1. **ML Model Prediction** → Dropout probability (0-1)
-2. **Convert to Percentage** → `risk_probability * 100`
-3. **Compute Signal Scores** → 5 signals, each 0-1
-4. **Aggregate Signals** → Weighted sum using config weights
-5. **Validate & Clamp** → Ensure 0-100 range
-6. **Categorize Risk Level** → Map to Low/Medium/High/Critical
-
-### Multi-Layer Validation
-
-```python
-# Layer 1: Clamp to bounds
-risk_score = max(0.0, min(100.0, risk_score))
-
-# Layer 2: Assert validation
-assert 0 <= risk_score <= 100, f"Invalid risk score: {risk_score}"
-
-# Layer 3: Check for NaN/Inf
-if not np.isfinite(risk_score):
-    risk_score = None  # Fail safely
-```
-
-**See**: `backend/features/risk_scorer.py`, `backend/ml/utils/validation_utils.py`
-
----
-
-## Deployment
-
-### Docker Compose (Production)
-
-```yaml
-# docker-compose.yml
-version: '3.8'
-
-services:
-  backend:
-    build: ./backend
-    ports:
-      - "8000:8000"
-    environment:
-      - GEMINI_API_KEY=${GEMINI_API_KEY}
-      - CLAUDE_API_KEY=${CLAUDE_API_KEY}
-      - LLM_PROVIDER=${LLM_PROVIDER:-gemini}
-      - SECRET_KEY=${SECRET_KEY}
-      - DATABASE_URL=sqlite:///./backend/data/sql_app.db
-    volumes:
-      - ./data:/app/data
-      - ./models/saved_models:/app/models/saved_models
-
-  frontend:
-    build: ./frontend
-    ports:
-      - "3000:3000"
-    environment:
-      - REACT_APP_API_URL=http://backend:8000/api/v1
-    depends_on:
-      - backend
-
-  redis:  # Optional: for response caching
-    image: redis:7-alpine
-    ports:
-      - "6379:6379"
-
-  nginx:  # Optional reverse proxy
-    image: nginx:alpine
-    ports:
-      - "80:80"
-    volumes:
-      - ./nginx.conf:/etc/nginx/nginx.conf
-```
-
-**Deploy Command**:
-```bash
-docker-compose up -d --build
-```
-
-### Environment-Specific Configs
+### 8.2 Backend Setup
 
 ```bash
-# Development
-docker-compose --env-file .env.development up -d
+# 1. Navigate to the repo
+cd /path/to/ews-retention-platform
 
-# Production
-docker-compose --env-file .env.production up -d
+# 2. Create a virtual environment
+python -m venv venv
+source venv/bin/activate        # Windows: venv\Scripts\activate
+
+# 3. Install Python dependencies
+pip install -r requirements.txt
+
+# 4. Configure environment (optional but recommended)
+cp .env.example .env
+# Edit .env:
+#   SECRET_KEY=<generate with: python -c "import secrets; print(secrets.token_hex(32))">
+#   GEMINI_API_KEY=<your key if you want AI features>
+
+# 5. Ensure the data file is in place
+ls backend/data/Engagement_Analysis.xlsx
+
+# 6. Start the server
+uvicorn backend.main:app --host 0.0.0.0 --port 8000 --reload
+
+# OR:
+python -m backend.main
 ```
 
----
-
-## Testing
-
-### Backend Tests
-
-```bash
-cd backend
-pytest tests/ -v --cov=backend --cov-report=html
+On startup, watch the logs:
+```
+INFO  Database initialised.
+INFO  Starting data ingestion from XLSX files...
+INFO  Data ingestion complete.
+INFO  [SCHEDULER] Started. Daily job: 03:00 UTC. Weekly job: Sunday 04:00 UTC.
 ```
 
-**Test Suite**:
-- `tests/test_risk_validation.py`: Risk score validation
-- `tests/test_risk_scoring.py`: Risk scorer logic
-- `tests/test_advanced_features.py`: Advanced feature orchestrator
-- `tests/test_validation_suite.py`: Comprehensive validation
-- `tests/test_llm_services.py`: LLM integration tests
-- `tests/test_canonical_implementation.py`: Reference implementation tests
-- `tests/test_integration_api.py`: API integration tests
-- `tests/test_ml/`: ML pipeline tests
-- `tests/test_api/`: API endpoint tests
-- `tests/test_services/`: Service layer tests
+If ingestion fails, the server still starts but `total_students` will be 0.
 
-### Frontend Tests
+### 8.3 Frontend Setup
 
 ```bash
 cd frontend
-npm test
+npm install
+npm start
+# Dev server starts at http://localhost:3000
 ```
 
-### Additional Documentation
+### 8.4 Creating an Admin User
 
-The `docs/` folder contains supplementary guides:
+There is no seed script. Use curl or the Swagger UI at `http://localhost:8000/docs`:
 
-| File | Purpose |
-|------|---------|
-| `API_CONTRACT.md` | API contract and schema definitions |
-| `API_MAPPING.md` | Frontend-to-backend API mapping |
-| `DATA_VALIDATION_ARCHITECTURE.md` | Data validation design |
-| `DEPLOYMENT_NOTES.md` | Deployment-specific notes |
-| `EXTENSIBILITY.md` | How to extend the platform |
-| `FACULTY_AI_GUIDE.md` | Faculty-facing AI features guide |
-| `LLM_ARCHITECTURE.md` | LLM integration architecture |
-| `llm_security_architecture.md` | LLM security considerations |
-| `SETUP.md` | Detailed setup walkthrough |
-| `STUDENT_AI_GUIDE.md` | Student-facing AI features guide |
-| `TESTING.md` | Testing strategy and guidelines |
+```bash
+# Step 1: Register a user
+curl -X POST http://localhost:8000/api/v1/auth/register \
+  -H "Content-Type: application/json" \
+  -d '{"username": "admin", "email": "admin@example.com", "password": "SecurePass123!"}'
 
----
+# Step 2: Login to get a token
+TOKEN=$(curl -s -X POST http://localhost:8000/api/v1/auth/login \
+  -d 'username=admin&password=SecurePass123!' \
+  | python3 -c "import sys, json; print(json.load(sys.stdin)['data']['access_token'])")
 
-## Monitoring & Logging
+# Step 3: Promote to admin
+curl -X PATCH http://localhost:8000/api/v1/auth/users/1 \
+  -H "Authorization: Bearer $TOKEN" \
+  -H "Content-Type: application/json" \
+  -d '{"role": "admin", "is_superuser": true}'
+```
 
-### Backend Logs
+### 8.5 Environment Variables Reference
 
-- **Location**: `backend/backend.log`
-- **Levels**: DEBUG, INFO, WARNING, ERROR, CRITICAL (configurable via `LOG_LEVEL`)
+| Variable | Default | Required | Description |
+|---|---|---|---|
+| `SECRET_KEY` | (insecure default) | **Yes in prod** | JWT signing key |
+| `ENVIRONMENT` | `development` | No | Set to `production` to enforce SECRET_KEY |
+| `DATABASE_URL` | `sqlite:///backend/data/sql_app.db` | No | SQLAlchemy URL |
+| `API_HOST` | `0.0.0.0` | No | Bind address |
+| `API_PORT` | `8000` | No | Port |
+| `CORS_ORIGINS` | `http://localhost:3000,...` | No | Comma-separated origins |
+| `ACCESS_TOKEN_EXPIRE_MINUTES` | `60` | No | JWT TTL |
+| `LLM_PROVIDER` | `gemini` | No | `gemini` or `claude` |
+| `GEMINI_API_KEY` | (empty) | No | Enables Gemini LLM features |
+| `GEMINI_MODEL` | `gemini-1.5-pro` | No | Gemini model name |
+| `CLAUDE_API_KEY` | (empty) | No | Enables Claude LLM features |
+| `REDIS_URL` | `redis://localhost:6379/0` | No | Cache (degrades gracefully) |
+| `CACHE_EXPIRE_SECONDS` | `300` | No | Redis TTL |
+| `RISK_THRESHOLD_HIGH` | `70.0` | No | High risk cutoff (0-100) |
+| `RISK_THRESHOLD_MEDIUM` | `40.0` | No | Medium risk cutoff |
+| `AVERAGE_STUDENT_LTV` | `150000.0` | No | For revenue calculations |
+| `TUITION_PER_SEMESTER` | `75000.0` | No | For revenue calculations |
+| `ENGAGEMENT_DATA_FILE` | `Engagement_Analysis.xlsx` | No | Primary data filename |
+| `REACT_APP_API_URL` | `http://localhost:8000/api/v1` | No | Frontend API base URL |
 
-**Key Events Logged**:
-- Startup / shutdown lifecycle
-- Data ingestion results
-- Prediction requests and risk score calculations
-- Data validation failures
-- API errors and rate limit triggers
+### 8.6 Verifying the Installation
 
-### Error Tracking
+```bash
+# Backend health
+curl http://localhost:8000/health
+# → {"success": true, "data": {"status": "healthy"}}
 
-- Quarantine system: `backend/ingestion/quarantine.py`
-- Error logger: `backend/ingestion/error_logger.py`
-
----
-
-## Troubleshooting
-
-### Issue: "HTTP error! status: 422"
-
-**Cause**: Backend API schema mismatch
-**Solution**:
-1. Check backend logs: `tail -f backend/backend.log`
-2. Verify API response schema matches frontend expectations
-3. Ensure `risk_score` is 0-100, not 0-1
-
-### Issue: "Risk score validation failed: risk_score out of range"
-
-**Cause**: Risk score not properly converted to 0-100
-**Solution**:
-1. Check `backend/ml/inference/predictor.py`
-2. Ensure `risk_probability * 100.0` conversion is applied
-3. Verify `validate_and_clamp_risk_score()` is called
-
-### Issue: "Frontend shows 'N/A' for all students"
-
-**Cause**: Backend not returning expected fields
-**Solution**:
-1. Check API response: `curl http://localhost:8000/api/v1/students/students?limit=1`
-2. Verify `risk_score`, `signal_breakdown`, `engagement_score` fields are present
-3. Check browser console for errors
-
-### Issue: LLM recommendations not working
-
-**Cause**: Missing or invalid API key
-**Solution**:
-1. Verify `LLM_PROVIDER` is set (`gemini` or `claude`)
-2. Check `GEMINI_API_KEY` or `CLAUDE_API_KEY` is set in `.env`
-3. Inspect backend logs for LLM client errors
+# Student count (after ingestion)
+curl http://localhost:8000/api/v1/students/overview \
+  -H "Authorization: Bearer <your_token>"
+# → {"data": {"total_students": 120, ...}}
+```
 
 ---
 
-## Contributing
+## 9. Known Issues and Risks
 
-### Development Workflow
+### Critical (Production Blockers)
 
-1. **Fork repository**
-2. **Create feature branch**: `git checkout -b feature/new-signal`
-3. **Make changes, add tests**
-4. **Run tests**: `pytest`, `npm test`
-5. **Commit**: `git commit -m "Add new engagement signal"`
-6. **Push**: `git push origin feature/new-signal`
-7. **Create Pull Request**
+**AUTH-01: Frontend authentication is completely disconnected from the backend.**  
+`AuthContext.js` uses hardcoded credentials (`admin/admin123`) and never obtains a JWT. All API calls in `api.js` and `services/api.js` have no Authorization header. The backend's protected endpoints will return HTTP 401 for every request from the frontend. The entire data layer of the UI is non-functional in a correctly deployed environment.  
+**Fix required:** Rewrite `AuthContext.js` to call `/api/v1/auth/login`, store the JWT, and inject it as a Bearer token in all fetch calls.
 
-### Code Style
+**AUTH-02: Hardcoded credentials are visible in the frontend source bundle.**  
+`admin/admin123` is a string literal in `AuthContext.js` and will appear in the compiled JavaScript bundle. Any user who downloads the app source can extract it.  
+**Fix required:** Remove the hardcoded credentials. Login must always go through the backend API.
 
-- **Python**: Follow PEP 8, use `black` formatter
-- **JavaScript**: Follow Airbnb style guide, use `eslint`
+**ML-01: The saved XGBoost and Logistic Regression models have no runtime integration.**  
+`backend/ml/models/saved/` contains joblib model files trained on 4 features (`absrate7`, `q4mpa7`, `nsusp7`, `mobility7`) that do not exist in the live database. The inference code was deleted. `ml_service.py` logs a schema mismatch warning and falls back to the rule-based scorer. The models are dead artifacts.
+
+### High Severity
+
+**SCORE-01: Dual representation of risk scores (0-1 in DB, 0-100 in API) is fragile.**  
+The scheduler stores `risk_score / 100.0`. The service layer re-multiplies by 100. Multiple defensive normalizations are scattered across `students_controller.py`, `student_service.py`, and `ml_service.py`. Any code that writes a prediction without dividing by 100, or reads without multiplying, silently produces incorrect risk scores.
+
+**RISK-01: Three incompatible risk scoring implementations coexist.**  
+`services/risk_scoring.py` (6 features, primary), `features/risk_scorer.py` (2 DB signals, secondary), and `ml/inference/risk_formula.py` (5 signals, explainability) all use different weights, thresholds, and feature schemas. The secondary pipeline is wired but not called. Documentation states three pipelines were "mutually incompatible."
+
+**RATE-01: Rate limiter is in-memory and per-process.**  
+`rate_limit_store` in `security_logging.py` is a plain Python dict. It resets on every restart. It provides no protection under multiple uvicorn workers or in a container cluster. A Redis-backed limiter (e.g., `slowapi`) is required for production.
+
+**WEIGHT-01: Signal weight mapping bug in risk_formula.py.**  
+`SIGNAL_WEIGHTS` in config contains keys `attendance`, `grades`, `engagement`, `submissions`. `risk_formula.py` maps 5 signal names to weight keys `academic`, `engagement`, `consistency`, `intent`, `responsiveness`. The `consistency`, `intent`, and `responsiveness` signals always receive weight 0.0 because their keys don't exist in `SIGNAL_WEIGHTS`. The explainability formula silently ignores 3 of 5 signals.
+
+### Medium Severity
+
+**DUP-01: Two parallel ingestion pipelines.**  
+`backend/ingestion/` (12 files, sophisticated validation and quarantine) is dead code. `backend/services/core/data_ingestion.py` is the active pipeline with less validation. The better pipeline is not used.
+
+**FEAT-01: Secondary feature engineering pipeline (backend/features/) is not integrated.**  
+The academic and engagement signal classes have full DB query implementations but are not called in the main scoring flow.
+
+**SCHED-01: Standalone feature store job not integrated with scheduler.**  
+`backend/jobs/feature_store_job.py` must be run as a separate process.
+
+**DATE-01: Enrollment date fields stored as strings.**  
+`last_visited_date`, `last_system_login`, etc. are `Column(String)` instead of `Column(DateTime)`. Sorting and arithmetic on these require parsing.
+
+**TEST-01: No automated tests.**  
+No unit, integration, or API tests exist in the repository.
+
+### Low Severity
+
+**CACHE-01: Redis caching has no effect when Redis is absent.**  
+`cache_response` decorator silently degrades to a no-op. All responses are computed fresh.
+
+**LLM-01: LLM endpoints return mock data when keys are absent.**  
+Mock responses are structurally correct but may mislead users who don't realize AI analysis is not being performed.
+
+**RETRAIN-01: Weekly retraining job is a no-op.**  
+`retrain_model_weekly()` logs "No labelled training data available" and exits. The system cannot improve its predictions over time.
 
 ---
 
-## License
+## 10. Improvement Roadmap
 
-MIT License — see LICENSE file for details
+### Tier 1 — Must Fix Before Real Deployment
 
----
+1. **Rewrite frontend authentication** to use the backend JWT system. Call `/api/v1/auth/login`, store token in memory (not localStorage), include `Authorization: Bearer` in all `fetch()` calls. Update both `api.js` and `services/api.js`.
 
-## Contact
+2. **Remove hardcoded credentials** from `AuthContext.js`. Delete the `CREDENTIALS` constant entirely.
 
-For questions or support:
-- **Issues**: GitHub Issues
-- **Documentation**: See the `docs/` folder for detailed guides
+3. **Consolidate to one risk scoring system.** Choose `services/risk_scoring.py` as canonical. Delete `features/risk_scorer.py` or clearly mark it as experimental/unused. Fix the weight mapping bug in `ml/inference/risk_formula.py`.
+
+4. **Standardize risk score storage.** Pick one representation (recommend 0-100 throughout, including DB storage). Remove all scattered normalization code. Add a DB migration.
+
+### Tier 2 — High Priority
+
+5. **Replace in-memory rate limiter with Redis-based.** Use `slowapi` or implement a custom Redis counter. Required for multi-worker deployment.
+
+6. **Bridge the ML model feature gap.** Either retrain XGBoost/LogReg on the 6 engagement features available in the live DB, or replace with a simple sklearn model trained on `labels.csv` augmented with the engagement features. The rule-based scorer provides a baseline to validate against.
+
+7. **Consolidate ingestion pipelines.** The `backend/ingestion/` pipeline has better validation. Migrate `services/core/data_ingestion.py` to use it and delete the orphaned simpler version.
+
+8. **Write a test suite.** Start with unit tests for `FeatureEngineer` and `RiskScorer` (pure functions, no DB needed). Add integration tests for the ETL pipeline and critical API routes.
+
+### Tier 3 — Quality Improvements
+
+9. **Fix date field types in Enrollment model.** Change string date columns to `DateTime`. Write a SQLAlchemy migration.
+
+10. **Integrate `FeatureStoreService` into the main scheduler.** Pre-compute feature vectors daily so `StudentService` can serve them without recomputing on each request.
+
+11. **Implement training label collection.** Add an advisor workflow to record actual outcomes (retained, transferred, withdrew). Feed these into a retraining pipeline.
+
+12. **Add per-student data isolation.** Faculty should only see students enrolled in their courses.
+
+### Tier 4 — Future Enhancements
+
+13. **Replace SQLite with PostgreSQL** for concurrent write performance and production-grade reliability.
+14. **Add HTTPS and HSTS** enforcement for production.
+15. **Add email verification** for the registration endpoint.
+16. **Add real-time alerts** via WebSocket or SSE when a student's risk exceeds a threshold.
+17. **Add observability** — Prometheus metrics, structured JSON logging, distributed tracing.
+18. **Add model performance monitoring** — track actual vs predicted outcomes, trigger retraining on drift.

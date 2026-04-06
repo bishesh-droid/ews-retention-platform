@@ -1,11 +1,8 @@
 """
-ML Models Package
-----------------
-Model registry and model interfaces.
+ML Models package.
+ModelRegistry was removed — use backend/services/ml_service.py directly.
+The joblib model files in saved/ are kept for reference but are NOT used
+for inference until they are retrained on DB-derived LMS features.
 """
 
-from backend.ml.models.model_registry import ModelRegistry
-
-__all__ = [
-    "ModelRegistry",
-]
+__all__ = []

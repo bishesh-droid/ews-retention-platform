@@ -4,37 +4,33 @@ Monitoring routes
 Lightweight operational endpoints for health and prediction statistics.
 """
 
-from fastapi import APIRouter
+from fastapi import APIRouter, Depends, HTTPException, status
 
-from models.predict_model import REGISTRY, RUNTIME_STATS  # type: ignore
+from backend.api.deps import get_current_user
+from backend.database.models.user import User
+from backend.core.logger import sys_logger
+from backend.services.ml_service import ml_service
 from backend.utils.api import success_response
 
 router = APIRouter(prefix="/monitoring", tags=["monitoring"])
 
 
 @router.get("/predictions")
-def get_prediction_stats():
+def get_prediction_stats(
+    _user: User = Depends(get_current_user),
+):
     """
     Return in-memory statistics about prediction calls.
-
-    This is intended for lightweight monitoring/observability and does not
-    expose any personally identifiable student data.
+    Requires authentication (does not expose PII, but leaks operational
+    details that should not be visible to anonymous callers).
     """
-    stats = dict(RUNTIME_STATS)
-
-    # Enrich with model registry status
-    registry_loaded = bool(REGISTRY and REGISTRY.is_loaded())
-    model_version = REGISTRY.get_model_version() if registry_loaded else "unknown"
-    stats.update(
-        {
-            "registry_loaded": registry_loaded,
-            "available_models": REGISTRY.available_models() if registry_loaded else [],
-            "model_version": model_version,
-        }
-    )
-    return success_response(
-        stats,
-        message="Prediction monitoring stats",
-        meta={"model_version": model_version},
-    )
-
+    try:
+        stats = ml_service.get_runtime_stats()
+        return success_response(stats, message="ML pipeline stats")
+    except Exception as exc:
+        # Keep monitoring endpoint resilient and avoid leaking internals.
+        sys_logger.error(f"Failed to fetch ML runtime stats: {exc}")
+        raise HTTPException(
+            status_code=status.HTTP_503_SERVICE_UNAVAILABLE,
+            detail="Monitoring service temporarily unavailable.",
+        )

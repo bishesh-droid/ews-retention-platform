@@ -12,8 +12,10 @@ def run_feature_store_computation():
     db = SessionLocal()
     try:
         FeatureStoreService.precompute_all_features(db)
+        db.commit()
         logger.info("Feature Store computation completed successfully.")
     except Exception as e:
+        db.rollback()
         logger.error(f"Error during Feature Store computation: {e}")
     finally:
         db.close()
