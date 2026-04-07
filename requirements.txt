@@ -41,8 +41,8 @@ bcrypt==5.0.0
 PyJWT==2.11.0
 cryptography==46.0.5
 
-# Cache
-redis==6.4.0
+# Cache (redis 4.x compatible with slowapi and Python 3.12)
+redis==4.6.0
 
 # PDF generation
 fpdf2==2.8.6
