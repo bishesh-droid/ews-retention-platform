@@ -125,3 +125,51 @@ def batch_predict(
         pred["student_id"] = s.get("student_id", "unknown")
         results.append(pred)
     return results
+
+
+def get_signal_summary(
+    students: List[Dict[str, Any]],
+    signal_category: str,
+) -> Dict[str, Any]:
+    """
+    Backward-compatible summary helper expected by core package imports.
+    """
+    signal_map = {
+        "academic": lambda s: float(s.get("graded_quiz_score", 0) or 0) / 100.0,
+        "engagement": lambda s: float(s.get("content_completion_score", 0) or 0) / 100.0,
+        "consistency": lambda s: float(s.get("exam_attendance_rate", 0) or 0) / 100.0,
+        "intent": lambda s: float(s.get("graded_assignment_score", 0) or 0) / 100.0,
+        "responsiveness": lambda s: float(s.get("exam_score", 0) or 0) / 100.0,
+    }
+
+    if signal_category not in signal_map:
+        raise ValueError(
+            "Invalid signal category. Must be one of: "
+            f"{list(signal_map.keys())}"
+        )
+
+    values = [signal_map[signal_category](s) for s in students]
+    if not values:
+        return {
+            "signal_category": signal_category,
+            "total_students": 0,
+            "mean": 0.0,
+            "median": 0.0,
+            "distribution": {"low": 0, "medium": 0, "high": 0},
+        }
+
+    values.sort()
+    n = len(values)
+    mean_val = sum(values) / n
+    median_val = values[n // 2]
+    low = sum(1 for v in values if v < 0.3)
+    medium = sum(1 for v in values if 0.3 <= v < 0.7)
+    high = sum(1 for v in values if v >= 0.7)
+
+    return {
+        "signal_category": signal_category,
+        "total_students": n,
+        "mean": round(mean_val, 3),
+        "median": round(median_val, 3),
+        "distribution": {"low": low, "medium": medium, "high": high},
+    }

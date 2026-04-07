@@ -19,7 +19,7 @@ from backend.database.models.enrollment import Enrollment
 from backend.database.models.goals_and_risks import RiskSnapshot
 from backend.database.models.prediction import Prediction
 from backend.database.models.student import Student
-from backend.database.session import SessionLocal
+from backend.database.connection import SessionLocal
 from backend.services.feature_engineering import FeatureEngineer
 from backend.services.risk_scoring import RiskScorer
 
@@ -202,24 +202,48 @@ class SchedulerService:
         self._daily_task: Optional[asyncio.Task] = None
         self._weekly_task: Optional[asyncio.Task] = None
         self._started = False
+        self._last_daily_run_at: Optional[datetime] = None
+        self._last_daily_success_at: Optional[datetime] = None
+        self._last_daily_error: Optional[str] = None
+        self._last_weekly_run_at: Optional[datetime] = None
+        self._last_weekly_success_at: Optional[datetime] = None
+        self._last_weekly_error: Optional[str] = None
+
+    async def _run_daily_job_once(self, reason: str) -> None:
+        self._last_daily_run_at = datetime.now(timezone.utc)
+        logger.info("[SCHEDULER] Triggering daily prediction job (%s).", reason)
+        try:
+            await asyncio.to_thread(generate_daily_predictions)
+            self._last_daily_success_at = datetime.now(timezone.utc)
+            self._last_daily_error = None
+            logger.info("[SCHEDULER] Daily prediction job finished successfully.")
+        except Exception as exc:
+            self._last_daily_error = str(exc)
+            logger.exception("[SCHEDULER] Daily prediction job failed (%s).", reason)
+
+    async def _run_weekly_job_once(self, reason: str) -> None:
+        self._last_weekly_run_at = datetime.now(timezone.utc)
+        logger.info("[SCHEDULER] Triggering weekly retrain job (%s).", reason)
+        try:
+            await asyncio.to_thread(retrain_model_weekly)
+            self._last_weekly_success_at = datetime.now(timezone.utc)
+            self._last_weekly_error = None
+            logger.info("[SCHEDULER] Weekly retrain job finished successfully.")
+        except Exception as exc:
+            self._last_weekly_error = str(exc)
+            logger.exception("[SCHEDULER] Weekly retrain job failed (%s).", reason)
 
     async def _run_daily_loop(self) -> None:
         while True:
             await asyncio.sleep(_seconds_until(hour=3, minute=0))
-            try:
-                await asyncio.to_thread(generate_daily_predictions)
-            except Exception:
-                logger.exception("[SCHEDULER] Daily job crashed.")
+            await self._run_daily_job_once(reason="scheduled-03:00-utc")
 
     async def _run_weekly_loop(self) -> None:
         while True:
             await asyncio.sleep(_seconds_until(hour=4, minute=0, weekday=6))
-            try:
-                await asyncio.to_thread(retrain_model_weekly)
-            except Exception:
-                logger.exception("[SCHEDULER] Weekly job crashed.")
+            await self._run_weekly_job_once(reason="scheduled-sunday-04:00-utc")
 
-    async def start(self) -> None:
+    async def start(self, run_daily_on_startup: bool = True) -> None:
         if self._started:
             logger.warning("[SCHEDULER] Start requested, but scheduler is already running.")
             return
@@ -232,6 +256,14 @@ class SchedulerService:
         logger.info(
             "[SCHEDULER] Started. Daily job: 03:00 UTC. Weekly job: Sunday 04:00 UTC."
         )
+
+        # Ensure predictions are generated in environments where the app may restart
+        # after the daily schedule window has passed.
+        if run_daily_on_startup:
+            asyncio.create_task(
+                self._run_daily_job_once(reason="startup-bootstrap"),
+                name="scheduler-daily-startup-bootstrap",
+            )
 
     async def stop(self) -> None:
         if not self._started:
@@ -248,6 +280,22 @@ class SchedulerService:
         self._weekly_task = None
         self._started = False
         logger.info("[SCHEDULER] Stopped.")
+
+    def get_status(self) -> dict:
+        """Expose scheduler/job runtime status for observability."""
+        return {
+            "started": self._started,
+            "daily": {
+                "last_run_at": self._last_daily_run_at.isoformat() if self._last_daily_run_at else None,
+                "last_success_at": self._last_daily_success_at.isoformat() if self._last_daily_success_at else None,
+                "last_error": self._last_daily_error,
+            },
+            "weekly": {
+                "last_run_at": self._last_weekly_run_at.isoformat() if self._last_weekly_run_at else None,
+                "last_success_at": self._last_weekly_success_at.isoformat() if self._last_weekly_success_at else None,
+                "last_error": self._last_weekly_error,
+            },
+        }
 
 
 scheduler_service = SchedulerService()

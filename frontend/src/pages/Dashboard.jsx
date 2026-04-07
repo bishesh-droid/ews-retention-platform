@@ -16,7 +16,7 @@ import FacultySummaryCard from '../components/dashboard/FacultySummaryCard';
 import { getCohortSummary } from '../services/api';
 
 function Dashboard() {
-  const { students } = useStudentData();
+  const { students, loading, error } = useStudentData();
   const navigate = useNavigate();
   const [riskFilter, setRiskFilter] = useState(null);
   const [riskFactorFilter, setRiskFactorFilter] = useState(null);
@@ -81,6 +81,30 @@ function Dashboard() {
     if (riskFilter === 'Very Low Risk') return student.risk_score <= 25;
     return true;
   }) : students, [students, riskFilter]);
+
+  console.log('[Dashboard] render state:', {
+    loading,
+    error,
+    studentsCount: students.length,
+  });
+
+  if (loading) {
+    return (
+      <div className="flex flex-col items-center justify-center min-h-[60vh] text-center">
+        <h2 className="text-2xl font-display font-bold text-slate-900 mb-3 tracking-tight">Loading Overview...</h2>
+        <p className="text-slate-500">Fetching student and cohort metrics.</p>
+      </div>
+    );
+  }
+
+  if (error) {
+    return (
+      <div className="flex flex-col items-center justify-center min-h-[60vh] text-center">
+        <h2 className="text-2xl font-display font-bold text-rose-500 mb-3 tracking-tight">Failed to Load Data</h2>
+        <p className="text-slate-500 max-w-md">{error}</p>
+      </div>
+    );
+  }
 
   if (students.length === 0) {
     return (

@@ -16,7 +16,7 @@ from datetime import datetime, timedelta
 from fastapi import APIRouter, Depends, HTTPException
 from pydantic import BaseModel
 from sqlalchemy.orm import Session
-from sqlalchemy import desc
+from sqlalchemy import desc, func, and_, case
 
 from backend.api.deps import get_current_user, get_db_async, require_role
 from backend.database.models.user import User
@@ -101,14 +101,24 @@ async def predict_student_batch(
     """
     Compute risk predictions for multiple students. Staff only.
     """
+    unique_ids = list(dict.fromkeys(request.student_ids))
+    if not unique_ids:
+        return success_response([], message="0 predictions computed")
+
+    existing_ids = {
+        sid for (sid,) in db.query(Student.id).filter(Student.id.in_(unique_ids)).all()
+    }
+    target_ids = [sid for sid in unique_ids if sid in existing_ids]
+
+    enrollment_map = StudentService._fetch_enrollments_map(db, target_ids)
+    graded_map = StudentService._fetch_graded_map(db, target_ids)
+    exam_map = StudentService._fetch_exam_map(db, target_ids)
+
     results = []
-    for student_id in request.student_ids:
-        student = db.query(Student).filter(Student.id == student_id).first()
-        if not student:
-            continue
-        enrollments = StudentService._get_enrollment_dicts(db, student_id)
-        graded = StudentService._get_graded_components(db, student_id)
-        exams = StudentService._get_exam_records(db, student_id)
+    for student_id in target_ids:
+        enrollments = enrollment_map.get(student_id, [])
+        graded = graded_map.get(student_id, [])
+        exams = exam_map.get(student_id, [])
 
         try:
             pred = await asyncio.wait_for(
@@ -138,14 +148,48 @@ async def get_cohort_risk(
     """
     Aggregate risk metrics for the current cohort. Staff only.
     """
-    subq = (
-        db.query(Prediction.student_id, Prediction.risk_score)
-        .order_by(Prediction.student_id, desc(Prediction.prediction_timestamp))
-        .distinct(Prediction.student_id)
-        .all()
+    latest = (
+        db.query(
+            Prediction.student_id.label("student_id"),
+            func.max(Prediction.prediction_timestamp).label("max_ts"),
+        )
+        .group_by(Prediction.student_id)
+        .subquery()
     )
 
-    if not subq:
+    risk_0_100 = case(
+        (Prediction.risk_score <= 1.0, Prediction.risk_score * 100.0),
+        else_=Prediction.risk_score,
+    )
+
+    agg = (
+        db.query(
+            func.count(Prediction.student_id).label("n"),
+            func.avg(risk_0_100).label("avg_risk"),
+            func.sum(
+                case(
+                    (risk_0_100 >= 70.0, 1),
+                    else_=0,
+                )
+            ).label("high_count"),
+            func.sum(
+                case(
+                    (risk_0_100 >= 85.0, 1),
+                    else_=0,
+                )
+            ).label("critical_count"),
+        )
+        .join(
+            latest,
+            and_(
+                Prediction.student_id == latest.c.student_id,
+                Prediction.prediction_timestamp == latest.c.max_ts,
+            ),
+        )
+        .one()
+    )
+
+    if not agg.n:
         total_students = db.query(Student).count()
         return success_response(
             {
@@ -157,28 +201,12 @@ async def get_cohort_risk(
             }
         )
 
-    scores = []
-    for _, raw_score in subq:
-        if raw_score is None:
-            continue
-        s = float(raw_score)
-        if s <= 1.0:
-            s *= 100.0
-        scores.append(s)
-
-    if not scores:
-        return success_response({"average_risk": None, "total_students": len(subq)})
-
-    avg = round(sum(scores) / len(scores), 2)
-    high_count = sum(1 for s in scores if s >= 70.0)
-    critical_count = sum(1 for s in scores if s >= 85.0)
-
     return success_response(
         {
-            "average_risk": avg,
-            "high_risk_count": high_count,
-            "critical_risk_count": critical_count,
-            "total_students": len(scores),
+            "average_risk": round(float(agg.avg_risk or 0.0), 2),
+            "high_risk_count": int(agg.high_count or 0),
+            "critical_risk_count": int(agg.critical_count or 0),
+            "total_students": int(agg.n or 0),
         }
     )
 
@@ -193,33 +221,27 @@ async def get_trend_analysis(
     Weekly average risk score trend over the last N weeks. Staff only.
     """
     start = datetime.utcnow() - timedelta(weeks=weeks)
-    preds = (
-        db.query(Prediction)
+    week_key = func.strftime("%Y-W%W", Prediction.prediction_timestamp)
+    risk_0_100 = case(
+        (Prediction.risk_score <= 1.0, Prediction.risk_score * 100.0),
+        else_=Prediction.risk_score,
+    )
+    rows = (
+        db.query(
+            week_key.label("week"),
+            func.avg(risk_0_100).label("avg_risk"),
+        )
         .filter(Prediction.prediction_timestamp >= start)
-        .order_by(Prediction.prediction_timestamp.asc())
+        .group_by(week_key)
+        .order_by(week_key.asc())
         .all()
     )
 
-    if not preds:
+    if not rows:
         return success_response(
             {"weekly_trend": [], "note": "No predictions stored in the requested window."}
         )
-
-    buckets: dict = {}
-    for p in preds:
-        if p.prediction_timestamp is None or p.risk_score is None:
-            continue
-        iso_year, iso_week, _ = p.prediction_timestamp.isocalendar()
-        key = f"{iso_year}-W{iso_week:02d}"
-        s = float(p.risk_score)
-        if s <= 1.0:
-            s *= 100.0
-        buckets.setdefault(key, []).append(s)
-
-    trend = [
-        {"week": k, "avg_risk": round(sum(v) / len(v), 2)}
-        for k, v in sorted(buckets.items())
-    ]
+    trend = [{"week": w, "avg_risk": round(float(avg or 0.0), 2)} for w, avg in rows]
 
     return success_response({"weekly_trend": trend})
 

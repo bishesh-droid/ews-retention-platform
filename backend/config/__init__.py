@@ -44,7 +44,7 @@ ENVIRONMENT: str = os.getenv("ENVIRONMENT", "development").lower()
 
 SECRET_KEY: str = os.getenv("SECRET_KEY", _INSECURE_DEFAULT_KEY)
 
-# Fail-fast: never allow known insecure defaults in ANY environment.
+# Fail-fast in non-development environments when using insecure defaults.
 _INSECURE_VALUES = {
     _INSECURE_DEFAULT_KEY,
     _INSECURE_DEFAULT_KEY_ALT,
@@ -56,7 +56,7 @@ _INSECURE_VALUES = {
     "CHANGE_ME",
     "CHANGE_ME_IN_PRODUCTION",
 }
-if SECRET_KEY.lower() in {k.lower() for k in _INSECURE_VALUES}:
+if ENVIRONMENT != "development" and SECRET_KEY.lower() in {k.lower() for k in _INSECURE_VALUES}:
     raise RuntimeError(
         "SECRET_KEY environment variable must be set to a cryptographically random "
         "value (e.g., openssl rand -hex 32). The provided value is a known insecure "

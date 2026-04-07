@@ -23,7 +23,7 @@ from jose import JWTError, jwt
 from sqlalchemy.orm import Session
 
 from backend.config import ALGORITHM, SECRET_KEY
-from backend.database.session import get_db, get_db_async
+from backend.database.connection import get_db, get_db_async
 from backend.database.models.user import User
 
 # Re-exported so routes can write `deps.User` without an extra import.

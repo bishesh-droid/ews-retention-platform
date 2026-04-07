@@ -5,7 +5,8 @@ Database engine and declarative base configuration.
 """
 
 from sqlalchemy import create_engine, event
-from sqlalchemy.orm import declarative_base
+from typing import AsyncGenerator, Generator
+from sqlalchemy.orm import Session, declarative_base, sessionmaker
 from backend.config import DATABASE_URL
 
 
@@ -25,6 +26,38 @@ event.listen(engine, "connect", _set_sqlite_pragmas)
 
 # Create declarative base for models
 Base = declarative_base()
+
+# Canonical session factory (single source of truth)
+SessionLocal = sessionmaker(
+    autocommit=False,
+    autoflush=False,
+    bind=engine,
+    expire_on_commit=False,
+)
+
+
+def get_db() -> Generator[Session, None, None]:
+    """Canonical sync DB dependency for FastAPI."""
+    db = SessionLocal()
+    try:
+        yield db
+    except Exception:
+        db.rollback()
+        raise
+    finally:
+        db.close()
+
+
+async def get_db_async() -> AsyncGenerator[Session, None]:
+    """Canonical async DB dependency for FastAPI async endpoints."""
+    db = SessionLocal()
+    try:
+        yield db
+    except Exception:
+        db.rollback()
+        raise
+    finally:
+        db.close()
 
 
 def init_db():

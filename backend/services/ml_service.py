@@ -254,8 +254,8 @@ class MLService:
             # Flush so PKs/row state is available to the caller if needed.
             db.flush()
         except Exception as exc:
-            db.rollback()
             logger.warning(f"Could not persist prediction for {student_id}: {exc}")
+            raise
 
     # Backward-compatible alias (if any legacy code calls the old private name).
     _persist_prediction = persist_prediction

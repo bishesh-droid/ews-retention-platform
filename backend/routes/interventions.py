@@ -15,16 +15,18 @@ from pydantic import BaseModel
 from sqlalchemy.orm import Session
 from sqlalchemy import desc
 
-from backend.api.deps import get_db, get_current_user
+from backend.api.deps import get_db, get_current_user, require_role
 from backend.database import Intervention, Student
 from backend.utils.api import success_response
-from fastapi import Depends
 
 router = APIRouter(
     prefix="/interventions",
     tags=["interventions"],
     dependencies=[Depends(get_current_user)],
 )
+
+_READ_ROLES = ["admin", "faculty", "retention team"]
+_WRITE_ROLES = ["admin", "faculty"]
 
 
 class InterventionCreateRequest(BaseModel):
@@ -104,6 +106,7 @@ def list_interventions(
     assigned_faculty: Optional[str] = Query(None),
     student_id: Optional[str] = Query(None),
     db: Session = Depends(get_db),
+    _user=Depends(require_role(_READ_ROLES)),
 ):
     q = db.query(Intervention).join(Student, Intervention.student_id == Student.id, isouter=True)
 
@@ -131,6 +134,7 @@ def list_interventions(
 def create_intervention(
     body: InterventionCreateRequest,
     db: Session = Depends(get_db),
+    _user=Depends(require_role(_WRITE_ROLES)),
 ):
     ids: List[str] = []
     if body.student_ids:
@@ -175,6 +179,7 @@ def update_intervention(
     intervention_id: int,
     body: InterventionUpdateRequest,
     db: Session = Depends(get_db),
+    _user=Depends(require_role(_WRITE_ROLES)),
 ):
     row = db.query(Intervention).filter(Intervention.id == intervention_id).first()
     if not row:

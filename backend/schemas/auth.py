@@ -29,6 +29,7 @@ class UserCreate(UserBase):
     username: str
     email: EmailStr
     password: str
+    model_config = ConfigDict(extra="forbid")
 
 
 class UserUpdate(UserBase):
@@ -40,6 +41,7 @@ class UserUpdate(UserBase):
     escalation vulnerability.
     """
     password: Optional[str] = None
+    model_config = ConfigDict(extra="forbid")
 
 
 class AdminUserUpdate(BaseModel):

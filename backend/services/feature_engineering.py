@@ -14,6 +14,7 @@ Feature Categories:
 
 from typing import Dict, List, Optional
 from datetime import datetime
+import math
 
 
 class FeatureEngineer:
@@ -35,6 +36,64 @@ class FeatureEngineer:
             return None
 
     @staticmethod
+    def _to_non_negative(value: object) -> float:
+        """Pure helper: parse value as non-negative float."""
+        try:
+            v = float(value or 0)
+        except (TypeError, ValueError):
+            return 0.0
+        if not math.isfinite(v):
+            return 0.0
+        return max(0.0, v)
+
+    @staticmethod
+    def _adaptive_saturation_score(values: List[float], min_scale: float = 1.0, max_scale: float = 1000.0) -> float:
+        """
+        Pure helper: data-driven normalization using exponential saturation.
+
+        Instead of fixed divisors (e.g., /20, /100), scale is inferred from the
+        student's own positive-value distribution (median of non-zero values).
+        This reduces off-distribution behavior while preserving monotonicity.
+        """
+        clean = [FeatureEngineer._to_non_negative(v) for v in values]
+        if not clean:
+            return 0.0
+
+        positives = sorted(v for v in clean if v > 0)
+        if not positives:
+            return 0.0
+
+        mid = len(positives) // 2
+        if len(positives) % 2 == 0:
+            scale = (positives[mid - 1] + positives[mid]) / 2.0
+        else:
+            scale = positives[mid]
+        scale = max(min_scale, min(max_scale, scale))
+
+        avg_value = sum(clean) / len(clean)
+        score = 100.0 * (1.0 - math.exp(-avg_value / scale))
+        return round(max(0.0, min(100.0, score)), 2)
+
+    @staticmethod
+    def _w1w2_completed_for_enrollment(e: Dict) -> float:
+        """
+        Pure helper for leakage-safe W1/W2 completion numerator.
+
+        Preference order:
+        1) explicit `content_completed_w1w2` (true same-window numerator)
+        2) fallback to capped cumulative completion if week-specific field absent
+        """
+        required_w1w2 = FeatureEngineer._to_non_negative(e.get("content_required_w1w2", 0))
+        explicit = e.get("content_completed_w1w2")
+        if explicit is not None:
+            completed = FeatureEngineer._to_non_negative(explicit)
+            return min(completed, required_w1w2)
+
+        # Backward-compatible fallback when source data lacks W1/W2 completed field.
+        cumulative = FeatureEngineer._to_non_negative(e.get("content_completed", 0))
+        return min(cumulative, required_w1w2)
+
+    @staticmethod
     def calculate_content_completion_score(enrollments: List[Dict]) -> float:
         """
         Calculate overall content completion rate across all courses.
@@ -48,8 +107,8 @@ class FeatureEngineer:
         total_required = 0
 
         for e in enrollments:
-            completed = e.get('content_completed', 0) or 0
-            required = e.get('content_required', 0) or 0
+            completed = FeatureEngineer._to_non_negative(e.get('content_completed', 0))
+            required = FeatureEngineer._to_non_negative(e.get('content_required', 0))
             total_completed += completed
             total_required += required
 
@@ -73,11 +132,8 @@ class FeatureEngineer:
         total_required = 0
 
         for e in enrollments:
-            completed = e.get('content_completed', 0) or 0
-            required_w1w2 = e.get('content_required_w1w2', 0) or 0
-            # Completed capped at w1w2 required
-            capped = min(completed, required_w1w2)
-            total_completed += capped
+            required_w1w2 = FeatureEngineer._to_non_negative(e.get('content_required_w1w2', 0))
+            total_completed += FeatureEngineer._w1w2_completed_for_enrollment(e)
             total_required += required_w1w2
 
         if total_required == 0:
@@ -96,24 +152,17 @@ class FeatureEngineer:
         Returns:
             Score [0-100] based on quiz activity
         """
-        total_quizzes = sum(e.get('quiz_completed', 0) or 0 for e in enrollments)
-        total_attempts = sum(e.get('total_quiz_attempts', 0) or 0 for e in enrollments)
-
         if not enrollments:
             return 0.0
 
-        # Average quizzes per course
-        avg_quizzes = total_quizzes / len(enrollments)
+        quiz_per_course = [FeatureEngineer._to_non_negative(e.get('quiz_completed', 0)) for e in enrollments]
+        attempts_per_course = [FeatureEngineer._to_non_negative(e.get('total_quiz_attempts', 0)) for e in enrollments]
 
-        # Normalize: assume ~20 quizzes per course is excellent
-        quiz_score = min(100.0, (avg_quizzes / 20.0) * 100)
+        completion_component = FeatureEngineer._adaptive_saturation_score(quiz_per_course, min_scale=1.0, max_scale=200.0)
+        attempt_component = FeatureEngineer._adaptive_saturation_score(attempts_per_course, min_scale=1.0, max_scale=300.0)
 
-        # Bonus for attempt-to-completion ratio (shows persistence)
-        if total_quizzes > 0 and total_attempts > total_quizzes:
-            persistence_bonus = min(10.0, ((total_attempts / total_quizzes) - 1) * 5)
-            quiz_score = min(100.0, quiz_score + persistence_bonus)
-
-        return round(quiz_score, 2)
+        # Completion carries more signal than raw attempts.
+        return round((completion_component * 0.7) + (attempt_component * 0.3), 2)
 
     @staticmethod
     def calculate_discussion_engagement_score(enrollments: List[Dict]) -> float:
@@ -126,21 +175,18 @@ class FeatureEngineer:
         Returns:
             Score [0-100] based on discussion activity
         """
-        total_created = sum(e.get('discussion_posts_created', 0) or 0 for e in enrollments)
-        total_replies = sum(e.get('discussion_post_replies', 0) or 0 for e in enrollments)
-        total_read = sum(e.get('discussion_posts_read', 0) or 0 for e in enrollments)
-
         if not enrollments:
             return 0.0
 
         # Weighted: creating > replying > reading
-        weighted_activity = (total_created * 3) + (total_replies * 2) + (total_read * 0.5)
+        weighted_activity = []
+        for e in enrollments:
+            created = FeatureEngineer._to_non_negative(e.get('discussion_posts_created', 0))
+            replies = FeatureEngineer._to_non_negative(e.get('discussion_post_replies', 0))
+            read = FeatureEngineer._to_non_negative(e.get('discussion_posts_read', 0))
+            weighted_activity.append((created * 3.0) + (replies * 2.0) + (read * 0.5))
 
-        # Normalize per course: assume 30 weighted activity points per course is good
-        avg_per_course = weighted_activity / len(enrollments)
-        score = min(100.0, (avg_per_course / 30.0) * 100)
-
-        return round(score, 2)
+        return FeatureEngineer._adaptive_saturation_score(weighted_activity, min_scale=1.0, max_scale=500.0)
 
     @staticmethod
     def calculate_login_consistency_score(enrollments: List[Dict]) -> float:
@@ -152,18 +198,11 @@ class FeatureEngineer:
         Returns:
             Score [0-100] based on login frequency
         """
-        total_logins = sum(e.get('num_logins', 0) or 0 for e in enrollments)
-
         if not enrollments:
             return 0.0
 
-        # Average logins per course
-        avg_logins = total_logins / len(enrollments)
-
-        # Normalize: assume 100 logins per course is very active
-        score = min(100.0, (avg_logins / 100.0) * 100)
-
-        return round(score, 2)
+        logins_per_course = [FeatureEngineer._to_non_negative(e.get('num_logins', 0)) for e in enrollments]
+        return FeatureEngineer._adaptive_saturation_score(logins_per_course, min_scale=1.0, max_scale=500.0)
 
     @staticmethod
     def calculate_time_investment_score(enrollments: List[Dict]) -> float:
@@ -175,18 +214,14 @@ class FeatureEngineer:
         Returns:
             Score [0-100] based on time spent in content
         """
-        total_seconds = sum(e.get('total_time_spent_seconds', 0) or 0 for e in enrollments)
-
         if not enrollments:
             return 0.0
 
-        # Average hours per course
-        avg_hours = (total_seconds / 3600) / len(enrollments)
-
-        # Normalize: assume 20 hours per course is good engagement
-        score = min(100.0, (avg_hours / 20.0) * 100)
-
-        return round(score, 2)
+        hours_per_course = [
+            FeatureEngineer._to_non_negative(e.get('total_time_spent_seconds', 0)) / 3600.0
+            for e in enrollments
+        ]
+        return FeatureEngineer._adaptive_saturation_score(hours_per_course, min_scale=0.5, max_scale=200.0)
 
     @staticmethod
     def calculate_assignment_score(enrollments: List[Dict]) -> float:
@@ -198,17 +233,14 @@ class FeatureEngineer:
         Returns:
             Score [0-100] based on assignment activity
         """
-        total_submissions = sum(e.get('num_assignment_submissions', 0) or 0 for e in enrollments)
-
         if not enrollments:
             return 0.0
 
-        avg_submissions = total_submissions / len(enrollments)
-
-        # Normalize: assume 5 submissions per course is good
-        score = min(100.0, (avg_submissions / 5.0) * 100)
-
-        return round(score, 2)
+        submissions_per_course = [
+            FeatureEngineer._to_non_negative(e.get('num_assignment_submissions', 0))
+            for e in enrollments
+        ]
+        return FeatureEngineer._adaptive_saturation_score(submissions_per_course, min_scale=1.0, max_scale=100.0)
 
     @staticmethod
     def calculate_zero_progress_ratio(enrollments: List[Dict]) -> float:
@@ -221,7 +253,10 @@ class FeatureEngineer:
         if not enrollments:
             return 1.0
 
-        zero_count = sum(1 for e in enrollments if (e.get('content_completed', 0) or 0) == 0)
+        zero_count = sum(
+            1 for e in enrollments
+            if FeatureEngineer._to_non_negative(e.get('content_completed', 0)) <= 0.0
+        )
         return round(zero_count / len(enrollments), 4)
 
     @staticmethod
@@ -236,9 +271,8 @@ class FeatureEngineer:
         total_required_w1w2 = 0
 
         for e in enrollments:
-            completed = e.get('content_completed', 0) or 0
-            required = e.get('content_required_w1w2', 0) or 0
-            total_completed += min(completed, required)
+            required = FeatureEngineer._to_non_negative(e.get('content_required_w1w2', 0))
+            total_completed += FeatureEngineer._w1w2_completed_for_enrollment(e)
             total_required_w1w2 += required
 
         if total_required_w1w2 == 0:
@@ -264,15 +298,46 @@ class FeatureEngineer:
         if not enrollments:
             return "inactive"
 
-        total_logins = sum(e.get('num_logins', 0) or 0 for e in enrollments)
-        total_completed = sum(e.get('content_completed', 0) or 0 for e in enrollments)
+        now = datetime.utcnow()
+        recent_14 = 0
+        recent_30 = 0
+        any_activity = 0
 
-        if total_logins == 0 and total_completed == 0:
+        for e in enrollments:
+            activity_timestamps = [
+                e.get("last_system_login"),
+                e.get("last_visited_date"),
+                e.get("last_assignment_submission_date"),
+                e.get("last_quiz_attempt_date"),
+                e.get("last_discussion_post_date"),
+                e.get("last_scorm_visit_date"),
+                e.get("last_scorm_completion_date"),
+            ]
+            parsed = [FeatureEngineer._parse_timestamp(ts) for ts in activity_timestamps if ts]
+            parsed = [p for p in parsed if p is not None]
+            if not parsed:
+                continue
+            any_activity += 1
+            most_recent = max(parsed)
+            age_days = (now - most_recent.replace(tzinfo=None)).days
+            if age_days <= 14:
+                recent_14 += 1
+            if age_days <= 30:
+                recent_30 += 1
+
+        if any_activity == 0:
             return "inactive"
-        elif total_logins < 10 or total_completed < 5:
-            return "declining"
-        else:
+
+        ratio_14 = recent_14 / len(enrollments)
+        ratio_30 = recent_30 / len(enrollments)
+
+        # Active: substantial recent activity in last two weeks.
+        if ratio_14 >= 0.5:
             return "active"
+        # Declining: has activity, but mostly not recent.
+        if ratio_30 >= 0.25:
+            return "declining"
+        return "inactive"
 
     @staticmethod
     def get_per_course_breakdown(enrollments: List[Dict]) -> List[Dict]:
@@ -378,13 +443,13 @@ class FeatureEngineer:
 
         scores = []
         for e in exam_records:
-            total = e.get('marks_total', 0) or 0
-            present = e.get('present', True)
+            total = FeatureEngineer._to_non_negative(e.get('marks_total', 0))
+            present = bool(e.get('present', False))
 
             if not present:
                 scores.append(0.0)
             elif total > 0:
-                obtained = e.get('marks_obtained') or 0
+                obtained = FeatureEngineer._to_non_negative(e.get('marks_obtained'))
                 scores.append(min(100.0, (obtained / total) * 100))
 
         if not scores:
@@ -402,7 +467,7 @@ class FeatureEngineer:
         if not exam_records:
             return 0.0
 
-        attended = sum(1 for e in exam_records if e.get('present', True))
+        attended = sum(1 for e in exam_records if bool(e.get('present', False)))
         return round((attended / len(exam_records)) * 100, 2)
 
     @staticmethod

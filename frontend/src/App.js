@@ -39,6 +39,7 @@ function App() {
                 <Route path="/students" element={<Students />} />
                 <Route path="/students/:id" element={<StudentProfile />} />
                 <Route path="/student-portal" element={<StudentPortal />} />
+                <Route path="/student-portal/:id" element={<StudentPortal />} />
                 <Route path="/faculty-tools" element={<FacultyTools />} />
                 <Route path="/risk-factors" element={<RiskFactors />} />
                 <Route path="/interventions" element={<Interventions />} />

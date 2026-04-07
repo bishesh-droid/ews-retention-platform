@@ -1,4 +1,5 @@
 import React, { useState, useEffect, useMemo } from 'react';
+import { useParams } from 'react-router-dom';
 import { Row, Col, Container } from 'react-bootstrap';
 import { motion } from 'framer-motion';
 import {
@@ -20,6 +21,7 @@ import AcademicPerformance from '../components/student/AcademicPerformance';
 import TutoringCenter from '../components/student/TutoringCenter';
 import { variants } from '../utils/motionConfig';
 import { getStudentDetails, getMLPrediction, getWeeklySummary, getStudentRiskTrend } from '../services/api';
+import { useStudentData } from '../context/StudentContext';
 import ConfidenceBadge from '../components/common/ConfidenceBadge';
 import TrendIndicator from '../components/common/TrendIndicator';
 import MLRiskCard from '../components/student/MLRiskCard';
@@ -64,6 +66,8 @@ const tooltipStyle = {
 /* ─── StudentPortal Page ─────────────────────────────────────── */
 
 const StudentPortal = () => {
+    const { id: routeId } = useParams();
+    const { students: allStudents, loading: studentsLoading } = useStudentData();
     const [activeTab,   setActiveTab]   = useState('dashboard');
     const [studentData, setStudentData] = useState(null);
     const [weekData,    setWeekData]    = useState(null);
@@ -73,13 +77,44 @@ const StudentPortal = () => {
     const [error,       setError]       = useState(null);
 
     useEffect(() => {
-        // TODO: Replace with authenticated student's ID when available
-        const studentId = '1001';
         let isMounted = true;
 
         const load = async () => {
+            if (studentsLoading) return;
             setLoading(true);
             setError(null);
+            setStudentData(null);
+            setWeekData(null);
+
+            const requestedId = (routeId || '').toString().trim();
+            console.log('ROUTE ID:', requestedId, 'type:', typeof requestedId);
+            console.log('DATASET:', allStudents);
+
+            if (!Array.isArray(allStudents) || allStudents.length === 0) {
+                setError("No students available for portal lookup.");
+                setLoading(false);
+                return;
+            }
+
+            const normalizedRequested = requestedId.toLowerCase();
+            const digitsRequested = requestedId.replace(/\D/g, '');
+            const matchedStudent = requestedId
+                ? (
+                    allStudents.find((s) => (s?.id || '').toString().toLowerCase() === normalizedRequested) ||
+                    allStudents.find((s) => (s?.org_defined_id || '').toString().toLowerCase() === normalizedRequested) ||
+                    (digitsRequested
+                        ? allStudents.find((s) => (s?.org_defined_id || '').toString().replace(/\D/g, '').endsWith(digitsRequested))
+                        : null)
+                )
+                : allStudents[0];
+
+            console.log('Matched student:', matchedStudent || null);
+            if (!matchedStudent?.id) {
+                setError(`Student '${requestedId || '(none)'}' not found`);
+                setLoading(false);
+                return;
+            }
+            const studentId = matchedStudent.id.toString();
 
             const [studentResp, mlResp, weeklyResp, trendResp] = await Promise.all([
                 getStudentDetails(studentId),
@@ -219,7 +254,7 @@ const StudentPortal = () => {
         return () => {
             isMounted = false;
         };
-    }, []);
+    }, [routeId, allStudents, studentsLoading]);
 
     const healthScore = studentData ? Math.round((1 - (studentData.dropout_risk ?? 0)) * 100) : 0;
     const mlDropoutPercent = useMemo(() => {

@@ -80,10 +80,15 @@ def get_prediction_by_student_id(db: Session, student_id: str):
         Prediction model instance or None if not found
     """
     from backend.database.models.prediction import Prediction
-    return db.query(Prediction).filter(Prediction.student_id == student_id).first()
+    return (
+        db.query(Prediction)
+        .filter(Prediction.student_id == student_id)
+        .order_by(Prediction.prediction_timestamp.desc(), Prediction.id.desc())
+        .first()
+    )
 
 
-def get_all_predictions(db: Session, skip: int = 0, limit: int = 5000):
+def get_all_predictions(db: Session, skip: int = 0, limit: int = 500):
     """
     Get all predictions with pagination.
 
@@ -96,7 +101,13 @@ def get_all_predictions(db: Session, skip: int = 0, limit: int = 5000):
         List of Prediction model instances
     """
     from backend.database.models.prediction import Prediction
-    return db.query(Prediction).offset(skip).limit(limit).all()
+    return (
+        db.query(Prediction)
+        .order_by(Prediction.prediction_timestamp.desc(), Prediction.id.desc())
+        .offset(skip)
+        .limit(limit)
+        .all()
+    )
 
 
 def get_interventions_by_student_id(db: Session, student_id: str, limit: int = 10):

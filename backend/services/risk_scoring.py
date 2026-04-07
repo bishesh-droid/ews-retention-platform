@@ -42,6 +42,21 @@ class RiskScorer:
     NEUTRAL_RISK_SCORE = 50.0
 
     @staticmethod
+    def normalize_risk_to_0_100(raw_value: object) -> Optional[float]:
+        """Pure helper: normalize risk values from either [0,1] or [0,100]."""
+        if raw_value is None:
+            return None
+        try:
+            v = float(raw_value)
+        except (TypeError, ValueError):
+            return None
+        if not isfinite(v):
+            return None
+        if 0.0 <= v <= 1.0:
+            v *= 100.0
+        return round(max(0.0, min(100.0, v)), 2)
+
+    @staticmethod
     def _to_valid_score(raw_value: object) -> Optional[float]:
         """Convert a raw feature to bounded [0,100] score or None."""
         if raw_value is None:
@@ -97,10 +112,12 @@ class RiskScorer:
         coverage = max(0.0, min(1.0, observed_weight / total_weight))
         risk_score = (base_risk * coverage) + (RiskScorer.NEUTRAL_RISK_SCORE * (1.0 - coverage))
 
-        # Zero-progress adds bounded risk directly (no misleading engagement rescaling).
+        # Zero-progress adds bounded risk directly with nonlinear sensitivity.
+        # This increases penalty only when zero-progress dominates course load.
         zero_ratio = RiskScorer._to_valid_score((features.get("zero_progress_ratio", 0.0) or 0.0) * 100.0)
         if zero_ratio is not None:
-            risk_score += min(15.0, (zero_ratio / 100.0) * 15.0)
+            z = zero_ratio / 100.0
+            risk_score += min(15.0, (z ** 1.5) * 15.0)
 
         if not isfinite(risk_score):
             return RiskScorer.NEUTRAL_RISK_SCORE
@@ -179,3 +196,28 @@ class RiskScorer:
         if not isfinite(float(risk_score)):
             return False
         return 0.0 <= float(risk_score) <= 100.0
+
+    @staticmethod
+    def compare_old_vs_new_formula(features: Dict) -> Dict[str, float]:
+        """
+        Pure helper for tests/docs: compare legacy and current formula outcomes.
+
+        Legacy approximation:
+          risk_old = 100 - weighted_engagement
+          if zero_progress_ratio >= 0.8: weighted_engagement *= 0.5
+        """
+        weighted_engagement, observed_weight = RiskScorer._compute_weighted_engagement(features)
+        if observed_weight == 0.0:
+            old_risk = 100.0
+        else:
+            old_weighted = weighted_engagement
+            if float(features.get("zero_progress_ratio", 0.0) or 0.0) >= 0.8:
+                old_weighted *= 0.5
+            old_risk = max(0.0, min(100.0, 100.0 - old_weighted))
+
+        new_risk = RiskScorer.calculate_risk_score(features)
+        return {
+            "old_risk_score": round(old_risk, 2),
+            "new_risk_score": round(new_risk, 2),
+            "delta_new_minus_old": round(new_risk - old_risk, 2),
+        }

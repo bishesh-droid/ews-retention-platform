@@ -4,8 +4,7 @@ Database Package
 Database connection, session management, and query utilities.
 """
 
-from backend.database.connection import engine, Base, init_db
-from backend.database.session import SessionLocal, get_db
+from backend.database.connection import engine, Base, init_db, SessionLocal, get_db
 from backend.database.queries import (
     get_student_by_id,
     get_students_by_ids,

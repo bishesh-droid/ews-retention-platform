@@ -46,7 +46,17 @@ const Students = () => {
       if (!isMounted) return;
       if (response.success && response.data) {
         const { students: pageStudents = [], total = 0 } = response.data;
-        setStudents(pageStudents);
+        const normalizedStudents = pageStudents.map((student) => {
+          const first = (student.first_name || '').trim();
+          const last = (student.last_name || '').trim();
+          const fullName = `${first} ${last}`.trim();
+          return {
+            ...student,
+            // Keep a stable display name for table/search.
+            name: student.name || fullName || student.id,
+          };
+        });
+        setStudents(normalizedStudents);
         setTotalStudents(total || pageStudents.length);
       } else {
         setError(response.message || 'Failed to load students');

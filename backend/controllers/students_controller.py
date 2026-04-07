@@ -20,7 +20,9 @@ from backend.database.models.user import User
 from backend.schemas.intervention import Intervention
 from backend.database import Prediction, RiskSnapshot, Intervention as DbIntervention
 from backend.database.models.student import Student
+from backend.presentation.student import build_weekly_summary_response
 from backend.services.student_service import StudentService
+from backend.services.risk_scoring import RiskScorer
 
 router = APIRouter()
 
@@ -94,7 +96,12 @@ def get_students(
         risk_max,
         current_user=current_user,
     )
-    total = StudentService.get_student_count(db)
+    total = StudentService.get_student_count_filtered(
+        db,
+        risk_min=risk_min,
+        risk_max=risk_max,
+        current_user=current_user,
+    )
     return {
         "students": students,
         "total": total,
@@ -129,15 +136,6 @@ def get_student_weekly_summary(
 
     enrollments = StudentService._get_enrollment_dicts(db, student_id)
 
-    total_study_minutes = int(
-        round(sum((e.get("total_time_spent_seconds") or 0) for e in enrollments) / 60)
-    )
-    resources_viewed = int(sum((e.get("content_completed") or 0) for e in enrollments))
-    assignments_completed = int(sum((e.get("num_assignment_submissions") or 0) for e in enrollments))
-
-    attendance_rate_pct = float(student.get("exam_attendance_rate") or 0)
-    attendance_rate = max(0.0, min(1.0, attendance_rate_pct / 100.0))
-
     engagement_improvement = 0.0
     preds = (
         db.query(Prediction)
@@ -154,16 +152,7 @@ def get_student_weekly_summary(
         else:
             engagement_improvement = round(cur - prev, 1)
 
-    return {
-        "assignmentsCompleted": assignments_completed,
-        "attendanceRate": round(attendance_rate, 4),
-        "engagementImprovement": engagement_improvement,
-        "missedAssignments": 0,
-        "lowEngagementDays": 0,
-        "totalStudyTimeMinutes": total_study_minutes,
-        "facultyInteractions": 0,
-        "resourcesViewed": resources_viewed,
-    }
+    return build_weekly_summary_response(student, enrollments, engagement_improvement)
 
 
 @router.get("/students/{student_id}/risk-trend")
@@ -242,17 +231,7 @@ def _bucket_key(dt: datetime) -> str:
 
 
 def _normalize_0_100(value: Optional[float]) -> Optional[float]:
-    if value is None:
-        return None
-    try:
-        v = float(value)
-    except Exception:
-        return None
-    if not (v == v):  # NaN
-        return None
-    if v <= 1.0:
-        v *= 100.0
-    return max(0.0, min(100.0, v))
+    return RiskScorer.normalize_risk_to_0_100(value)
 
 
 @router.get("/analytics/risk-trends")
@@ -379,8 +358,8 @@ def get_intervention_effectiveness(
         .all()
     )
 
-    students = StudentService.get_all_students(db, skip=0, limit=2000, sort_by="risk_score", order="desc")
-    risk_now = {s["id"]: (s.get("risk_score") or 0) for s in students}
+    student_ids = list({i.student_id for i in interventions if i.student_id})
+    risk_now = StudentService.get_latest_risk_scores_for_students(db, student_ids)
 
     status_counts: Dict[str, int] = {}
     improvements: List[float] = []

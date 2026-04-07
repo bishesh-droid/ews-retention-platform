@@ -81,7 +81,7 @@ def _build_file_map() -> dict:
 
 def _validate_required_files(files: dict):
     """Fail fast if core ETL sources are missing."""
-    required = ("engagement", "quiz_exam")
+    required = ("engagement",)
     missing = [str(files[key]) for key in required if not Path(files[key]).exists()]
     if missing:
         raise FileNotFoundError(f"Missing required ETL input file(s): {', '.join(missing)}")
@@ -226,6 +226,12 @@ def _update_course_content_row(by_name: dict, course_name: str, w1: int, w2: int
 def _ingest_quiz_assignment_exam(db: Session, files: dict, owner_thread_id: int):
     _assert_session_thread(owner_thread_id)
     path = Path(files["quiz_exam"])
+    if not path.exists():
+        logger.warning(
+            "Optional quiz/exam workbook not found; skipping graded/exam ingestion: %s",
+            path,
+        )
+        return
     logger.info(f"Reading {path}...")
 
     wb = openpyxl.load_workbook(str(path), read_only=True, data_only=True)
