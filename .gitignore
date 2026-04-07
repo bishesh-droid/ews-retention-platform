@@ -73,3 +73,5 @@ package-lock.json
 !frontend/package-lock.json
 .tmp/
 .aider*
+.aider.chat.history.md
+.aider.input.history

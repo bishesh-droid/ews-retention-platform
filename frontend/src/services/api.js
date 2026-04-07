@@ -82,6 +82,18 @@ const showGlobalToast = (message) => {
   }
 };
 
+// Request interceptor to attach JWT token to all outgoing requests
+http.interceptors.request.use(
+  (config) => {
+    const token = sessionStorage.getItem('ews_jwt');
+    if (token) {
+      config.headers.Authorization = `Bearer ${token}`;
+    }
+    return config;
+  },
+  (error) => Promise.reject(error),
+);
+
 // Global response interceptor for centralized error handling
 http.interceptors.response.use(
   (response) => response,
@@ -98,7 +110,8 @@ http.interceptors.response.use(
     });
 
     if (status === 401) {
-      // Redirect unauthenticated users to login
+      // Clear stale token and redirect unauthenticated users to login
+      sessionStorage.removeItem('ews_jwt');
       if (typeof window !== 'undefined' && !window.location.pathname.startsWith('/login')) {
         window.location.href = '/login';
       }
