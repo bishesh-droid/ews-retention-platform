@@ -47,8 +47,8 @@ redis==4.6.0
 # PDF generation
 fpdf2==2.8.6
 
-# Rate limiting
-slowapi==0.1.4
+# Rate limiting (0.1.9+ has no redis version restriction)
+slowapi==0.1.9
 
 # Scheduling (APScheduler - async compatible)
 APScheduler==3.11.2
