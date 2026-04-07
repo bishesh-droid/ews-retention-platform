@@ -1,5 +1,13 @@
 # EWS Retention Platform - Pinned Dependencies
 # Generated: 2026-04-07
+#
+# Packages removed (confirmed unused in backend):
+#   - lightgbm, catboost (only in models/ directory, not used by backend)
+#   - optuna (only in models/ directory, not used by backend)
+#   - schedule (replaced by APScheduler in scheduler.py)
+#   - seaborn, matplotlib (only in models/evaluation.py, not called by backend)
+#   - imbalanced-learn (only in models/ directory, not used by backend)
+#   - google-genai, anthropic (imported with try/except, kept for optional LLM features)
 
 # Core web framework
 fastapi==0.118.0
@@ -38,6 +46,16 @@ redis==6.4.0
 
 # PDF generation
 fpdf2==2.8.6
+
+# Rate limiting
+slowapi==0.1.4
+
+# Scheduling (APScheduler - async compatible)
+APScheduler==3.11.2
+
+# LLM providers (optional imports - kept for AI advisor features)
+google-generativeai==0.8.6
+anthropic==0.89.0
 
 # Testing
 pytest==9.0.2
