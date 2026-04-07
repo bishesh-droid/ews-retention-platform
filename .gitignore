@@ -2,6 +2,7 @@
 __pycache__/
 **/__pycache__/
 *.py[cod]
+*.pyc
 *$py.class
 *.so
 *.egg-info/
@@ -72,6 +73,6 @@ cursor.AppImage
 package-lock.json
 !frontend/package-lock.json
 .tmp/
-.aider*
+.aider.*
 .aider.chat.history.md
 .aider.input.history
