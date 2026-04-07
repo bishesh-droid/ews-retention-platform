@@ -53,10 +53,6 @@ slowapi==0.1.9
 # Scheduling (APScheduler - async compatible)
 APScheduler==3.11.2
 
-# LLM providers (optional imports - kept for AI advisor features)
-google-generativeai==0.8.6
-anthropic==0.89.0
-
 # Testing
 pytest==9.0.2
 pytest-asyncio==1.3.0
