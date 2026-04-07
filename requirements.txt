@@ -1,25 +1,45 @@
-SQLAlchemy
-pandas
-fastapi
-uvicorn
-scikit-learn
-seaborn
-matplotlib
-imbalanced-learn
-google-genai
-xgboost
-lightgbm
-catboost
-optuna
-python-multipart
-python-dotenv
-pydantic[email]
-joblib
-schedule
-numpy
+# EWS Retention Platform - Pinned Dependencies
+# Generated: 2026-04-07
+
+# Core web framework
+fastapi==0.118.0
+uvicorn==0.38.0
+starlette==0.48.0
+
+# Database
+SQLAlchemy==2.0.45
+alembic==1.18.4
+greenlet==3.3.2
+
+# Data processing
+pandas==2.3.3
+numpy==2.3.5
 openpyxl==3.1.5
-python-jose[cryptography]
-passlib[bcrypt]
-redis
-fpdf2
-anthropic
+
+# ML core
+scikit-learn==1.8.0
+xgboost==2.1.4
+joblib==1.5.2
+
+# API/Security
+python-multipart==0.0.22
+python-dotenv==1.2.1
+pydantic==2.12.5
+pydantic_core==2.41.5
+email-validator==2.2.0
+python-jose==3.5.0
+passlib==1.7.4
+bcrypt==5.0.0
+PyJWT==2.11.0
+cryptography==46.0.5
+
+# Cache
+redis==6.4.0
+
+# PDF generation
+fpdf2==2.8.6
+
+# Testing
+pytest==9.0.2
+pytest-asyncio==1.3.0
+pytest-cov==7.1.0
