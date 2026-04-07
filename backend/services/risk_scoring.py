@@ -9,6 +9,11 @@ from `FeatureEngineer.calculate_all_features()`.
 from math import isfinite
 from typing import Dict, Optional, Tuple
 
+from backend.config import (
+    RISK_THRESHOLD_MEDIUM,
+    RISK_THRESHOLD_HIGH,
+)
+
 
 class RiskScorer:
     """Calculate dropout risk from current engagement/activity signals."""
@@ -32,13 +37,6 @@ class RiskScorer:
         "assignment_score": "Assignment Submissions",
         "time_investment_score": "Time Investment",
         "discussion_engagement_score": "Discussion Engagement",
-    }
-
-    # Risk thresholds
-    RISK_THRESHOLDS = {
-        "low": 40.0,
-        "medium": 70.0,
-        "high": 100.0,
     }
 
     NEUTRAL_RISK_SCORE = 50.0
@@ -112,9 +110,9 @@ class RiskScorer:
     @staticmethod
     def get_risk_category(risk_score: float) -> str:
         """Categorize risk score into low/medium/high."""
-        if risk_score < RiskScorer.RISK_THRESHOLDS["low"]:
+        if risk_score < RISK_THRESHOLD_MEDIUM:
             return "low"
-        if risk_score < RiskScorer.RISK_THRESHOLDS["medium"]:
+        if risk_score < RISK_THRESHOLD_HIGH:
             return "medium"
         return "high"
 

@@ -1,7 +1,7 @@
 import { useState, useCallback, useMemo } from 'react';
 import { useStudentData } from '../context/StudentContext';
 import { validateRiskScore, sanitizePrediction } from '../utils/riskScoreValidator';
-import * as api from '../api';
+import { getStudentDetails, getMLPrediction } from '../services/api';
 
 /**
  * Custom hook for student risk-related operations
@@ -85,7 +85,7 @@ export const useStudentRisk = (studentId = null) => {
         return distribution;
     }, [students]);
 
-    // Fetch fresh prediction from API
+    // Fetch fresh prediction from API (rules-based + ML)
     const refreshPrediction = useCallback(async (id) => {
         const targetId = id || studentId;
         if (!targetId) return null;
@@ -94,9 +94,35 @@ export const useStudentRisk = (studentId = null) => {
         setError(null);
 
         try {
-            const response = await api.getStudentPrediction(targetId);
-            const sanitized = sanitizePrediction(response.data);
-            return sanitized;
+            const [studentResp, mlResp] = await Promise.all([
+                getStudentDetails(targetId),
+                getMLPrediction(targetId),
+            ]);
+
+            if (!studentResp.success || !studentResp.data) {
+                throw new Error(studentResp.message || 'Failed to load student');
+            }
+
+            const s = studentResp.data;
+            const ruleRiskScore = typeof s.risk_score === 'number' ? s.risk_score : 0;
+            const engagementScore = typeof s.engagement_score === 'number' ? s.engagement_score : 0;
+            const retentionLikelihood = s.retention_likelihood ?? 'Unknown';
+
+            const rulePrediction = {
+                student_id: s.id,
+                risk_score: validateRiskScore(ruleRiskScore, 50),
+                engagement_score: engagementScore,
+                retention_likelihood: retentionLikelihood,
+                signal_breakdown: s.signal_breakdown || {},
+                top_risk_factors: s.top_risk_factors || [],
+            };
+
+            let mlPrediction = null;
+            if (mlResp && mlResp.success && mlResp.data) {
+                mlPrediction = sanitizePrediction(mlResp.data);
+            }
+
+            return { rulePrediction, mlPrediction };
         } catch (err) {
             setError(err.message);
             return null;
@@ -105,24 +131,11 @@ export const useStudentRisk = (studentId = null) => {
         }
     }, [studentId]);
 
-    // Simulate what-if scenario
-    const simulateWhatIf = useCallback(async (id, adjustments) => {
-        const targetId = id || studentId;
-        if (!targetId) return null;
-
-        setLoading(true);
-        setError(null);
-
-        try {
-            const response = await api.postWhatIfSimulation(targetId, adjustments);
-            return response.data;
-        } catch (err) {
-            setError(err.message);
-            return null;
-        } finally {
-            setLoading(false);
-        }
-    }, [studentId]);
+    // Simulate what-if scenario (placeholder; backend endpoint not yet wired)
+    const simulateWhatIf = useCallback(async () => {
+        console.warn('simulateWhatIf is not implemented against a real backend endpoint yet.');
+        return null;
+    }, []);
 
     return {
         // Data

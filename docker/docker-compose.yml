@@ -1,6 +1,14 @@
 version: '3.8'
 
 services:
+  redis:
+    image: redis:7-alpine
+    ports:
+      - "6379:6379"
+    volumes:
+      - redis_data:/data
+    command: redis-server --appendonly yes
+
   backend:
     build: .
     ports:
@@ -10,6 +18,11 @@ services:
       - ./backend:/app/backend
     environment:
       - DATABASE_URL=sqlite:///./backend/ews_platform.db
+      - SECRET_KEY
+      - ENVIRONMENT=development
+      - REDIS_URL=redis://redis:6379/0
+    depends_on:
+      - redis
 
   scheduler:
     build: .
@@ -17,6 +30,12 @@ services:
     volumes:
       - ./models:/app/models
       - ./backend:/app/backend
+    environment:
+      - SECRET_KEY
+      - ENVIRONMENT=development
+      - REDIS_URL=redis://redis:6379/0
+    depends_on:
+      - redis
 
   frontend:
     build: ./frontend
@@ -24,3 +43,6 @@ services:
       - "3000:80"
     depends_on:
       - backend
+
+volumes:
+  redis_data:

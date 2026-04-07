@@ -7,14 +7,19 @@ Application entry point.
 import asyncio
 import time
 import traceback
+import socket
 
 from contextlib import asynccontextmanager
 
 from fastapi import FastAPI, Request, HTTPException, status
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.responses import JSONResponse
+from slowapi import Limiter
+from slowapi.errors import RateLimitExceeded
+from slowapi.middleware import SlowAPIMiddleware
+from slowapi.util import get_remote_address
 
-from backend.config import API_HOST, API_PORT, CORS_ORIGINS
+from backend.config import API_HOST, API_PORT, CORS_ORIGINS, REDIS_URL
 from backend.database.connection import init_db
 from backend.database.session import SessionLocal
 from backend.routes import api_router
@@ -29,10 +34,55 @@ from backend.utils.api import AppError, error_response, success_response
 # Lifespan
 # ---------------------------------------------------------------------------
 
+def check_redis_connection() -> bool:
+    """Verify Redis is reachable before accepting traffic."""
+    try:
+        # Parse REDIS_URL (format: redis://host:port/db)
+        # Simple parsing for common format
+        url = REDIS_URL.replace("redis://", "")
+        host_port = url.split("/")[0]  # Remove database number
+        if ":" in host_port:
+            host, port_str = host_port.rsplit(":", 1)
+            port = int(port_str)
+        else:
+            host, port = host_port, 6379
+
+        sock = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
+        sock.settimeout(5)
+        result = sock.connect_ex((host, port))
+        sock.close()
+        return result == 0
+    except Exception as e:
+        sys_logger.error(f"Redis health check failed: {e}")
+        return False
+
+
 @asynccontextmanager
 async def lifespan(app: FastAPI):
     """Startup and shutdown sequence."""
     sys_logger.info("Starting EWS Retention Platform API...")
+
+    # Initialize rate limiter with Redis backend
+    try:
+        limiter = Limiter(
+            key_func=get_remote_address,
+            storage_uri=REDIS_URL,
+            default_limits=["100/minute"],
+        )
+        app.state.limiter = limiter
+        app.add_exception_handler(RateLimitExceeded, limiter.exceeded_handler)
+        sys_logger.info("Rate limiter initialized with Redis backend.")
+    except Exception as e:
+        sys_logger.error(f"Failed to initialize rate limiter: {e}")
+        raise
+
+    # Health check: verify Redis is reachable
+    if not check_redis_connection():
+        raise RuntimeError(
+            "Redis is not reachable. Ensure Redis is running and REDIS_URL is correct. "
+            f"Attempted connection to: {REDIS_URL}"
+        )
+    sys_logger.info("Redis connection verified.")
 
     # Create DB tables synchronously (fast, local SQLite)
     init_db()
@@ -99,6 +149,10 @@ app.add_middleware(
     allow_methods=["GET", "POST", "PUT", "PATCH", "DELETE", "OPTIONS"],
     allow_headers=["*"],
 )
+
+# Rate limiting middleware (slowapi with Redis backend)
+# Note: The limiter instance is stored in app.state.limiter during lifespan startup
+app.add_middleware(SlowAPIMiddleware)
 
 # Custom middleware (applied last-registered = outermost)
 app.middleware("http")(security_and_logging_middleware)

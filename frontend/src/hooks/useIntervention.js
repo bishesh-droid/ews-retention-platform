@@ -1,5 +1,5 @@
 import { useState, useCallback } from 'react';
-import * as api from '../api';
+import api, { getInterventions as getAllInterventions, createIntervention as createInterventionApi } from '../services/api';
 
 /**
  * Custom hook for intervention-related operations
@@ -44,14 +44,18 @@ export const useIntervention = () => {
     const [loading, setLoading] = useState(false);
     const [error, setError] = useState(null);
 
-    // Get intervention recommendation for a student
+    // Get intervention recommendation for a student (placeholder: use latest intervention or risk)
     const getRecommendation = useCallback(async (studentId) => {
         setLoading(true);
         setError(null);
 
         try {
-            const response = await api.getDecision(studentId);
-            return response.data;
+            const res = await getAllInterventions({ student_id: studentId, limit: 10 });
+            if (!res.success) {
+                throw new Error(res.message || 'Failed to load interventions');
+            }
+            const items = res.data?.items || [];
+            return items[0] || null;
         } catch (err) {
             setError(err.message);
             return null;
@@ -60,18 +64,22 @@ export const useIntervention = () => {
         }
     }, []);
 
-    // Execute an intervention
+    // Execute an intervention (create new intervention record)
     const executeIntervention = useCallback(async (studentId, interventionType, notes = '') => {
         setLoading(true);
         setError(null);
 
         try {
-            const response = await api.executeDecision({
+            const payload = {
                 student_id: studentId,
                 action_type: interventionType,
-                notes
-            });
-            return response.data;
+                notes,
+            };
+            const res = await createInterventionApi(payload);
+            if (!res.success) {
+                throw new Error(res.message || 'Failed to create intervention');
+            }
+            return res.data;
         } catch (err) {
             setError(err.message);
             return null;
@@ -101,8 +109,11 @@ export const useIntervention = () => {
         setError(null);
 
         try {
-            const response = await api.getPendingDecisions();
-            return response.data;
+            const res = await getAllInterventions({ status: 'pending', limit: 200 });
+            if (!res.success) {
+                throw new Error(res.message || 'Failed to load interventions');
+            }
+            return res.data?.items || [];
         } catch (err) {
             setError(err.message);
             return [];

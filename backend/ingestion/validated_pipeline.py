@@ -41,9 +41,32 @@ class ValidatedEWSPipeline:
         self.schema_engine = SchemaInferenceEngine()
         self.quarantine = QuarantineManager()
         self.error_logger = IngestionErrorLogger()
-        
-        self.db = SessionLocal()
+
+        # Lazily created DB session (only when running or used as a context manager).
+        self.db = None
         self.validation_reports = []
+
+    def __enter__(self):
+        """
+        Optional context-manager support for legacy callers.
+
+        Example:
+            with ValidatedEWSPipeline(...) as pipeline:
+                pipeline.run()
+        """
+        if self.db is None:
+            self.db = SessionLocal()
+        return self
+
+    def __exit__(self, exc_type, exc, tb):
+        # Never open sessions in __init__, so only close if we created/hold one.
+        if self.db is not None:
+            try:
+                if exc_type is not None:
+                    self.db.rollback()
+            finally:
+                self.db.close()
+                self.db = None
     
     def run(self):
         """Execute full validated pipeline"""
@@ -53,17 +76,26 @@ class ValidatedEWSPipeline:
         self.logger.info("="*80)
         
         start_time = datetime.now()
-        
+
+        # Prefer an externally-managed session (context manager usage); otherwise
+        # create/close a session scoped to this run invocation.
+        if self.db is not None:
+            return self._run_with_db(self.db, start_time)
+
+        with SessionLocal() as db:
+            return self._run_with_db(db, start_time)
+
+    def _run_with_db(self, db, start_time: datetime) -> bool:
         try:
             # LAYER 1: File-level validation
             self.logger.info("\n[LAYER 1] File-Level Validation...")
             files = self._get_data_files()
-            
+
             validation_results = {}
             for file_path in files:
                 result = self.file_validator.validate_file(str(file_path))
                 validation_results[file_path] = result
-                
+
                 if result.status == ValidationStatus.REJECTED:
                     self.logger.error(f"  ✗ {file_path.name}: REJECTED")
                     for msg in result.messages:
@@ -74,37 +106,35 @@ class ValidatedEWSPipeline:
                         self.logger.warning(f"    - {msg}")
                 else:
                     self.logger.info(f"  ✓ {file_path.name}: PASSED")
-            
+
             # Check for any rejections
             rejected = [f for f, r in validation_results.items() if r.has_errors()]
             if rejected and self.strict_mode:
                 self.logger.error(f"\n✗ {len(rejected)} files failed validation")
                 return False
-            
+
             # LAYER 2-7: Process each file with schema enforcement
             valid_files = [f for f, r in validation_results.items() if not r.has_errors()]
-            
+
             for file_path in valid_files:
-                self._process_file_with_validation(file_path)
-            
+                self._process_file_with_validation(db, file_path)
+
             # Commit if successful
-            self.db.commit()
-            
+            db.commit()
+
             duration = (datetime.now() - start_time).total_seconds()
             self.logger.info(f"\n✓ Pipeline completed in {duration:.1f}s")
-            
+
             # Print reports
             self.error_logger.print_summary()
             self.quarantine.print_summary()
-            
+
             return True
-            
+
         except Exception as e:
             self.logger.error(f"Pipeline failed: {e}", exc_info=True)
-            self.db.rollback()
+            db.rollback()
             return False
-        finally:
-            self.db.close()
     
     def _get_data_files(self) -> List[Path]:
         """Get all data files to process"""
@@ -122,7 +152,7 @@ class ValidatedEWSPipeline:
         
         return sorted(files)
     
-    def _process_file_with_validation(self, file_path: Path):
+    def _process_file_with_validation(self, db, file_path: Path):
         """Process a single file with full validation"""
         self.logger.info(f"\n[Processing] {file_path.name}")
         
@@ -177,7 +207,7 @@ class ValidatedEWSPipeline:
             
             if valid_rows:
                 valid_df = pd.DataFrame(valid_rows)
-                self._ingest_valid_data(valid_df, file_path.name)
+                self._ingest_valid_data(db, valid_df, file_path.name)
             
             # Export quarantine for this file
             if any(r.source_file == file_path.name for r in self.quarantine.quarantined_rows):
@@ -253,20 +283,20 @@ class ValidatedEWSPipeline:
         
         return (len(errors) == 0, errors)
     
-    def _ingest_valid_data(self, df: pd.DataFrame, source_file: str):
+    def _ingest_valid_data(self, db, df: pd.DataFrame, source_file: str):
         """Ingest validated data to canonical tables"""
         
         # Detect data type from columns
         if any('student' in str(col).lower() and 'email' in str(col).lower() for col in df.columns):
-            self._ingest_student_data(df, source_file)
+            self._ingest_student_data(db, df, source_file)
         
         if any('attendance' in str(col).lower() or 'session' in str(col).lower() for col in df.columns):
-            self._ingest_engagement_data(df, source_file)
+            self._ingest_engagement_data(db, df, source_file)
         
         if any('quiz' in str(col).lower() or 'score' in str(col).lower() for col in df.columns):
-            self._ingest_academic_data(df, source_file)
+            self._ingest_academic_data(db, df, source_file)
     
-    def _ingest_student_data(self, df: pd.DataFrame, source_file: str):
+    def _ingest_student_data(self, db, df: pd.DataFrame, source_file: str):
         """Ingest student roster data"""
         email_cols = [col for col in df.columns if 'email' in col.lower() or 'username' in col.lower()]
         
@@ -281,7 +311,7 @@ class ValidatedEWSPipeline:
             if not email:
                 continue
             
-            existing = self.db.query(DimStudent).filter_by(student_id=email).first()
+            existing = db.query(DimStudent).filter_by(student_id=email).first()
             if existing:
                 continue
             
@@ -290,17 +320,17 @@ class ValidatedEWSPipeline:
                 enrollment_status='Active',
                 is_new_student=True
             )
-            self.db.add(student)
+            db.add(student)
             added += 1
         
         self.logger.info(f"  ✓ Added {added} students")
     
-    def _ingest_engagement_data(self, df: pd.DataFrame, source_file: str):
+    def _ingest_engagement_data(self, db, df: pd.DataFrame, source_file: str):
         """Ingest engagement/attendance data"""
         # TODO: Implement engagement ingestion with provenance tracking
         self.logger.warning("_ingest_engagement_data is not yet implemented; skipping %s", source_file)
 
-    def _ingest_academic_data(self, df: pd.DataFrame, source_file: str):
+    def _ingest_academic_data(self, db, df: pd.DataFrame, source_file: str):
         """Ingest academic performance data"""
         # TODO: Implement academic data ingestion with provenance tracking
         self.logger.warning("_ingest_academic_data is not yet implemented; skipping %s", source_file)

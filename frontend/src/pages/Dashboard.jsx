@@ -11,7 +11,7 @@ import { variants } from '../utils/motionConfig';
 import AiInsight from '../components/ai/AiInsight';
 import { generateBulkRecommendations } from '../utils/recommendationEngine';
 import { generateShortRiskSummary } from '../utils/riskNarrativeGenerator';
-import RiskChangeExplainer from '../components/dashboard/RiskChangeExplainer';
+import RiskChangeExplainer from '../components/ai/RiskChangeExplainer';
 import FacultySummaryCard from '../components/dashboard/FacultySummaryCard';
 import { getCohortSummary } from '../services/api';
 

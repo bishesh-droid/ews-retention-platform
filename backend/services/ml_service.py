@@ -29,7 +29,7 @@ trend, velocity, and history endpoints have real data to serve.
 
 import json
 import logging
-from datetime import datetime
+from datetime import datetime, timezone
 from typing import Any, Dict, List, Optional
 
 from sqlalchemy.orm import Session
@@ -160,7 +160,7 @@ class MLService:
                 "risk_breakdown": breakdown,
                 "model_used": False,                # True once a retrained model is available
                 "prediction_error": False,
-                "prediction_timestamp": datetime.utcnow().isoformat(),
+                "prediction_timestamp": datetime.now(timezone.utc).isoformat(),
                 "features": {
                     "content_completion_score": features.get("content_completion_score", 0),
                     "quiz_engagement_score": features.get("quiz_engagement_score", 0),
@@ -234,13 +234,18 @@ class MLService:
                 risk_score=risk_score / 100.0,          # stored as 0-1 probability
                 engagement_score=features.get("content_completion_score", 0) / 100.0,
                 retention_likelihood=RiskScorer.get_retention_likelihood(risk_score),
+                # Legacy fields (kept for backward compatibility with analytics endpoints)
+                grades=features.get("graded_quiz_score", 0.0),
+                attendance=features.get("exam_attendance_rate", 0.0),
+                assignments=features.get("graded_assignment_score", 0.0),
+                # Signal breakdown scores (0-1 scale)
                 academic_signal_score=features.get("graded_quiz_score", 0) / 100.0,
                 engagement_signal_score=features.get("quiz_engagement_score", 0) / 100.0,
                 consistency_signal_score=features.get("login_consistency_score", 0) / 100.0,
                 intent_signal_score=features.get("assignment_score", 0) / 100.0,
                 responsiveness_signal_score=features.get("discussion_engagement_score", 0) / 100.0,
                 model_version="rule-based-v1",
-                prediction_timestamp=datetime.utcnow(),
+                prediction_timestamp=datetime.now(timezone.utc),
                 top_risk_factors=json.dumps(
                     [RiskScorer.get_dominant_risk_factor(features)]
                 ),
@@ -285,7 +290,7 @@ class MLService:
             "model_used": False,
             "prediction_error": True,
             "error": error,
-            "prediction_timestamp": datetime.utcnow().isoformat(),
+            "prediction_timestamp": datetime.now(timezone.utc).isoformat(),
         }
 
 

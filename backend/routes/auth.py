@@ -1,11 +1,13 @@
 from fastapi import APIRouter, Depends, HTTPException, status
 from fastapi.security import OAuth2PasswordRequestForm
 from sqlalchemy.orm import Session
-from datetime import timedelta
+from datetime import timedelta, datetime, timezone
+import json
 
 from backend.database import User
 from backend.api import deps
 from backend.core import auth
+from backend.database.models.audit import AuditLog
 from backend.schemas.auth import (
     Token,
     UserOut,
@@ -148,7 +150,7 @@ def admin_update_user(
     user_id: int,
     payload: AdminUserUpdate,
     db: Session = Depends(deps.get_db),
-    _admin: User = Depends(deps.require_role(["admin"])),
+    current_user: User = Depends(deps.require_role(["admin"])),
 ):
     """
     Admin-only: update role, active status, or superuser flag for any account.
@@ -157,6 +159,9 @@ def admin_update_user(
     user = db.query(User).filter(User.id == user_id).first()
     if not user:
         raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="User not found.")
+
+    old_role = user.role
+    old_is_superuser = user.is_superuser
 
     if payload.role is not None:
         user.role = payload.role
@@ -168,4 +173,26 @@ def admin_update_user(
     db.add(user)
     db.commit()
     db.refresh(user)
+
+    # Best-effort audit log. Must never roll back the user update.
+    try:
+        audit_entry = AuditLog(
+            user_id=current_user.id,
+            user_role=current_user.role,
+            action_type="USER_ROLE_MODIFIED",
+            affected_student_id=str(user.id),
+            details=json.dumps(
+                {
+                    "target_id": user.id,
+                    "old": {"role": old_role, "is_superuser": old_is_superuser},
+                    "new": {"role": user.role, "is_superuser": user.is_superuser},
+                }
+            ),
+            timestamp=datetime.now(timezone.utc),
+        )
+        db.add(audit_entry)
+        db.commit()
+    except Exception:
+        db.rollback()
+
     return user

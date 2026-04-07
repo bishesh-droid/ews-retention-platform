@@ -65,8 +65,7 @@ def generate_daily_predictions() -> None:
     """Generate and persist risk predictions for all students."""
     logger.info("[SCHEDULER] Daily prediction job started.")
     with db_session_scope() as db:
-        students = db.query(Student).all()
-
+        # Pre-load reference data (once per job)
         all_enrollments = (
             db.query(Enrollment, Course.name)
             .join(Course, Enrollment.course_id == Course.id, isouter=True)
@@ -113,47 +112,77 @@ def generate_daily_predictions() -> None:
                 }
             )
 
+        # Keyset pagination: O(n) instead of O(n²) with OFFSET
+        BATCH_SIZE = 100
+        last_id = ""
+        total_processed = 0
         created_predictions = 0
         created_snapshots = 0
-        for student in students:
-            try:
-                features = FeatureEngineer.calculate_all_features(
-                    enrollment_map.get(student.id, []),
-                    graded_components=graded_map.get(student.id, []),
-                    exam_records=exam_map.get(student.id, []),
-                )
-                risk_score = RiskScorer.calculate_risk_score(features)
-                now_utc = datetime.now(timezone.utc).replace(tzinfo=None)
 
-                db.add(
-                    Prediction(
-                        student_id=student.id,
-                        risk_score=risk_score / 100.0,
-                        engagement_score=(100.0 - risk_score) / 100.0,
-                        retention_likelihood=RiskScorer.get_retention_likelihood(risk_score),
-                        model_version="rule-based-v1",
-                        prediction_timestamp=now_utc,
-                    )
-                )
-                created_predictions += 1
+        while True:
+            batch = (
+                db.query(Student)
+                .filter(Student.is_active == True, Student.id > last_id)
+                .order_by(Student.id)
+                .limit(BATCH_SIZE)
+                .all()
+            )
+            if not batch:
+                break
+            last_id = batch[-1].id
+            total_processed += len(batch)
 
-                db.add(
-                    RiskSnapshot(
-                        student_id=student.id,
-                        risk_score=risk_score / 100.0,
-                        engagement_score=(100.0 - risk_score) / 100.0,
-                        timestamp=now_utc,
+            for student in batch:
+                try:
+                    features = FeatureEngineer.calculate_all_features(
+                        enrollment_map.get(student.id, []),
+                        graded_components=graded_map.get(student.id, []),
+                        exam_records=exam_map.get(student.id, []),
                     )
-                )
-                created_snapshots += 1
-            except Exception:
-                logger.exception(
-                    "[SCHEDULER] Failed creating prediction for student_id=%s", student.id
-                )
+                    risk_score = RiskScorer.calculate_risk_score(features)
+                    # Engagement is computed from observed behaviors (not the complement of risk):
+                    # - content completion (60%)
+                    # - attendance rate (40%)
+                    # Stored as 0-1 in the DB.
+                    attendance_rate = features.get("attendance_rate")
+                    if attendance_rate is None:
+                        attendance_rate = features.get("exam_attendance_rate", 0.0)
+                    engagement_score_0_100 = (
+                        float(features.get("content_completion_score", 0.0)) * 0.6
+                        + float(attendance_rate or 0.0) * 0.4
+                    )
+                    engagement_score = max(0.0, min(1.0, engagement_score_0_100 / 100.0))
+                    now_utc = datetime.now(timezone.utc).replace(tzinfo=None)
+
+                    db.add(
+                        Prediction(
+                            student_id=student.id,
+                            risk_score=risk_score / 100.0,
+                            engagement_score=engagement_score,
+                            retention_likelihood=RiskScorer.get_retention_likelihood(risk_score),
+                            model_version="rule-based-v1",
+                            prediction_timestamp=now_utc,
+                        )
+                    )
+                    created_predictions += 1
+
+                    db.add(
+                        RiskSnapshot(
+                            student_id=student.id,
+                            risk_score=risk_score / 100.0,
+                            engagement_score=engagement_score,
+                            timestamp=now_utc,
+                        )
+                    )
+                    created_snapshots += 1
+                except Exception:
+                    logger.exception(
+                        "[SCHEDULER] Failed creating prediction for student_id=%s", student.id
+                    )
 
     logger.info(
         "[SCHEDULER] Daily prediction job complete. students=%s predictions=%s snapshots=%s",
-        len(students),
+        total_processed,
         created_predictions,
         created_snapshots,
     )

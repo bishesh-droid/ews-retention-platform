@@ -81,10 +81,19 @@ def get_students(
     risk_min: Optional[float] = Query(None, ge=0, le=100),
     risk_max: Optional[float] = Query(None, ge=0, le=100),
     db: Session = Depends(get_db),
-    _user: User = Depends(require_role(_STAFF_ROLES)),
+    current_user: User = Depends(require_role(_STAFF_ROLES)),
 ):
     """Get paginated list of students with engagement metrics. Staff only."""
-    students = StudentService.get_all_students(db, skip, limit, sort_by, order, risk_min, risk_max)
+    students = StudentService.get_all_students(
+        db,
+        skip,
+        limit,
+        sort_by,
+        order,
+        risk_min,
+        risk_max,
+        current_user=current_user,
+    )
     total = StudentService.get_student_count(db)
     return {
         "students": students,
@@ -98,10 +107,10 @@ def get_students(
 def get_student_detail(
     student_id: str,
     db: Session = Depends(get_db),
-    _user: User = Depends(require_role(_STAFF_ROLES)),
+    current_user: User = Depends(require_role(_STAFF_ROLES)),
 ):
     """Get detailed engagement information for a single student. Staff only."""
-    student = StudentService.get_student_by_id(db, student_id)
+    student = StudentService.get_student_by_id(db, student_id, current_user=current_user)
     if not student:
         raise HTTPException(status_code=404, detail=f"Student '{student_id}' not found")
     return student
@@ -111,10 +120,10 @@ def get_student_detail(
 def get_student_weekly_summary(
     student_id: str,
     db: Session = Depends(get_db),
-    _user: User = Depends(require_role(_STAFF_ROLES)),
+    current_user: User = Depends(require_role(_STAFF_ROLES)),
 ):
     """Get a lightweight weekly-style summary for the student portal. Staff only."""
-    student = StudentService.get_student_by_id(db, student_id)
+    student = StudentService.get_student_by_id(db, student_id, current_user=current_user)
     if not student:
         raise HTTPException(status_code=404, detail=f"Student '{student_id}' not found")
 
@@ -162,10 +171,16 @@ def get_student_risk_trend(
     student_id: str,
     limit: int = Query(8, ge=2, le=52),
     db: Session = Depends(get_db),
-    _user: User = Depends(require_role(_STAFF_ROLES)),
+    current_user: User = Depends(require_role(_STAFF_ROLES)),
 ):
     """Return risk score trend points for a student. Staff only."""
-    exists = db.query(Student.id).filter(Student.id == student_id).first()
+    # Faculty are restricted to their department
+    base = db.query(Student.id).filter(Student.id == student_id)
+    role = (current_user.role or "").lower()
+    if role == "faculty" and not current_user.is_superuser and current_user.department:
+        base = base.filter(Student.parent_department_name == current_user.department)
+
+    exists = base.first()
     if not exists:
         raise HTTPException(status_code=404, detail=f"Student '{student_id}' not found")
 

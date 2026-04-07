@@ -1,14 +1,20 @@
+import hashlib
 import json
+import logging
 from functools import wraps
 from typing import Any, Optional
 import redis
 from backend.config import REDIS_URL, CACHE_EXPIRE_SECONDS
 
+logger = logging.getLogger(__name__)
+
 class RedisCache:
     def __init__(self):
         try:
             self.client = redis.from_url(REDIS_URL, decode_responses=True)
+            self.client.ping()
         except Exception:
+            logger.warning("[REDIS] Connection failed - caching disabled")
             self.client = None
 
     def get(self, key: str) -> Optional[Any]:
@@ -29,8 +35,8 @@ def cache_response(key_prefix: str, expire: int = CACHE_EXPIRE_SECONDS):
     def decorator(func):
         @wraps(func)
         async def wrapper(*args, **kwargs):
-            # Create unique key based on arguments
-            key = f"{key_prefix}:{hash(str(kwargs))}"
+            # Create stable key using SHA256 of sorted kwargs (avoids PYTHONHASHSEED randomization)
+            key = f"{key_prefix}:{hashlib.sha256(json.dumps(kwargs, sort_keys=True).encode()).hexdigest()[:16]}"
             cached_data = cache.get(key)
             if cached_data:
                 return cached_data

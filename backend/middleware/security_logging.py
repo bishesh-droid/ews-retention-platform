@@ -1,41 +1,28 @@
 """
 Security and access logging middleware.
+
+Rate limiting is handled by slowapi with Redis backend (configured in main.py).
+This middleware focuses on logging request/response metrics.
 """
 
 import time
 import traceback
-from typing import Dict, Tuple
 
 from fastapi import Request
 from fastapi.responses import JSONResponse
+from slowapi.errors import RateLimitExceeded
 
 from backend.core.logger import sys_logger
 
 
-rate_limit_store: Dict[str, Tuple[float, int]] = {}
-
-
 async def security_and_logging_middleware(request: Request, call_next):
     """
-    Combined rate limiting and structured access logging.
+    Access logging middleware with distributed rate limiting via slowapi/Redis.
 
-    Preserves the original behavior from backend.main.
+    Rate limiting is handled by the slowapi limiter attached to the app.
+    This middleware focuses on logging request/response metrics.
     """
     client_ip = request.client.host
-    current_time = time.time()
-
-    # Rate Limiting Logic (100 req / minute per IP)
-    if client_ip in rate_limit_store:
-        last_time, count = rate_limit_store[client_ip]
-        if current_time - last_time < 60:
-            if count >= 100:
-                sys_logger.warning(f"Rate limit exceeded for IP: {client_ip}")
-                return JSONResponse(status_code=429, content={"detail": "Too many requests"})
-            rate_limit_store[client_ip] = (last_time, count + 1)
-        else:
-            rate_limit_store[client_ip] = (current_time, 1)
-    else:
-        rate_limit_store[client_ip] = (current_time, 1)
 
     # Log Request
     sys_logger.info(f"Incoming request: {request.method} {request.url.path} from {client_ip}")
@@ -49,6 +36,11 @@ async def security_and_logging_middleware(request: Request, call_next):
             f"- Status: {response.status_code} - Time: {process_time:.4f}s"
         )
         return response
+    except RateLimitExceeded:
+        # This should be caught by the slowapi exception handler,
+        # but log it here as well for visibility
+        sys_logger.warning(f"Rate limit exceeded for IP: {client_ip}")
+        raise
     except Exception as e:
         sys_logger.error(
             f"Unhandled Server Error on {request.method} {request.url.path}: {str(e)}\n"
@@ -58,4 +50,3 @@ async def security_and_logging_middleware(request: Request, call_next):
             status_code=500,
             content={"detail": "Internal server error. Please try again later."},
         )
-

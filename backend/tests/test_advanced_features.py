@@ -3,12 +3,16 @@ Advanced Features Test Suite
 Test all 36 advanced retention features
 """
 import pytest
+pytest.skip(
+    "Legacy `backend/features/*` package removed; active pipeline is `backend/services/feature_engineering.py`.",
+    allow_module_level=True,
+)
+
 from datetime import date, datetime, timedelta
 from sqlalchemy import create_engine
 from sqlalchemy.orm import sessionmaker
 
 from backend.database import Base, DimStudent, FactAcademicPerformance, FactEngagement, FactIntentResponsiveness
-from backend.features.advanced_orchestrator import AdvancedFeatureOrchestrator, compute_advanced_features
 
 
 @pytest.fixture

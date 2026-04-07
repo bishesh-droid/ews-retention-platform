@@ -16,6 +16,7 @@ class UserBase(BaseModel):
     username: Optional[str] = None
     email: Optional[EmailStr] = None
     is_active: Optional[bool] = True
+    department: Optional[str] = None
 
 
 class UserCreate(UserBase):

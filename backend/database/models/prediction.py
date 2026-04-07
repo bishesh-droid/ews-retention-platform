@@ -6,7 +6,7 @@ Database model for ML predictions and risk scores.
 
 from sqlalchemy import Column, Integer, String, Float, ForeignKey, DateTime
 from sqlalchemy.orm import relationship
-from datetime import datetime
+from datetime import datetime, timezone
 from backend.database.connection import Base
 
 
@@ -21,10 +21,10 @@ class Prediction(Base):
     id = Column(Integer, primary_key=True, index=True)
     
     # Foreign Key
-    student_id = Column(String, ForeignKey("students.id"))
-    
+    student_id = Column(String, ForeignKey("students.id"), index=True)
+
     # Core predictions
-    risk_score = Column(Float)  # 0-1 probability of dropout
+    risk_score = Column(Float, index=True)  # 0-1 probability of dropout
     engagement_score = Column(Float)
     retention_likelihood = Column(String)  # 'high', 'medium', 'low'
     
@@ -42,7 +42,7 @@ class Prediction(Base):
     
     # ========== Prediction Metadata ==========
     model_version = Column(String)  # e.g., 'xgboost_v1.0', 'random_forest_v1.0'
-    prediction_timestamp = Column(DateTime, default=datetime.utcnow)
+    prediction_timestamp = Column(DateTime, default=lambda: datetime.now(timezone.utc))
     top_risk_factors = Column(String)  # JSON string of top contributing features
     
     # Relationship

@@ -12,6 +12,7 @@ from typing import Dict, List, Optional, Any
 from sqlalchemy.orm import Session
 from sqlalchemy import func, and_, case, cast, Integer, Float
 
+from backend.config import RISK_THRESHOLD_MEDIUM, RISK_THRESHOLD_HIGH
 from backend.services.feature_engineering import FeatureEngineer
 from backend.services.risk_scoring import RiskScorer
 from backend.database import Student, Course, Enrollment, GradedComponent, ExamRecord, Intervention, Prediction
@@ -288,9 +289,23 @@ class StudentService:
         return StudentService._build_student_metrics_response(student, features, risk_fields)
 
     @staticmethod
-    def get_student_by_id(db: Session, student_id: str) -> Optional[Dict]:
-        """Get student with calculated metrics by ID."""
-        student = db.query(Student).filter(Student.id == student_id).first()
+    def get_student_by_id(db: Session, student_id: str, current_user=None) -> Optional[Dict]:
+        """Get student with calculated metrics by ID.
+
+        Faculty users are restricted to their own department; admins and superusers
+        may access all students.
+        """
+        query = db.query(Student).filter(Student.id == student_id)
+
+        if current_user is not None:
+            role = (getattr(current_user, "role", "") or "").lower()
+            is_superuser = bool(getattr(current_user, "is_superuser", False))
+            if role == "faculty" and not is_superuser:
+                dept = getattr(current_user, "department", None)
+                if dept:
+                    query = query.filter(Student.parent_department_name == dept)
+
+        student = query.first()
 
         if not student:
             return None
@@ -303,10 +318,16 @@ class StudentService:
         )
 
     @staticmethod
-    def get_all_students(db: Session, skip: int = 0, limit: int = 100,
-                         sort_by: str = 'risk_score', order: str = 'desc',
-                         risk_min: Optional[float] = None,
-                         risk_max: Optional[float] = None) -> List[Dict]:
+    def get_all_students(
+        db: Session,
+        skip: int = 0,
+        limit: int = 100,
+        sort_by: str = "risk_score",
+        order: str = "desc",
+        risk_min: Optional[float] = None,
+        risk_max: Optional[float] = None,
+        current_user=None,
+    ) -> List[Dict]:
         """
         Get students with calculated metrics, with filtering and pagination.
 
@@ -316,9 +337,19 @@ class StudentService:
         - Eliminates N+1 by batch-loading enrollments/graded/exams for page IDs.
         - Avoids recomputing risk for ordering/filtering by using latest stored Predictions.
         """
-
         pred_subq = StudentService._latest_prediction_subq(db)
-        base = db.query(Student, pred_subq).outerjoin(pred_subq, pred_subq.c.student_id == Student.id)
+        base = db.query(Student, pred_subq).outerjoin(
+            pred_subq, pred_subq.c.student_id == Student.id
+        )
+
+        # Department scoping for faculty users
+        if current_user is not None:
+            role = (getattr(current_user, "role", "") or "").lower()
+            is_superuser = bool(getattr(current_user, "is_superuser", False))
+            if role == "faculty" and not is_superuser:
+                dept = getattr(current_user, "department", None)
+                if dept:
+                    base = base.filter(Student.parent_department_name == dept)
 
         risk_expr = cast(pred_subq.c.risk_score, Float)
         if risk_min is not None:
@@ -353,10 +384,11 @@ class StudentService:
             risk_fields = StudentService._derive_risk_fields(features, pred_row=pred_row)
             result.append(StudentService._build_student_metrics_response(student, features, risk_fields))
 
-        # Preserve legacy in-page sorting for computed fields (response structure unchanged).
+        # In-memory sorting only for computed feature fields not in the database.
+        # DB-level ordering handles: risk_score, id, first_name, last_name, org_defined_id,
+        # department, old_new_student, is_active (see _sort_expr_for_students).
         reverse = (order == "desc")
-        sortable_fields = [
-            "risk_score",
+        computed_fields = [
             "content_completion_score",
             "quiz_engagement_score",
             "login_consistency_score",
@@ -370,10 +402,8 @@ class StudentService:
             "behavioral_score",
             "stability_score",
         ]
-        if sort_by in sortable_fields:
+        if sort_by in computed_fields:
             result.sort(key=lambda x: x.get(sort_by, 0) or 0, reverse=reverse)
-        elif sort_by == "id":
-            result.sort(key=lambda x: x["id"], reverse=reverse)
 
         return result
 
@@ -411,7 +441,7 @@ class StudentService:
             db.query(func.count(pred.c.student_id))
             .select_from(pred)
             .filter(risk.isnot(None))
-            .filter(risk_0_100 < RiskScorer.RISK_THRESHOLDS["low"])
+            .filter(risk_0_100 < RISK_THRESHOLD_MEDIUM)
             .scalar()
             or 0
         )
@@ -419,8 +449,8 @@ class StudentService:
             db.query(func.count(pred.c.student_id))
             .select_from(pred)
             .filter(risk.isnot(None))
-            .filter(risk_0_100 >= RiskScorer.RISK_THRESHOLDS["low"])
-            .filter(risk_0_100 < RiskScorer.RISK_THRESHOLDS["medium"])
+            .filter(risk_0_100 >= RISK_THRESHOLD_MEDIUM)
+            .filter(risk_0_100 < RISK_THRESHOLD_HIGH)
             .scalar()
             or 0
         )
@@ -428,7 +458,7 @@ class StudentService:
             db.query(func.count(pred.c.student_id))
             .select_from(pred)
             .filter(risk.isnot(None))
-            .filter(risk_0_100 >= RiskScorer.RISK_THRESHOLDS["medium"])
+            .filter(risk_0_100 >= RISK_THRESHOLD_HIGH)
             .scalar()
             or 0
         )

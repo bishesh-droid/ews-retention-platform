@@ -4,7 +4,7 @@ import { Row, Col, Button, Spinner as BootstrapSpinner, Form, Badge } from 'reac
 import { LineChart, Line, XAxis, YAxis, CartesianGrid, Tooltip, Legend, ResponsiveContainer } from 'recharts';
 import { motion } from 'framer-motion';
 import { FaArrowLeft, FaHistory, FaLightbulb, FaClipboardList, FaHeartbeat } from 'react-icons/fa';
-import { getStudentRiskHistory, getAIAdvice, getInterventions, createIntervention } from '../api';
+import { getStudentRiskTrend, getAllInterventions, createIntervention as createInterventionApi } from '../services/api';
 import { getStudentDetails, getMLPrediction } from '../services/api';
 import Spinner from '../components/common/Spinner';
 import { variants } from '../utils/motionConfig';
@@ -37,8 +37,11 @@ function StudentProfile() {
 
   const fetchInterventions = async (studentId) => {
     try {
-      const fetchedInterventions = await getInterventions(studentId);
-      setInterventions(fetchedInterventions);
+      const res = await getAllInterventions({ student_id: studentId, limit: 100 });
+      if (!res.success) {
+        throw new Error(res.message || 'Failed to load interventions');
+      }
+      setInterventions(res.data?.items || []);
     } catch (err) {
       console.error("Error fetching interventions:", err);
     }
@@ -76,7 +79,10 @@ function StudentProfile() {
           mlData = mlResp.data;
         }
 
-        const riskHistoryData = await getStudentRiskHistory(id, builtPrediction.risk_score);
+        const trendRes = await getStudentRiskTrend(id, 12);
+        const riskHistoryData = trendRes.success && Array.isArray(trendRes.data)
+          ? trendRes.data
+          : [];
 
         setStudent(s);
         setPrediction(builtPrediction);
@@ -97,8 +103,12 @@ function StudentProfile() {
     setLoadingAdvice(true);
     setAdviceError(null);
     try {
-      const adviceText = await getAIAdvice(id, promptType);
-      setAiAdvice(adviceText);
+      // TODO: Replace with real AI advisor endpoint once available
+      setAiAdvice(
+        promptType === 'faculty'
+          ? 'Consider scheduling a one-on-one check-in and reviewing recent engagement patterns with this student.'
+          : 'AI advice service is not yet connected to the backend.'
+      );
     } catch (err) {
       setAdviceError('Failed to fetch AI advice.');
       console.error(err);
@@ -114,11 +124,15 @@ function StudentProfile() {
       return;
     }
     try {
-      const interventionData = {
+      const payload = {
+        student_id: id,
         user: newInterventionUser,
         action: newInterventionAction,
       };
-      await createIntervention(id, interventionData);
+      const res = await createInterventionApi(payload);
+      if (!res.success) {
+        throw new Error(res.message || 'Failed to create intervention');
+      }
       setNewInterventionUser('');
       setNewInterventionAction('');
       await fetchInterventions(id);

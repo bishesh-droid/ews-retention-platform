@@ -1,5 +1,5 @@
 import React, { createContext, useState, useEffect, useContext, useCallback } from 'react';
-import { getStudents as fetchStudentsFromApi } from '../api';
+import { getStudentList } from '../services/api';
 import { validateRiskScore } from '../utils/riskScoreValidator';
 
 const StudentContext = createContext();
@@ -17,11 +17,14 @@ export const StudentProvider = ({ children }) => {
       setLoading(true);
       setError(null);
 
-      // Backend returns students pre-computed with risk scores and features
-      const fetchedStudents = await fetchStudentsFromApi(2000);
-      setTotalStudents(fetchedStudents.length);
+      const response = await getStudentList(1, 2000, 'risk_score', 'desc');
+      if (!response.success || !Array.isArray(response.data?.items)) {
+        throw new Error(response.message || 'Failed to load students');
+      }
 
-      // Validate risk scores
+      const fetchedStudents = response.data.items;
+      setTotalStudents(response.data.total || fetchedStudents.length);
+
       const studentsWithData = fetchedStudents.map(student => ({
         ...student,
         risk_score: validateRiskScore(student.risk_score, 50),

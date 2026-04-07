@@ -99,11 +99,9 @@ self.signal_weights = {
 ### Example: Peer Interaction Signal
 
 ```python
-# backend/features/peer_interaction_signal.py
+# backend/services/feature_engineering.py (active pipeline)
 
-from backend.features.signal_computer import SignalComputer
-
-class PeerInteractionSignal(SignalComputer):
+class PeerInteractionSignal:
     
     def __init__(self):
         weights = {
@@ -111,7 +109,7 @@ class PeerInteractionSignal(SignalComputer):
             'group_project_participation': 0.3,
             'peer_review_completion': 0.3
         }
-        super().__init__(weights)
+        self.weights = weights
     
     def compute(self, db_session, student_id, trimester):
         # Query relevant fact tables

@@ -38,15 +38,29 @@ DATABASE_URL: str = os.getenv(
 # Security / Auth
 # ---------------------------------------------------------------------------
 _INSECURE_DEFAULT_KEY = "CHANGE_ME_IN_PRODUCTION_a3f9c2e1b7d4e8f0a1b2c3d4e5f60718"
+_INSECURE_DEFAULT_KEY_ALT = "change-me-to-a-strong-random-secret-key"
+_ENV_FILE_WEAK_DEFAULT = "change-me-to-a-strong-random-secret-key"
 ENVIRONMENT: str = os.getenv("ENVIRONMENT", "development").lower()
 
 SECRET_KEY: str = os.getenv("SECRET_KEY", _INSECURE_DEFAULT_KEY)
 
-# Fail-fast: never allow the default key in production.
-if ENVIRONMENT == "production" and SECRET_KEY == _INSECURE_DEFAULT_KEY:
+# Fail-fast: never allow known insecure defaults in ANY environment.
+_INSECURE_VALUES = {
+    _INSECURE_DEFAULT_KEY,
+    _INSECURE_DEFAULT_KEY_ALT,
+    _ENV_FILE_WEAK_DEFAULT,
+    "",
+    "changeme",
+    "secret",
+    "secret_key",
+    "CHANGE_ME",
+    "CHANGE_ME_IN_PRODUCTION",
+}
+if SECRET_KEY.lower() in {k.lower() for k in _INSECURE_VALUES}:
     raise RuntimeError(
-        "SECRET_KEY environment variable must be set to a strong, unique value in "
-        "production. The hardcoded development default is NOT acceptable."
+        "SECRET_KEY environment variable must be set to a cryptographically random "
+        "value (e.g., openssl rand -hex 32). The provided value is a known insecure "
+        "default or placeholder and will not be accepted."
     )
 
 ALGORITHM: str = os.getenv("ALGORITHM", "HS256")
