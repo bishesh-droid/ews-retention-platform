@@ -47,13 +47,13 @@ Meridian is an Early Warning System (EWS) for student retention at a data scienc
 
 ```
 ┌──────────────────────────────────────────────────────────────────────┐
-│  React SPA (localhost:3000)                                           │
-│  Create React App + Bootstrap 5 + Chart.js v4 + Recharts            │
+│  React SPA (localhost:3000)                                          │
+│  Create React App + Bootstrap 5 + Chart.js v4 + Recharts             │ 
 │                                                                      │
 │  AuthContext ── hardcoded "admin"/"admin123" check                   │
-│               ── no backend call, no JWT obtained                   │
+│               ── no backend call, no JWT obtained                    │
 │                                                                      │
-│  StudentContext → api.js → fetch() → NO Authorization header        │
+│  StudentContext → api.js → fetch() → NO Authorization header         │
 └────────────────────────────┬─────────────────────────────────────────┘
                              │ HTTP requests (unauthenticated)
                              ▼
@@ -62,26 +62,26 @@ Meridian is an Early Warning System (EWS) for student retention at a data scienc
 │                                                                      │
 │  Middleware (outermost → innermost):                                 │
 │    security_and_logging_middleware  — 100 req/min rate limit + logs  │
-│    request_validation_middleware    — JSON Content-Type enforcement   │
+│    request_validation_middleware    — JSON Content-Type enforcement  │
 │    CORSMiddleware                   — configurable origins           │
 │                                                                      │
-│  Exception handlers: AppError, HTTPException, Exception             │
+│  Exception handlers: AppError, HTTPException, Exception              │
 │                                                                      │
-│  /api/v1/* ─── api_router (22 sub-routers)                         │
+│  /api/v1/* ─── api_router (22 sub-routers)                           │
 │                                                                      │
 │  Lifespan startup:                                                   │
-│    1. init_db()         → SQLite schema creation                    │
-│    2. ingest_all_data() → ETL from XLSX (non-blocking task)         │
-│    3. scheduler.start() → daily prediction + weekly retrain tasks   │
+│    1. init_db()         → SQLite schema creation                     │
+│    2. ingest_all_data() → ETL from XLSX (non-blocking task)          │
+│    3. scheduler.start() → daily prediction + weekly retrain tasks    │
 └──────────┬──────────────────────────────────────────┬───────────────┘
            │                                          │
            ▼                                          ▼
   ┌────────────────┐                      ┌─────────────────────┐
-  │  SQLite DB     │                      │  LLM Providers       │
-  │  sql_app.db    │                      │                      │
-  │  25+ tables    │                      │  Gemini (default)    │
-  │                │                      │  Claude (alt)        │
-  └────────────────┘                      │  Both optional       │
+  │  SQLite DB     │                      │  LLM Providers      │
+  │  sql_app.db    │                      │                     │
+  │  25+ tables    │                      │  Gemini (default)   │
+  │                │                      │  Claude (alt)       │
+  └────────────────┘                      │  Both optional      │
            ▲                              └─────────────────────┘
            │
   ┌────────────────────────┐
