@@ -7,25 +7,27 @@ import Header from './Header';
 
 const GlobalBackground = () => (
     <div style={{ position: 'fixed', inset: 0, overflow: 'hidden', pointerEvents: 'none', zIndex: 0 }}>
-        {/* Base gradient */}
+        {/* Base gradient — driven by CSS variable, switches with theme */}
         <div style={{
             position: 'absolute', inset: 0,
             background: `
-                radial-gradient(ellipse 70% 55% at 15% 10%, rgba(124,58,237,0.16) 0%, transparent 60%),
-                radial-gradient(ellipse 55% 45% at 85% 85%, rgba(109,40,217,0.13) 0%, transparent 55%),
-                radial-gradient(ellipse 40% 35% at 70% 5%, rgba(245,158,11,0.05) 0%, transparent 50%),
-                linear-gradient(160deg, #100920 0%, #0B0714 45%, #0E0B1F 100%)
-            `
+                radial-gradient(ellipse 70% 55% at 15% 10%, var(--bg-orb-primary) 0%, transparent 60%),
+                radial-gradient(ellipse 55% 45% at 85% 85%, var(--bg-orb-secondary) 0%, transparent 55%),
+                radial-gradient(ellipse 40% 35% at 70% 5%, var(--bg-orb-gold) 0%, transparent 50%),
+                var(--bg-gradient)
+            `,
+            transition: 'background 0.25s ease',
         }} />
         {/* Orbs */}
-        <div style={{ position: 'absolute', top: '8%', left: '20%', width: 500, height: 500, borderRadius: '50%', background: 'radial-gradient(circle, rgba(124,58,237,0.1) 0%, transparent 70%)', filter: 'blur(50px)' }} />
-        <div style={{ position: 'absolute', bottom: '10%', right: '8%', width: 420, height: 420, borderRadius: '50%', background: 'radial-gradient(circle, rgba(139,92,246,0.09) 0%, transparent 70%)', filter: 'blur(45px)' }} />
-        <div style={{ position: 'absolute', top: '45%', right: '30%', width: 250, height: 250, borderRadius: '50%', background: 'radial-gradient(circle, rgba(245,158,11,0.05) 0%, transparent 70%)', filter: 'blur(35px)' }} />
+        <div style={{ position: 'absolute', top: '8%', left: '20%', width: 500, height: 500, borderRadius: '50%', background: 'radial-gradient(circle, var(--bg-orb-primary) 0%, transparent 70%)', filter: 'blur(50px)', transition: 'background 0.25s ease' }} />
+        <div style={{ position: 'absolute', bottom: '10%', right: '8%', width: 420, height: 420, borderRadius: '50%', background: 'radial-gradient(circle, var(--bg-orb-secondary) 0%, transparent 70%)', filter: 'blur(45px)', transition: 'background 0.25s ease' }} />
+        <div style={{ position: 'absolute', top: '45%', right: '30%', width: 250, height: 250, borderRadius: '50%', background: 'radial-gradient(circle, var(--bg-orb-gold) 0%, transparent 70%)', filter: 'blur(35px)', transition: 'background 0.25s ease' }} />
         {/* Dot grid */}
         <div style={{
             position: 'absolute', inset: 0,
-            backgroundImage: 'radial-gradient(circle, rgba(139,92,246,0.1) 1px, transparent 1px)',
+            backgroundImage: 'radial-gradient(circle, var(--bg-dot-color) 1px, transparent 1px)',
             backgroundSize: '36px 36px',
+            transition: 'opacity 0.25s ease',
         }} />
     </div>
 );
@@ -34,7 +36,10 @@ const Layout = ({ children }) => {
     const location = useLocation();
 
     return (
-        <div className="flex h-screen overflow-hidden" style={{ backgroundColor: '#0B0714', position: 'relative' }}>
+        <div
+            className="flex h-screen overflow-hidden"
+            style={{ backgroundColor: 'var(--bg-color)', position: 'relative', transition: 'background-color 0.25s ease' }}
+        >
             <GlobalBackground />
 
             {/* Sidebar */}

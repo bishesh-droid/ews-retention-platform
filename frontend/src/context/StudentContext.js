@@ -77,6 +77,7 @@ export const StudentProvider = ({ children }) => {
 
       const studentsWithData = fetchedStudents.map(student => ({
         ...student,
+        name: student.name || student.id,
         risk_score: validateRiskScore(student.risk_score, 50),
       }));
 

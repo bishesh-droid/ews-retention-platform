@@ -8,6 +8,11 @@ import { getAllInterventions, createIntervention, updateIntervention } from '../
 
 const Interventions = () => {
     const { students } = useStudentData();
+    const studentNameById = useMemo(() => {
+        const map = new Map();
+        students.forEach(s => map.set(s.id, s.name || s.id));
+        return map;
+    }, [students]);
     const [showModal, setShowModal] = useState(false);
     const [modalStep, setModalStep] = useState(1);
     const [selectedStudents, setSelectedStudents] = useState([]);
@@ -260,7 +265,7 @@ const Interventions = () => {
                                 <tbody>
                                     {paginatedInterventions.map((item, idx) => (
                                         <tr key={`${item.student_id}-${idx}`}>
-                                            <td>{item.student_id}</td>
+                                            <td>{studentNameById.get(item.student_id) || item.student_id}</td>
                                             <td>{item.action || item.threshold_category || 'Intervention'}</td>
                                             <td>{item.date || '—'}</td>
                                             <td>{getStatusBadge(item.status || 'Pending')}</td>
@@ -475,7 +480,7 @@ const Interventions = () => {
                                     <Form.Check
                                         key={student.id}
                                         type="checkbox"
-                                        label={`${student.id} (Risk: ${student.risk_score})`}
+                                        label={`${student.name || student.id} (Risk: ${student.risk_score})`}
                                         className="ms-4"
                                         checked={selectedStudents.includes(student.id)}
                                         onChange={(e) => {

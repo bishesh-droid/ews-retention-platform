@@ -716,7 +716,7 @@ class FeatureEngineer:
         """
         # Extract raw values from features dict
         login_count = features.get("login_count", 0)
-        content_completion_rate = features.get("content_completion_score", 0) / 100.0
+        content_completion_rate = (features.get("content_completion_score") or 0) / 100.0
         total_time_seconds = features.get("total_time_spent", 0)
         graded_quiz_score = features.get("graded_quiz_score")
         risk_score = features.get("risk_score", 0)

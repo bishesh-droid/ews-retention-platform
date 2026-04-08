@@ -49,6 +49,7 @@ function Dashboard() {
     const sortedStudents = [...students].sort((a, b) => b.risk_score - a.risk_score);
     return sortedStudents.slice(0, 6).map(student => ({
       id: student.id,
+      name: student.name || student.id,
       message: generateShortRiskSummary(student),
       riskScore: student.risk_score
     }));
@@ -276,7 +277,7 @@ function Dashboard() {
                     </div>
 
                     <p className="text-sm font-bold mb-1" style={{ color: '#EDE9FE' }}>
-                      Student #{warning.id}
+                      {warning.name}
                     </p>
                     <p className="text-xs line-clamp-2 mb-3" style={{ color: '#A899CF', lineHeight: '1.5' }}>
                       {warning.message}

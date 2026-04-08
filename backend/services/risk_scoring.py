@@ -48,6 +48,7 @@ class RiskScorer:
         "assignment_score": "Assignment Submissions",
         "time_investment_score": "Time Investment",
         "discussion_engagement_score": "Discussion Engagement",
+        "self_directed_learning_score": "Self-Directed Learning",
     }
 
     NEUTRAL_RISK_SCORE = 50.0

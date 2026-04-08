@@ -15,6 +15,7 @@ import BusinessAnalytics from './pages/BusinessAnalytics';
 import Login from './pages/Login';
 import Signup from './pages/Signup';
 import { useAuth } from './context/AuthContext';
+import { ThemeProvider } from './context/ThemeContext';
 import './App.css';
 
 const ProtectedRoute = ({ children }) => {
@@ -26,6 +27,7 @@ function App() {
   const location = useLocation();
 
   return (
+    <ThemeProvider>
     <Routes location={location} key={location.pathname}>
       <Route path="/login" element={<Login />} />
       <Route path="/signup" element={<Signup />} />
@@ -53,6 +55,7 @@ function App() {
         }
       />
     </Routes>
+    </ThemeProvider>
   );
 }
 

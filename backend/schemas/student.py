@@ -43,6 +43,7 @@ class StudentMetricsResponse(BaseModel):
     id: str
     first_name: Optional[str] = None
     last_name: Optional[str] = None
+    name: Optional[str] = None
     org_defined_id: Optional[str] = None
     department: Optional[str] = None
     old_new_student: Optional[str] = None

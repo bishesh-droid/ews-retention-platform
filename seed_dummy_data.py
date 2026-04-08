@@ -8,12 +8,10 @@ from backend.database.models import (
     User, Student, Prediction, Intervention, RiskSnapshot, Goal,
     LLMInsight, AIExplanation, PatternDiscovery, StudentResponse, AuditLog
 )
-from passlib.context import CryptContext
-
-pwd_context = CryptContext(schemes=["pbkdf2_sha256"], deprecated="auto")
+import bcrypt
 
 def get_password_hash(password):
-    return pwd_context.hash(password)
+    return bcrypt.hashpw(password.encode("utf-8"), bcrypt.gensalt()).decode("utf-8")
 
 def seed_data():
     db = SessionLocal()

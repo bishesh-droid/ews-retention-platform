@@ -5,78 +5,74 @@
 /* Import Premium Design System */
 @import './design-system.css';
 
+/* ─────────────────────────────────────────────
+   LIGHT MODE  (default / :root)
+   Brand: warm lavender — intentional, not generic
+───────────────────────────────────────────── */
 :root {
-  /* Core Brand Colors - Meridian */
+  /* Core Brand Colors — Meridian (same in both modes) */
   --primary-color: #7C3AED;
-  /* Meridian Violet */
   --primary-hover: #6D28D9;
-  /* Deeper Violet */
   --primary-light: #C4B5FD;
-  /* Soft Lavender */
 
-  /* Meridian Accent Colors */
+  /* Accent Colors (same in both modes) */
   --accent-gold: #F59E0B;
-  /* Warm Amber - Radiance */
   --accent-gold-light: #FDE68A;
-  /* Light Amber Glow */
   --accent-red: #EF4444;
-  /* Alert Red */
 
   /* Semantic Risk Colors */
   --high-risk-color: #DC3545;
-  /* Red */
-  --medium-risk-color: #FFA500;
-  /* Orange */
-  --low-risk-color: #28A745;
-  /* Green */
+  --medium-risk-color: #F97316;
+  --low-risk-color: #16A34A;
   --neutral-risk-color: #6C757D;
-  /* Gray */
 
-  /* AI & Ethics Colors - Meridian Theme */
-  --ai-primary: #F59E0B; /* Warm Amber for AI distinction */
+  /* AI & Ethics Colors */
+  --ai-primary: #F59E0B;
   --ai-light: #FDE68A;
-  --ai-bg-glass: rgba(245, 158, 11, 0.05);
-  --ai-border: rgba(245, 158, 11, 0.2);
+  --ai-bg-glass: rgba(245, 158, 11, 0.06);
+  --ai-border: rgba(245, 158, 11, 0.25);
   --confidence-high: #10B981;
   --confidence-medium: #F59E0B;
   --confidence-low: #EF4444;
 
   /* Gradients */
   --gradient-primary: linear-gradient(135deg, #7C3AED 0%, #C4B5FD 100%);
-  --gradient-gold: linear-gradient(135deg, var(--accent-gold) 0%, var(--accent-gold-light) 100%);
-  --gradient-glow: radial-gradient(circle at 50% -20%, rgba(139, 92, 246, 0.18), transparent 70%);
-  --gradient-glass: linear-gradient(180deg, rgba(255, 255, 255, 0.95) 0%, rgba(255, 255, 255, 0.7) 100%);
+  --gradient-gold: linear-gradient(135deg, #F59E0B 0%, #FDE68A 100%);
+  --gradient-glow: radial-gradient(circle at 50% -20%, rgba(124,58,237,0.12), transparent 70%);
 
-  /* Backgrounds & Surfaces (Dark — Meridian) */
-  --bg-color: #0B0714;
-  /* Deep Void */
-  --surface-color: #130D23;
-  /* Dark Violet Surface */
-  --surface-hover: #1A1035;
-  /* Elevated Hover */
-  --glass-bg: rgba(19, 13, 35, 0.95);
-  /* Dark Glass */
-  --glass-border: rgba(139, 92, 246, 0.15);
+  /* ── Light-mode surfaces ── */
+  --bg-color: #EDE7FA;
+  --surface-color: #FFFFFF;
+  --surface-hover: #F5F0FF;
+  --glass-bg: rgba(255, 255, 255, 0.88);
+  --glass-border: rgba(124, 58, 237, 0.14);
 
-  /* Typography */
+  /* Background gradient (used by GlobalBackground in Layout) */
+  --bg-gradient: linear-gradient(160deg, #F0EAFF 0%, #EDE7FA 45%, #EAE3F8 100%);
+  --bg-orb-primary: rgba(124, 58, 237, 0.07);
+  --bg-orb-secondary: rgba(139, 92, 246, 0.05);
+  --bg-orb-gold: rgba(245, 158, 11, 0.04);
+  --bg-dot-color: rgba(124, 58, 237, 0.06);
+
+  /* ── Light-mode typography ── */
   --font-sans: 'Inter', -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
-  --text-primary: #EDE9FE;
-  /* Near-White Violet */
-  --text-secondary: #C4B5FD;
-  /* Soft Lavender */
-  --text-muted: #B8AADA;
-  /* Muted Violet - readable on dark */
+  --text-primary: #1A0A3C;
+  --text-secondary: #4A3275;
+  --text-muted: #7B6BAD;
 
-  /* Borders & Shadows */
-  --border-color: rgba(139, 92, 246, 0.18);
+  /* ── Light-mode borders & shadows ── */
+  --border-color: rgba(124, 58, 237, 0.15);
   --border-width: 1px;
-  --shadow-sm: 0 1px 2px 0 rgba(0, 0, 0, 0.05);
-  --shadow-md: 0 4px 6px -1px rgba(0, 0, 0, 0.1);
-  --shadow-lg: 0 20px 25px -5px rgba(0, 0, 0, 0.15);
-  --shadow-glow: 0 0 20px rgba(139, 92, 246, 0.3);
-  --shadow-gold: 0 0 15px rgba(245, 158, 11, 0.3);
+  --shadow-sm: 0 1px 3px rgba(124, 58, 237, 0.08);
+  --shadow-md: 0 4px 12px rgba(124, 58, 237, 0.1);
+  --shadow-lg: 0 20px 40px rgba(124, 58, 237, 0.12);
+  --shadow-glow: 0 0 20px rgba(124, 58, 237, 0.2);
+  --shadow-gold: 0 0 15px rgba(245, 158, 11, 0.25);
 
-  /* Spacing */
+  /* Theme toggle bg */
+  --theme-toggle-bg: rgba(124, 58, 237, 0.07);
+
+  /* Spacing & radii */
   --header-height: 72px;
   --sidebar-width: 260px;
   --border-radius-sm: 6px;
@@ -84,37 +80,108 @@
   --border-radius-lg: 12px;
   --border-radius-xl: 16px;
 
-  /* Bootstrap 5 CSS variable overrides — forces dark-theme text everywhere */
-  --bs-body-color:            #DDD6FE;
-  --bs-body-color-rgb:        221, 214, 254;
-  --bs-body-bg:               #0B0714;
-  --bs-secondary-color:       #A899CF;
-  --bs-tertiary-color:        #8B7DB8;
-  --bs-emphasis-color:        #EDE9FE;
-  --bs-link-color:            #A78BFA;
-  --bs-link-hover-color:      #C4B5FD;
-  --bs-border-color:          rgba(139, 92, 246, 0.18);
-  --bs-card-bg:               #130D23;
-  --bs-card-color:            #DDD6FE;
-  --bs-card-border-color:     rgba(139, 92, 246, 0.18);
-  --bs-card-cap-bg:           rgba(139, 92, 246, 0.05);
-  --bs-card-cap-color:        #EDE9FE;
-  --bs-list-group-bg:         #130D23;
-  --bs-list-group-color:      #DDD6FE;
-  --bs-list-group-border-color: rgba(139, 92, 246, 0.18);
-  --bs-modal-bg:              #130D23;
-  --bs-modal-color:           #DDD6FE;
-  --bs-dropdown-bg:           #130D23;
-  --bs-dropdown-color:        #DDD6FE;
-  --bs-dropdown-link-color:   #C4B5FD;
-  --bs-input-bg:              #1A1035;
-  --bs-input-color:           #EDE9FE;
-  --bs-table-bg:              transparent;
-  --bs-table-color:           #DDD6FE;
-  --bs-table-striped-bg:      rgba(139, 92, 246, 0.04);
-  --bs-table-hover-bg:        rgba(139, 92, 246, 0.08);
+  /* ── Light-mode Bootstrap 5 overrides ── */
+  --bs-body-color:              #1A0A3C;
+  --bs-body-color-rgb:          26, 10, 60;
+  --bs-body-bg:                 #EDE7FA;
+  --bs-secondary-color:         #4A3275;
+  --bs-tertiary-color:          #7B6BAD;
+  --bs-emphasis-color:          #1A0A3C;
+  --bs-link-color:              #7C3AED;
+  --bs-link-hover-color:        #6D28D9;
+  --bs-border-color:            rgba(124, 58, 237, 0.15);
+  --bs-card-bg:                 #FFFFFF;
+  --bs-card-color:              #1A0A3C;
+  --bs-card-border-color:       rgba(124, 58, 237, 0.15);
+  --bs-card-cap-bg:             rgba(124, 58, 237, 0.04);
+  --bs-card-cap-color:          #1A0A3C;
+  --bs-list-group-bg:           #FFFFFF;
+  --bs-list-group-color:        #1A0A3C;
+  --bs-list-group-border-color: rgba(124, 58, 237, 0.15);
+  --bs-modal-bg:                #FFFFFF;
+  --bs-modal-color:             #1A0A3C;
+  --bs-dropdown-bg:             #FFFFFF;
+  --bs-dropdown-color:          #1A0A3C;
+  --bs-dropdown-link-color:     #4A3275;
+  --bs-input-bg:                #F5F0FF;
+  --bs-input-color:             #1A0A3C;
+  --bs-table-bg:                transparent;
+  --bs-table-color:             #1A0A3C;
+  --bs-table-striped-bg:        rgba(124, 58, 237, 0.03);
+  --bs-table-hover-bg:          rgba(124, 58, 237, 0.06);
 
   /* Context-specific colors */
+  --faculty-primary: #7C3AED;
+  --faculty-accent: #D97706;
+  --student-primary: #059669;
+  --student-success: #059669;
+  --student-warning: #D97706;
+  --business-primary: #7C3AED;
+  --business-revenue: #DC2626;
+  --business-growth: #059669;
+  --business-warning: #D97706;
+  --institutional-primary: #7C3AED;
+}
+
+/* ─────────────────────────────────────────────
+   DARK MODE  (html.dark)
+   Original Meridian deep-space aesthetic
+───────────────────────────────────────────── */
+html.dark {
+  --bg-color: #0B0714;
+  --surface-color: #130D23;
+  --surface-hover: #1A1035;
+  --glass-bg: rgba(19, 13, 35, 0.95);
+  --glass-border: rgba(139, 92, 246, 0.15);
+
+  --bg-gradient: linear-gradient(160deg, #100920 0%, #0B0714 45%, #0E0B1F 100%);
+  --bg-orb-primary: rgba(124, 58, 237, 0.10);
+  --bg-orb-secondary: rgba(139, 92, 246, 0.09);
+  --bg-orb-gold: rgba(245, 158, 11, 0.05);
+  --bg-dot-color: rgba(139, 92, 246, 0.10);
+
+  --text-primary: #EDE9FE;
+  --text-secondary: #C4B5FD;
+  --text-muted: #B8AADA;
+
+  --border-color: rgba(139, 92, 246, 0.18);
+  --shadow-sm: 0 1px 2px rgba(0, 0, 0, 0.3);
+  --shadow-md: 0 4px 6px rgba(0, 0, 0, 0.4);
+  --shadow-lg: 0 20px 25px rgba(0, 0, 0, 0.5);
+  --shadow-glow: 0 0 20px rgba(139, 92, 246, 0.3);
+  --shadow-gold: 0 0 15px rgba(245, 158, 11, 0.3);
+
+  --theme-toggle-bg: rgba(139, 92, 246, 0.1);
+
+  --bs-body-color:              #DDD6FE;
+  --bs-body-color-rgb:          221, 214, 254;
+  --bs-body-bg:                 #0B0714;
+  --bs-secondary-color:         #A899CF;
+  --bs-tertiary-color:          #8B7DB8;
+  --bs-emphasis-color:          #EDE9FE;
+  --bs-link-color:              #A78BFA;
+  --bs-link-hover-color:        #C4B5FD;
+  --bs-border-color:            rgba(139, 92, 246, 0.18);
+  --bs-card-bg:                 #130D23;
+  --bs-card-color:              #DDD6FE;
+  --bs-card-border-color:       rgba(139, 92, 246, 0.18);
+  --bs-card-cap-bg:             rgba(139, 92, 246, 0.05);
+  --bs-card-cap-color:          #EDE9FE;
+  --bs-list-group-bg:           #130D23;
+  --bs-list-group-color:        #DDD6FE;
+  --bs-list-group-border-color: rgba(139, 92, 246, 0.18);
+  --bs-modal-bg:                #130D23;
+  --bs-modal-color:             #DDD6FE;
+  --bs-dropdown-bg:             #130D23;
+  --bs-dropdown-color:          #DDD6FE;
+  --bs-dropdown-link-color:     #C4B5FD;
+  --bs-input-bg:                #1A1035;
+  --bs-input-color:             #EDE9FE;
+  --bs-table-bg:                transparent;
+  --bs-table-color:             #DDD6FE;
+  --bs-table-striped-bg:        rgba(139, 92, 246, 0.04);
+  --bs-table-hover-bg:          rgba(139, 92, 246, 0.08);
+
   --faculty-primary: #C4B5FD;
   --faculty-accent: #F59E0B;
   --student-primary: #10B981;
@@ -125,6 +192,11 @@
   --business-growth: #10B981;
   --business-warning: #F59E0B;
   --institutional-primary: #C4B5FD;
+}
+
+/* ── Theme transition ── */
+html {
+  transition: background-color 0.25s ease, color 0.2s ease;
 }
 
 /* Global Reset & Base */
@@ -141,6 +213,21 @@ body {
   background-color: var(--bg-color);
   color: var(--text-primary);
   transition: background-color var(--transition-normal), color var(--transition-normal);
+}
+
+/* Smooth theme transitions on key structural elements */
+body,
+.card,
+.glass-panel,
+.modal-content,
+.list-group-item,
+.dropdown-menu,
+aside,
+header,
+input,
+select,
+textarea {
+  transition: background-color 0.25s ease, border-color 0.25s ease, color 0.2s ease, box-shadow 0.25s ease;
 }
 
 /* Force readable text on all plain elements inside Bootstrap cards/panels */
@@ -286,7 +373,7 @@ a:hover {
 }
 
 .modern-table thead th {
-  color: #C4B5FD;
+  color: var(--text-secondary);
   /* Column headers */
   font-weight: 600;
   text-transform: uppercase;

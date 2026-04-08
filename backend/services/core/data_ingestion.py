@@ -138,7 +138,7 @@ async def ingest_all_data(db: Session, triggered_by: str = "startup", uploaded_f
         start_time = time.time()
 
         try:
-            _run_ingestion(db, stats)
+            await _run_ingestion(db, stats)
             run.status = "partial" if stats.errors else "success"
         except Exception as e:
             run.status = "failed"
@@ -176,7 +176,7 @@ async def ingest_all_data(db: Session, triggered_by: str = "startup", uploaded_f
                 await _cleanup_uploaded_file(uploaded_filepath)
 
 
-def _run_ingestion(db: Session, stats: IngestionStats):
+async def _run_ingestion(db: Session, stats: IngestionStats):
     """
     Internal ingestion logic with stats tracking.
     """
@@ -472,6 +472,18 @@ def upsert_course_content_registry(
         .filter_by(course_offering_code=course_offering_code, semester_name=semester_name)
         .first()
     )
+
+    # Also check objects pending in the session (not yet flushed to DB)
+    if existing is None:
+        existing = next(
+            (
+                obj for obj in db.new
+                if isinstance(obj, CourseContentRegistry)
+                and obj.course_offering_code == course_offering_code
+                and obj.semester_name == semester_name
+            ),
+            None,
+        )
 
     if not existing:
         # Insert new record

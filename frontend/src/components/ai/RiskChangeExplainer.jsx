@@ -163,7 +163,7 @@ const RiskChangeExplainer = ({ studentId, students, limit = 5 }) => {
                                                 className="text-sm font-bold leading-none mb-1"
                                                 style={{ color: '#EDE9FE' }}
                                             >
-                                                Student #{student.id}
+                                                {student.name || student.id}
                                             </p>
                                             <p
                                                 className="text-[10px] font-medium uppercase tracking-wider"

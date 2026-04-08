@@ -89,6 +89,7 @@ class StudentApplicationService:
             "id": student.id,
             "first_name": student.first_name,
             "last_name": student.last_name,
+            "name": " ".join(filter(None, [student.first_name, student.last_name])).strip() or student.id,
             "org_defined_id": student.org_defined_id,
             "department": student.parent_department_name,
             "old_new_student": student.old_new_student,

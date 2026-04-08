@@ -22,13 +22,26 @@ const SidebarItem = ({ to, icon: Icon, label }) => {
             className="flex items-center gap-3 py-3 rounded-xl transition-all duration-200"
             style={({ isActive }) => ({
                 textDecoration: 'none',
-                backgroundColor: isActive ? 'rgba(124, 58, 237, 0.25)' : 'transparent',
-                color: isActive ? '#C4B5FD' : '#9B8FC0',
-                borderLeft: isActive ? '3px solid #8B5CF6' : '3px solid transparent',
+                backgroundColor: isActive ? 'rgba(124, 58, 237, 0.18)' : 'transparent',
+                color: isActive ? 'var(--primary-light)' : 'var(--text-muted)',
+                borderLeft: isActive ? '3px solid var(--primary-color)' : '3px solid transparent',
                 paddingLeft: isActive ? '13px' : '16px',
                 paddingRight: '16px',
-                boxShadow: isActive ? '0 0 20px rgba(139,92,246,0.2)' : 'none',
+                boxShadow: isActive ? '0 0 20px rgba(139,92,246,0.15)' : 'none',
+                transition: 'all 0.2s ease',
             })}
+            onMouseEnter={e => {
+                if (!e.currentTarget.classList.contains('active')) {
+                    e.currentTarget.style.backgroundColor = 'rgba(124,58,237,0.08)';
+                    e.currentTarget.style.color = 'var(--text-secondary)';
+                }
+            }}
+            onMouseLeave={e => {
+                if (!e.currentTarget.classList.contains('active')) {
+                    e.currentTarget.style.backgroundColor = 'transparent';
+                    e.currentTarget.style.color = 'var(--text-muted)';
+                }
+            }}
         >
             <Icon size={18} className="shrink-0" />
             <span className="font-medium whitespace-nowrap">{label}</span>
@@ -44,6 +57,7 @@ const Sidebar = () => {
         logout();
         navigate('/login');
     };
+
     const navItems = [
         { to: "/", icon: FaChartPie, label: "Overview" },
         { to: "/students", icon: FaUsers, label: "Students" },
@@ -60,7 +74,13 @@ const Sidebar = () => {
     return (
         <aside
             className="w-72 min-w-[18rem] h-screen sticky top-0 flex flex-col p-6 overflow-y-auto overflow-x-hidden"
-            style={{ backgroundColor: 'rgba(11,7,20,0.6)', backdropFilter: 'blur(12px)', borderRight: '1px solid rgba(139,92,246,0.1)' }}
+            style={{
+                backgroundColor: 'var(--glass-bg)',
+                backdropFilter: 'blur(12px)',
+                WebkitBackdropFilter: 'blur(12px)',
+                borderRight: '1px solid var(--border-color)',
+                transition: 'background-color 0.25s ease, border-color 0.25s ease',
+            }}
         >
             <div className="mb-10 px-2">
                 <Logo size={38} textSize="lg" />
@@ -72,13 +92,13 @@ const Sidebar = () => {
                 ))}
             </nav>
 
-            <div className="mt-10 pt-6" style={{ borderTop: '1px solid rgba(139,92,246,0.15)' }}>
+            <div className="mt-10 pt-6" style={{ borderTop: '1px solid var(--border-color)' }}>
                 <button
                     onClick={handleSignOut}
                     className="flex items-center gap-3 px-4 py-3 rounded-xl transition-all duration-200 w-full"
-                    style={{ color: '#9B8FC0' }}
+                    style={{ color: 'var(--text-muted)', background: 'none', border: 'none', cursor: 'pointer' }}
                     onMouseEnter={e => { e.currentTarget.style.backgroundColor = 'rgba(239,68,68,0.1)'; e.currentTarget.style.color = '#F87171'; }}
-                    onMouseLeave={e => { e.currentTarget.style.backgroundColor = 'transparent'; e.currentTarget.style.color = '#9B8FC0'; }}
+                    onMouseLeave={e => { e.currentTarget.style.backgroundColor = 'transparent'; e.currentTarget.style.color = 'var(--text-muted)'; }}
                 >
                     <FaSignOutAlt size={18} />
                     <span className="font-medium">Sign Out</span>

@@ -102,8 +102,12 @@ export const getStudentsWithPredictions = async (limit = 1500) => {
 
         return students.map(student => {
             const prediction = predictions[student.id] || {};
+            const first = (student.first_name || '').trim();
+            const last = (student.last_name || '').trim();
+            const fullName = `${first} ${last}`.trim();
             return {
                 ...student,
+                name: student.name || fullName || student.id,
                 risk_score: validateRiskScore(prediction.risk_score, 50),
                 engagement_score: prediction.engagement_score || 50,
                 retention_likelihood: prediction.retention_likelihood || 'Unknown',

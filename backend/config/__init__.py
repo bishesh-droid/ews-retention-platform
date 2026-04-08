@@ -12,6 +12,10 @@ from datetime import date, datetime
 from pathlib import Path
 from typing import Optional, Union
 
+from dotenv import load_dotenv
+
+load_dotenv(Path(__file__).resolve().parent.parent.parent / ".env")
+
 # ---------------------------------------------------------------------------
 # Base paths
 # ---------------------------------------------------------------------------
