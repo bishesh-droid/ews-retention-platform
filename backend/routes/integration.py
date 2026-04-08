@@ -5,10 +5,12 @@ Read-only endpoints that expose structured student risk profiles
 for consumption by the AI Academic Advisor (or any authorized service).
 
 These endpoints do NOT modify any EWS data.
-Authentication: X-Integration-Key header validated against env var.
+Authentication: X-API-Key-Hash + X-Timestamp headers with replay protection.
 """
 
-from fastapi import APIRouter, Depends, HTTPException, Header, Query
+import time
+
+from fastapi import APIRouter, Depends, HTTPException, Header, Query, Request
 from sqlalchemy.orm import Session
 from typing import Optional, List
 from datetime import datetime
@@ -18,7 +20,8 @@ from backend.services.student_service import StudentService
 from backend.services.feature_engineering import FeatureEngineer
 from backend.services.risk_scoring import RiskScorer
 from backend.database import Student, Enrollment
-from backend.config import INTEGRATION_API_KEY
+from backend.config import INTEGRATION_API_KEY_HASH
+from backend.core.signing import verify_signed_request, constant_time_compare
 from backend.utils.api import success_response
 
 router = APIRouter()
@@ -28,16 +31,37 @@ API_VERSION = "1.0"
 
 # ─── Authentication ─────────────────────────────────────────────────────────
 
-def verify_integration_key(x_integration_key: str = Header(..., alias="X-Integration-Key")):
-    """Validate the integration API key from request header."""
-    if not INTEGRATION_API_KEY:
+async def verify_integration_key(
+    request: Request,
+    x_api_key_hash: str = Header(..., alias="X-API-Key-Hash"),
+    x_timestamp: str = Header(..., alias="X-Timestamp"),
+):
+    """
+    Validate signed request with timestamp-based replay protection.
+
+    Client must send:
+      - X-API-Key-Hash: SHA-256 hash of the raw API key
+      - X-Timestamp: Unix timestamp (seconds since epoch)
+    """
+    if not INTEGRATION_API_KEY_HASH:
         raise HTTPException(
             status_code=503,
-            detail="Integration API is not configured. Set INTEGRATION_API_KEY env var."
+            detail="Integration API is not configured. Set INTEGRATION_API_KEY_HASH env var."
         )
-    if x_integration_key != INTEGRATION_API_KEY:
-        raise HTTPException(status_code=401, detail="Invalid integration API key")
-    return x_integration_key
+
+    # Verify key hash matches (constant-time comparison)
+    if not constant_time_compare(x_api_key_hash, INTEGRATION_API_KEY_HASH):
+        raise HTTPException(status_code=403, detail="Invalid API key")
+
+    # Verify timestamp is within window (prevents replay attacks)
+    try:
+        ts = int(x_timestamp)
+        if abs(time.time() - ts) > 300:  # 5-minute window
+            raise HTTPException(status_code=403, detail="Request timestamp expired")
+    except ValueError:
+        raise HTTPException(status_code=403, detail="Invalid timestamp")
+
+    return x_api_key_hash
 
 
 # ─── Helpers ─────────────────────────────────────────────────────────────────

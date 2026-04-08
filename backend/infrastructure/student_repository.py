@@ -143,7 +143,14 @@ class StudentRepository:
     def fetch_exam_map(db: Session, student_ids: List[str]) -> Dict[str, List[Dict]]:
         if not student_ids:
             return {}
-        rows = db.query(ExamRecord).filter(ExamRecord.student_id.in_(student_ids)).all()
+        rows = (
+            db.query(ExamRecord)
+            .filter(
+                ExamRecord.student_id.in_(student_ids),
+                ExamRecord.course_code != "EXAM_DEFAULT",
+            )
+            .all()
+        )
         out: Dict[str, List[Dict]] = {sid: [] for sid in student_ids}
         for e in rows:
             out.setdefault(e.student_id, []).append(

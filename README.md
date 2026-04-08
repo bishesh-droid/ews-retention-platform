@@ -971,12 +971,16 @@ source venv/bin/activate        # Windows: venv\Scripts\activate
 
 # 3. Install Python dependencies
 pip install -r requirements.txt
+# For development/testing, also install: pip install -r requirements-dev.txt
 
 # 4. Configure environment (optional but recommended)
 cp .env.example .env
 # Edit .env:
 #   SECRET_KEY=<generate with: python -c "import secrets; print(secrets.token_hex(32))">
 #   GEMINI_API_KEY=<your key if you want AI features>
+
+# LLM features require additional packages (see requirements.txt for details):
+#   pip install google-generativeai anthropic
 
 # 5. Ensure the data file is in place
 ls backend/data/Engagement_Analysis.xlsx
@@ -1009,7 +1013,19 @@ npm start
 
 ### 8.4 Creating an Admin User
 
-There is no seed script. Use curl or the Swagger UI at `http://localhost:8000/docs`:
+**Option 1: Seed script (recommended for local development)**
+
+Run once after first setup to create a local admin user:
+
+```bash
+python -m backend.scripts.seed_dev_data
+```
+
+This creates a dev admin with credentials: `dev_admin` / `changeme_local_only`
+
+**Option 2: Manual via API**
+
+Use curl or the Swagger UI at `http://localhost:8000/docs`:
 
 ```bash
 # Step 1: Register a user

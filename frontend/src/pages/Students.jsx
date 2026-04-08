@@ -10,6 +10,12 @@ import { variants } from '../utils/motionConfig';
 import useDebounce from '../hooks/useDebounce';
 import { getStudentList } from '../services/api';
 
+// Format score with null guard (returns "—" for null/undefined values)
+const formatScore = (score, suffix = '%') => {
+  if (score == null) return '—';
+  return `${Number(score).toFixed(1)}${suffix}`;
+};
+
 const Students = () => {
   const [students, setStudents] = useState([]);
   const [totalStudents, setTotalStudents] = useState(0);
@@ -91,13 +97,13 @@ const Students = () => {
         return true;
       })
       .filter(student => {
-        // Quiz score filter
-        const quizScore = student.graded_quiz_score ?? 0;
-        if (quizScore < quizScoreRange[0] || quizScore > quizScoreRange[1]) return false;
+        // Quiz score filter (allow null scores to pass through)
+        const quizScore = student.graded_quiz_score;
+        if (quizScore != null && (quizScore < quizScoreRange[0] || quizScore > quizScoreRange[1])) return false;
 
-        // Attendance filter
-        const attendance = student.exam_attendance_rate ?? 0;
-        if (attendance < attendanceRange[0] || attendance > attendanceRange[1]) return false;
+        // Attendance filter (allow null rates to pass through)
+        const attendance = student.exam_attendance_score ?? student.exam_attendance_rate;
+        if (attendance != null && (attendance < attendanceRange[0] || attendance > attendanceRange[1])) return false;
 
         // Department filter
         if (departmentFilter !== 'all' && student.department !== departmentFilter) return false;

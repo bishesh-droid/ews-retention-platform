@@ -41,7 +41,9 @@ class Prediction(Base):
     responsiveness_signal_score = Column(Float)
     
     # ========== Prediction Metadata ==========
-    model_version = Column(String)  # e.g., 'xgboost_v1.0', 'random_forest_v1.0'
+    # TODO: model_version currently stores "rule_based" since no trained ML model exists.
+    # Future: will store ML model version when training pipeline is implemented.
+    model_version = Column(String)  # e.g., 'rule_based', 'xgboost_v1.0'
     prediction_timestamp = Column(DateTime, default=lambda: datetime.now(timezone.utc))
     top_risk_factors = Column(String)  # JSON string of top contributing features
     

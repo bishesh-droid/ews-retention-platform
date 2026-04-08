@@ -2,8 +2,12 @@
 Risk Consistency Checker — Section 6
 Ensures coherence between rule-based risk scores and ML predictions.
 
-Responsibilities
-----------------
+TODO: This module is currently inactive for ML comparisons — no trained model exists yet.
+The discrepancy detection logic is reserved for future use when a real ML model is available.
+See backend/ml/training/calibrate.py for the path to real ML.
+
+Responsibilities (when ML is available)
+---------------------------------------
 1. Shared feature base for both rule-based and ML scoring.
 2. Detect contradictions (rule says LOW, ML says HIGH, or vice-versa).
 3. Log discrepancies to logs/risk_discrepancy.log.

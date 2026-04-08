@@ -2,13 +2,14 @@
 Decision Engine Service
 Implements risk threshold logic to determine appropriate interventions.
 
-Thresholds are configurable via environment variables (see backend/config.py):
-- < THRESHOLD_NO_ACTION (default 30%): No action
-- THRESHOLD_NO_ACTION to THRESHOLD_GENTLE (30-60%): Gentle reminder (automated email)
-- THRESHOLD_GENTLE to THRESHOLD_MENTOR (60-80%): Mentor outreach (faculty + email)
-- >= THRESHOLD_URGENT (default 80%): Urgent intervention (sales + WhatsApp + incentive)
+All risk scores in this module use a 0–100 scale.
 
-NOTE: All risk_score inputs must be probabilities in [0.0, 1.0] range.
+Thresholds are configurable via environment variables (see backend/config.py):
+- < THRESHOLD_NO_ACTION (default 30): No action
+- THRESHOLD_NO_ACTION to THRESHOLD_GENTLE (30–40): Gentle reminder (automated email)
+- THRESHOLD_GENTLE to THRESHOLD_MENTOR (40–60): Mentor outreach (faculty + email)
+- THRESHOLD_MENTOR to THRESHOLD_URGENT (60–80): Mentor outreach (escalated)
+- >= THRESHOLD_URGENT (default 80): Urgent intervention (sales + WhatsApp + incentive)
 """
 
 import logging
@@ -30,28 +31,130 @@ THRESHOLD_MENTOR = INTERVENTION_THRESHOLDS['mentor_outreach']
 THRESHOLD_URGENT = INTERVENTION_THRESHOLDS['urgent']
 
 
-def get_intervention_recommendation(risk_score: float) -> Dict[str, Any]:
+def get_intervention_recommendation(
+    risk_score: float,
+    engagement_pattern: str = None,
+    features: Dict[str, Any] = None,
+) -> Dict[str, Any]:
     """
     Apply decision thresholds and return recommended intervention.
-    
+
     Args:
-        risk_score: Risk score from 0.0 to 1.0 (probability, NOT percentage)
-        
+        risk_score: Risk score on the 0–100 scale (same scale as config thresholds).
+        engagement_pattern: Optional engagement pattern classification ("disengaged",
+            "struggling", "at_risk_normal", "on_track") to enable tailored interventions.
+        features: Optional features dictionary for ghost detection and other
+            feature-based routing decisions.
+
     Returns:
         Dictionary with intervention details
-    
-    Note:
-        This function expects probabilities (0.0-1.0), not percentages (0-100).
-        Thresholds are: <0.30, 0.30-0.60, 0.60-0.80, >=0.80
     """
-    # Validate risk_score is in valid range
     if risk_score is None or np.isnan(risk_score) or np.isinf(risk_score):
-        logger.error(f"Invalid risk_score in decision engine: {risk_score}. Using neutral default 0.5")
-        risk_score = 0.5
-    
-    if risk_score < 0.0 or risk_score > 1.0:
-        logger.error(f"Risk score out of range [0, 1]: {risk_score}. Clamping to valid range.")
-        risk_score = max(0.0, min(1.0, risk_score))
+        logger.error(
+            f"Invalid risk_score in decision engine: {risk_score}. Using neutral default 50.0"
+        )
+        risk_score = 50.0
+
+    assert 0.0 <= risk_score <= 100.0, f"Expected risk score in [0,100], got {risk_score}"
+
+    # Ghost student activation outreach takes ABSOLUTE priority
+    # These students need human intervention, not automated messaging
+    if features and features.get("requires_activation_outreach"):
+        ghost_type = features.get("ghost_info", {}).get("ghost_type", "unknown")
+        return {
+            "type": "activation_outreach",
+            "priority": "critical",
+            "ghost_type": ghost_type,
+            "channels": ["direct_call", "email", "admissions_escalation"],
+            "action_items": [
+                "Call student directly — do not send automated message",
+                "Verify student received welcome email and login credentials",
+                "Check if student has a platform access or technical issue",
+                "If no response within 48 hours, escalate to admissions team",
+                "Log outcome in intervention tracker",
+            ] if ghost_type == "never_logged_in" else [
+                "Student has logged in but never accessed course content",
+                "Send personalised onboarding walkthrough link",
+                "Schedule a 15-minute orientation call with student support team",
+                "Check if student is aware of how to navigate the LMS",
+            ],
+            "suppress_automated_messages": True,
+        }
+
+    # Academic flags routing (exam-based high-signal indicators)
+    flags = features.get("academic_flags", {}) if features else {}
+
+    if features and features.get("suppress_intervention"):
+        # Student formally deferred — enrolled in next trimester
+        return {"type": "none", "reason": "Student formally deferred — enrolled in next trimester"}
+
+    if flags.get("dropout_intent"):
+        return {
+            "type": "retention_emergency",
+            "priority": "critical",
+            "channels": ["direct_call", "retention_team", "admissions_escalation"],
+            "action_items": [
+                "Immediate call from retention team — do not use automated messaging",
+                "Understand the reason for refund request",
+                "Offer financial support options, fee deferral, or leave of absence",
+                "Escalate to academic director within 24 hours if no response",
+            ],
+        }
+
+    if flags.get("ufm_flagged"):
+        return {
+            "type": "academic_integrity",
+            "priority": "high",
+            "channels": ["email", "dean_notification"],
+            "action_items": [
+                "Notify academic integrity officer",
+                "Schedule a formal meeting with student and academic advisor",
+                "Document the incident in the student record",
+            ],
+        }
+
+    if features and features.get("health_referral_needed"):
+        return {
+            "type": "welfare_referral",
+            "priority": "medium",
+            "channels": ["email", "welfare_team"],
+            "action_items": [
+                "Refer to student welfare team (not academic team)",
+                "Check on student wellbeing — avoid academic pressure messaging",
+                "Offer assignment extension or medical leave if appropriate",
+            ],
+        }
+
+    # Pattern-specific interventions take priority over generic threshold logic
+    if engagement_pattern == "struggling":
+        return {
+            "type": "academic_support",
+            "priority": "high" if risk_score >= 60 else "medium",
+            "channels": ["ta_session", "instructor_flag", "remedial_content"],
+            "action_items": [
+                "Schedule a TA support session within 3 days",
+                "Share course-specific remedial content links",
+                "Notify course instructor — student is attending but struggling",
+                "Follow up after next graded component submission",
+            ],
+            "message_tone": "supportive",
+            "suppress_sales_contact": True,
+        }
+
+    if engagement_pattern == "disengaged":
+        return {
+            "type": "re_engagement",
+            "priority": "high" if risk_score >= 50 else "medium",
+            "channels": ["whatsapp", "email"],
+            "action_items": [
+                "Verify platform access — student may have login issues",
+                "Send personalised re-engagement message",
+                "Check if student received onboarding materials",
+                "Escalate to admissions if no response in 5 days",
+            ],
+            "message_tone": "warm",
+            "suppress_sales_contact": False,
+        }
 
     if risk_score < THRESHOLD_NO_ACTION:
         return {
@@ -62,7 +165,7 @@ def get_intervention_recommendation(risk_score: float) -> Dict[str, Any]:
             "message_template": None,
             "urgency": "none",
             "description": "Student is on track, no intervention needed",
-            "threshold_used": THRESHOLD_NO_ACTION
+            "threshold_used": THRESHOLD_NO_ACTION,
         }
 
     elif risk_score < THRESHOLD_GENTLE:
@@ -74,7 +177,7 @@ def get_intervention_recommendation(risk_score: float) -> Dict[str, Any]:
             "message_template": "gentle_reminder_email",
             "urgency": "low",
             "description": "Send automated email reminder to check in with student",
-            "threshold_used": THRESHOLD_GENTLE
+            "threshold_used": THRESHOLD_GENTLE,
         }
 
     elif risk_score < THRESHOLD_MENTOR:
@@ -86,10 +189,25 @@ def get_intervention_recommendation(risk_score: float) -> Dict[str, Any]:
             "message_template": "mentor_outreach_email",
             "urgency": "medium",
             "description": "Assign faculty mentor for personalized outreach and support",
-            "threshold_used": THRESHOLD_MENTOR
+            "threshold_used": THRESHOLD_MENTOR,
         }
 
-    else:  # risk_score >= THRESHOLD_URGENT
+    elif risk_score < THRESHOLD_URGENT:
+        return {
+            "action_type": "mentor_outreach",
+            "threshold_category": "mentor_outreach_escalated",
+            "channels": ["email", "mentor_call"],
+            "assigned_team": "faculty",
+            "message_template": "mentor_outreach_email",
+            "urgency": "high",
+            "description": (
+                "Escalated faculty mentor outreach — heightened engagement risk; "
+                "prioritize personalized support and follow-up"
+            ),
+            "threshold_used": THRESHOLD_URGENT,
+        }
+
+    else:
         return {
             "action_type": "urgent_intervention",
             "threshold_category": "urgent_intervention",
@@ -98,7 +216,7 @@ def get_intervention_recommendation(risk_score: float) -> Dict[str, Any]:
             "message_template": "urgent_intervention_package",
             "urgency": "high",
             "description": "Immediate escalation to sales team with multi-channel outreach and incentive offer",
-            "threshold_used": THRESHOLD_URGENT
+            "threshold_used": THRESHOLD_URGENT,
         }
 
 
@@ -111,7 +229,7 @@ def should_trigger_intervention(
     Determine if an intervention should be triggered based on risk score and history
     
     Args:
-        current_risk_score: Current risk score (0-1)
+        current_risk_score: Current risk score (0–100)
         previous_risk_score: Previous risk score, if available
         days_since_last_intervention: Days since last intervention
         
@@ -199,29 +317,21 @@ def calculate_intervention_priority(
 ) -> str:
     """
     Calculate priority level for intervention queue
-    
+
     Args:
-        risk_score: Current risk score (0-1)
-        engagement_trend: Trend in engagement (negative = declining)
-        days_inactive: Number of consecutive days inactive
-        
+        risk_score: Current risk score (0–100)
+        engagement_trend: Trend in engagement (negative = declining); reserved for future use
+        days_inactive: Number of consecutive days inactive; reserved for future use
+
     Returns:
         Priority level: "critical", "high", "medium", "low"
     """
-    # Critical: Very high risk + declining engagement + inactive
-    if risk_score >= 0.85:
-        if (engagement_trend and engagement_trend < -0.2) or (days_inactive and days_inactive > 10):
-            return "critical"
+    normalized = risk_score / 100.0
+    if normalized >= 0.85:
+        return "critical"
+    elif normalized >= 0.70:
         return "high"
-    
-    # High: High risk threshold
-    elif risk_score >= 0.70:
-        return "high"
-    
-    # Medium: Moderate risk
-    elif risk_score >= 0.45:
+    elif normalized >= 0.45:
         return "medium"
-    
-    # Low: Just above no-action threshold
     else:
         return "low"

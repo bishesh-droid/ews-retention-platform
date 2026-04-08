@@ -34,7 +34,10 @@ from typing import Any, Dict, List, Optional
 
 from sqlalchemy.orm import Session
 
+import backend.config as settings
+from backend.config import trimester_week_number
 from backend.services.feature_engineering import FeatureEngineer
+from backend.services.calendar_scorer import get_current_week
 from backend.services.risk_scoring import RiskScorer
 from backend.database.models.prediction import Prediction
 from backend.core.logger import sys_logger
@@ -144,8 +147,15 @@ class MLService:
                 enrollments,
                 graded_components=graded,
                 exam_records=exams,
+                is_new_student=False,
+                week_number=trimester_week_number(),
             )
-            risk_score = RiskScorer.calculate_risk_score(features)
+            risk_score = RiskScorer.calculate_risk_score(
+                features,
+                graded_components=graded or [],
+                program=None,
+                current_week=get_current_week(settings.TRIMESTER_START_DATE),
+            )
             risk_category = RiskScorer.get_risk_category(risk_score)
             retention = RiskScorer.get_retention_likelihood(risk_score)
             dominant = RiskScorer.get_dominant_risk_factor(features)
@@ -154,11 +164,15 @@ class MLService:
             result: Dict[str, Any] = {
                 "student_id": student_id,
                 "risk_score": risk_score,           # 0-100
+                "engagement_risk_score": risk_score, # Clarified name — same value
                 "risk_category": risk_category,     # "low" | "medium" | "high"
                 "retention_likelihood": retention,
                 "dominant_risk_factor": dominant,
                 "risk_breakdown": breakdown,
                 "model_used": False,                # True once a retrained model is available
+                "model_type": "rule_based",
+                "model_description": "Weighted engagement formula — not a trained ML model",
+                "score_basis": "rule_based_formula",
                 "prediction_error": False,
                 "prediction_timestamp": datetime.now(timezone.utc).isoformat(),
                 "features": {

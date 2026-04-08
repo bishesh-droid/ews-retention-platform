@@ -1,4 +1,4 @@
-from datetime import datetime, timedelta
+from datetime import datetime, timedelta, timezone
 from typing import Any, Optional, Union
 
 from jose import jwt
@@ -23,7 +23,7 @@ def create_access_token(
     Embedding role in the token means authorization checks do not require
     an extra DB round-trip and the role cannot be forged via HTTP headers.
     """
-    expire = datetime.utcnow() + (expires_delta or timedelta(minutes=15))
+    expire = datetime.now(timezone.utc) + (expires_delta or timedelta(minutes=15))
     to_encode = {
         "exp": expire,
         "sub": str(subject),

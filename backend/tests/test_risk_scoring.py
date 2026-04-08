@@ -5,11 +5,16 @@ Tests verify that:
 1. Risk scores are always [0-100]
 2. Negative CSV values are handled properly
 3. Edge cases (missing data, perfect scores, etc.) work correctly
+
+NOTE: These tests reference legacy K-12 feature engineering (attendance_score, absrate, nsusp, etc.)
+which is separate from the LMS exam_attendance_rate. The attendance_score tested here represents
+historical school absence rates, not written exam presence.
 """
 
 import pytest
 from backend.services.feature_engineering import FeatureEngineer
 from backend.services.risk_scoring import RiskScorer
+from backend.config import RISK_THRESHOLD_LOW, RISK_THRESHOLD_HIGH
 
 
 class TestFeatureEngineering:
@@ -157,7 +162,7 @@ class TestRiskScoring:
         }
         
         risk = RiskScorer.calculate_risk_score(features)
-        assert risk < 20  # Very low risk
+        assert risk < RISK_THRESHOLD_LOW  # Very low risk
         assert RiskScorer.get_risk_category(risk) == "low"
     
     def test_failing_student_high_risk(self):
@@ -170,7 +175,7 @@ class TestRiskScoring:
         }
         
         risk = RiskScorer.calculate_risk_score(features)
-        assert risk > 80  # Very high risk
+        assert risk > RISK_THRESHOLD_HIGH  # Very high risk
         assert RiskScorer.get_risk_category(risk) == "high"
     
     def test_risk_validation(self):

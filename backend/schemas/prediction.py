@@ -27,6 +27,9 @@ class PredictionBase(BaseModel):
     
     # Model metadata
     model_version: Optional[str] = None
+    model_type: Optional[str] = "rule_based"
+    model_description: Optional[str] = "Weighted engagement formula — not a trained ML model"
+    score_basis: Optional[str] = "rule_based_formula"
     top_risk_factors: Optional[List[Dict[str, Any]]] = None
 
 

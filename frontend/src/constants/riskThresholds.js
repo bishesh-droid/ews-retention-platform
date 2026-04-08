@@ -2,81 +2,51 @@
  * Risk Threshold Constants
  *
  * Centralized configuration for risk categorization.
- * These should match the backend configuration in backend/config.py
+ * These match the backend INTERVENTION_THRESHOLDS in backend/config/__init__.py
  */
 
-// Risk score thresholds (0-100 scale for frontend)
+// Intervention thresholds (0-100 scale) - synced with backend
 export const RISK_THRESHOLDS = {
-    CRITICAL: 85,    // >= 85% = Critical risk
-    HIGH: 70,        // >= 70% = High risk
-    MODERATE: 40,    // >= 40% = Moderate risk
-    LOW: 0           // < 40% = Low risk
+  NO_ACTION: 30,    // matches THRESHOLD_NO_ACTION in config
+  GENTLE: 40,       // matches THRESHOLD_GENTLE
+  MENTOR: 60,       // matches THRESHOLD_MENTOR
+  URGENT: 80,       // matches THRESHOLD_URGENT
 };
 
-// Intervention thresholds (0-100 scale)
-export const INTERVENTION_THRESHOLDS = {
-    NO_ACTION: 30,        // < 30% = No intervention needed
-    GENTLE_REMINDER: 60,  // 30-60% = Automated email reminder
-    MENTOR_OUTREACH: 80,  // 60-80% = Faculty mentor outreach
-    URGENT: 80            // >= 80% = Urgent sales intervention
+/**
+ * Get risk category with label and color based on score.
+ * Matches backend intervention threshold logic.
+ */
+export const getRiskCategory = (score) => {
+  if (score >= RISK_THRESHOLDS.URGENT) return { label: "Critical", color: "danger" };
+  if (score >= RISK_THRESHOLDS.MENTOR) return { label: "High", color: "warning" };
+  if (score >= RISK_THRESHOLDS.GENTLE) return { label: "Medium", color: "info" };
+  if (score >= RISK_THRESHOLDS.NO_ACTION) return { label: "Watch", color: "secondary" };
+  return { label: "On track", color: "success" };
 };
 
-// Risk category definitions
-export const RISK_CATEGORIES = {
-    CRITICAL: {
-        key: 'critical',
-        label: 'Critical',
-        description: 'Immediate attention required',
-        color: '#DC2626',
-        bgColor: 'rgba(220, 38, 38, 0.1)',
-        threshold: RISK_THRESHOLDS.CRITICAL
-    },
-    HIGH: {
-        key: 'high',
-        label: 'High Risk',
-        description: 'Significant risk of dropout',
-        color: '#F59E0B',
-        bgColor: 'rgba(245, 158, 11, 0.1)',
-        threshold: RISK_THRESHOLDS.HIGH
-    },
-    MODERATE: {
-        key: 'moderate',
-        label: 'Moderate',
-        description: 'Some warning signs present',
-        color: '#FBBF24',
-        bgColor: 'rgba(251, 191, 36, 0.1)',
-        threshold: RISK_THRESHOLDS.MODERATE
-    },
-    LOW: {
-        key: 'low',
-        label: 'Low Risk',
-        description: 'On track for success',
-        color: '#10B981',
-        bgColor: 'rgba(16, 185, 129, 0.1)',
-        threshold: RISK_THRESHOLDS.LOW
-    }
-};
-
-// Helper function to get category from risk score
-export const getRiskCategory = (riskScore) => {
-    if (riskScore >= RISK_THRESHOLDS.CRITICAL) return RISK_CATEGORIES.CRITICAL;
-    if (riskScore >= RISK_THRESHOLDS.HIGH) return RISK_CATEGORIES.HIGH;
-    if (riskScore >= RISK_THRESHOLDS.MODERATE) return RISK_CATEGORIES.MODERATE;
-    return RISK_CATEGORIES.LOW;
-};
-
-// Helper function to get intervention type from risk score
+/**
+ * Get intervention type from risk score.
+ * Maps to the backend intervention decision logic.
+ */
 export const getInterventionType = (riskScore) => {
-    if (riskScore < INTERVENTION_THRESHOLDS.NO_ACTION) return 'no_action';
-    if (riskScore < INTERVENTION_THRESHOLDS.GENTLE_REMINDER) return 'gentle_reminder';
-    if (riskScore < INTERVENTION_THRESHOLDS.MENTOR_OUTREACH) return 'mentor_outreach';
-    return 'urgent_intervention';
+  if (riskScore < RISK_THRESHOLDS.NO_ACTION) return 'no_action';
+  if (riskScore < RISK_THRESHOLDS.GENTLE) return 'gentle_reminder';
+  if (riskScore < RISK_THRESHOLDS.MENTOR) return 'mentor_outreach';
+  return 'urgent_intervention';
+};
+
+// Legacy exports for backward compatibility during transition
+export const INTERVENTION_THRESHOLDS = {
+  NO_ACTION: RISK_THRESHOLDS.NO_ACTION,
+  GENTLE_REMINDER: RISK_THRESHOLDS.GENTLE,
+  MENTOR_OUTREACH: RISK_THRESHOLDS.MENTOR,
+  URGENT: RISK_THRESHOLDS.URGENT,
 };
 
 export default {
     RISK_THRESHOLDS,
     INTERVENTION_THRESHOLDS,
-    RISK_CATEGORIES,
     getRiskCategory,
     getInterventionType
 };

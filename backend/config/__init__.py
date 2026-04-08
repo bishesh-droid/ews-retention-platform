@@ -8,7 +8,9 @@ so the application can run locally without a .env file.
 
 import os
 import logging
+from datetime import date, datetime
 from pathlib import Path
+from typing import Optional, Union
 
 # ---------------------------------------------------------------------------
 # Base paths
@@ -29,47 +31,60 @@ CORS_ORIGINS: list = os.getenv(
 # ---------------------------------------------------------------------------
 # Database
 # ---------------------------------------------------------------------------
-DATABASE_URL: str = os.getenv(
-    "DATABASE_URL",
-    f"sqlite:///{DATA_DIR / 'sql_app.db'}"
-)
+TESTING: bool = os.getenv("TESTING", "false").lower() == "true"
+
+# Force in-memory SQLite when TESTING=true, regardless of DATABASE_URL
+if TESTING:
+    DATABASE_URL: str = "sqlite+aiosqlite:///:memory:"
+    logger = logging.getLogger(__name__)
+    logger.info("TESTING=true: using in-memory SQLite database")
+else:
+    DATABASE_URL: str = os.getenv(
+        "DATABASE_URL",
+        f"sqlite:///{DATA_DIR / 'sql_app.db'}"
+    )
 
 # ---------------------------------------------------------------------------
 # Security / Auth
 # ---------------------------------------------------------------------------
-_INSECURE_DEFAULT_KEY = "CHANGE_ME_IN_PRODUCTION_a3f9c2e1b7d4e8f0a1b2c3d4e5f60718"
-_INSECURE_DEFAULT_KEY_ALT = "change-me-to-a-strong-random-secret-key"
-_ENV_FILE_WEAK_DEFAULT = "change-me-to-a-strong-random-secret-key"
 ENVIRONMENT: str = os.getenv("ENVIRONMENT", "development").lower()
 
-SECRET_KEY: str = os.getenv("SECRET_KEY", _INSECURE_DEFAULT_KEY)
+SECRET_KEY: str = os.getenv("SECRET_KEY", "")
 
-# Fail-fast in non-development environments when using insecure defaults.
-_INSECURE_VALUES = {
-    _INSECURE_DEFAULT_KEY,
-    _INSECURE_DEFAULT_KEY_ALT,
-    _ENV_FILE_WEAK_DEFAULT,
-    "",
-    "changeme",
-    "secret",
-    "secret_key",
-    "CHANGE_ME",
-    "CHANGE_ME_IN_PRODUCTION",
-}
-if ENVIRONMENT != "development" and SECRET_KEY.lower() in {k.lower() for k in _INSECURE_VALUES}:
-    raise RuntimeError(
-        "SECRET_KEY environment variable must be set to a cryptographically random "
-        "value (e.g., openssl rand -hex 32). The provided value is a known insecure "
-        "default or placeholder and will not be accepted."
-    )
+
+# Validate on startup — crash immediately if misconfigured rather than running insecurely
+def validate_security_config():
+    if not SECRET_KEY:
+        raise RuntimeError(
+            "SECRET_KEY environment variable is not set. "
+            'Generate one with: python -c "import secrets; print(secrets.token_hex(32))"'
+        )
+    if len(SECRET_KEY) < 32:
+        raise RuntimeError("SECRET_KEY must be at least 32 characters")
+    if ENVIRONMENT != "development" and SECRET_KEY in ("dev", "test", "changeme", "secret"):
+        raise RuntimeError("Insecure SECRET_KEY detected in non-development environment")
 
 ALGORITHM: str = os.getenv("ALGORITHM", "HS256")
 ACCESS_TOKEN_EXPIRE_MINUTES: int = int(os.getenv("ACCESS_TOKEN_EXPIRE_MINUTES", "60"))
 
 # ---------------------------------------------------------------------------
+# Rate Limiting
+# ---------------------------------------------------------------------------
+RATE_LIMIT_LOGIN: str = os.getenv("RATE_LIMIT_LOGIN", "5/minute")
+RATE_LIMIT_INGEST: str = os.getenv("RATE_LIMIT_INGEST", "10/hour")
+RATE_LIMIT_DEFAULT: str = os.getenv("RATE_LIMIT_DEFAULT", "200/minute")
+
+# ---------------------------------------------------------------------------
+# File Upload
+# ---------------------------------------------------------------------------
+MAX_UPLOAD_SIZE_MB: int = int(os.getenv("MAX_UPLOAD_SIZE_MB", "50"))
+
+# ---------------------------------------------------------------------------
 # Integration / External APIs
 # ---------------------------------------------------------------------------
-INTEGRATION_API_KEY: str = os.getenv("INTEGRATION_API_KEY", "")
+INTEGRATION_API_KEY_HASH: str = os.getenv("INTEGRATION_API_KEY_HASH", "")
+# This is the SHA-256 hash of the actual key, NOT the key itself
+# Generate with: python -c "import hashlib; print(hashlib.sha256(b'your-key').hexdigest())"
 
 # ---------------------------------------------------------------------------
 # LLM / AI
@@ -104,13 +119,21 @@ RISK_THRESHOLD_HIGH: float = float(os.getenv("RISK_THRESHOLD_HIGH", "70.0"))
 RISK_THRESHOLD_MEDIUM: float = float(os.getenv("RISK_THRESHOLD_MEDIUM", "40.0"))
 RISK_THRESHOLD_LOW: float = float(os.getenv("RISK_THRESHOLD_LOW", "20.0"))
 
-DEFAULT_MODEL_TYPE: str = os.getenv("DEFAULT_MODEL_TYPE", "xgboost")
+# Model type configuration:
+# "rule_based" = deterministic weighted formula (current implementation)
+# "xgboost" = reserved for future trained model — do not set until training pipeline exists
+DEFAULT_MODEL_TYPE: str = os.getenv("DEFAULT_MODEL_TYPE", "rule_based")
 
-SIGNAL_WEIGHTS: dict = {
-    "attendance": float(os.getenv("WEIGHT_ATTENDANCE", "0.35")),
-    "grades": float(os.getenv("WEIGHT_GRADES", "0.30")),
-    "engagement": float(os.getenv("WEIGHT_ENGAGEMENT", "0.20")),
-    "submissions": float(os.getenv("WEIGHT_SUBMISSIONS", "0.15")),
+# Rule-based RiskScorer + advisor explainability (risk_formula signal rollup).
+# Logical keys map to FeatureEngineer outputs via backend.services.risk_scoring._LOGICAL_TO_FEATURE_KEY.
+FEATURE_WEIGHTS: dict = {
+    "content_completion": float(os.getenv("WEIGHT_CONTENT_COMPLETION", "0.30")),
+    "login_consistency": float(os.getenv("WEIGHT_LOGIN_CONSISTENCY", "0.20")),
+    "quiz_engagement": float(os.getenv("WEIGHT_QUIZ_ENGAGEMENT", "0.20")),
+    "assignment": float(os.getenv("WEIGHT_ASSIGNMENT", "0.15")),
+    "time_investment": float(os.getenv("WEIGHT_TIME_INVESTMENT", "0.08")),
+    "discussion": float(os.getenv("WEIGHT_DISCUSSION", "0.02")),
+    "self_directed_learning": float(os.getenv("WEIGHT_SELF_DIRECTED_LEARNING", "0.05")),  # risk reducer
 }
 
 # ---------------------------------------------------------------------------
@@ -124,7 +147,7 @@ INTERVENTION_THRESHOLDS: dict = {
 }
 
 INTERVENTION_COOLDOWN_DAYS: int = int(os.getenv("INTERVENTION_COOLDOWN_DAYS", "7"))
-RISK_SPIKE_THRESHOLD: float = float(os.getenv("RISK_SPIKE_THRESHOLD", "0.15"))
+RISK_SPIKE_THRESHOLD: float = float(os.getenv("RISK_SPIKE_THRESHOLD", "15.0"))
 
 # Business / revenue
 AVERAGE_STUDENT_LTV: float = float(os.getenv("AVERAGE_STUDENT_LTV", "150000.0"))
@@ -178,3 +201,30 @@ WEEK5_USAGE_PATH = DATA_DIR / os.getenv(
 
 # ML training sample data
 SAMPLE_DATA_PATH = DATA_DIR / os.getenv("SAMPLE_DATA_FILE", "labels.csv")
+
+# ---------------------------------------------------------------------------
+# Academic calendar (trimester week for feature engineering & risk snapshots)
+# ---------------------------------------------------------------------------
+# ISO date (YYYY-MM-DD) for the first day (Monday) of week 1.
+# Default set for Trimester-2 2026.
+TRIMESTER_START_DATE: str = os.getenv("TRIMESTER_START_DATE", "2026-01-05")
+CURRENT_SEMESTER_NAME: str = os.getenv("CURRENT_SEMESTER_NAME", "Trimester 2")
+_TRIMESTER_START_DATE_DATE: date = date.fromisoformat(TRIMESTER_START_DATE)
+
+# Calendar-based risk blending weight (0.0–1.0)
+CALENDAR_RISK_BLEND_WEIGHT: float = float(os.getenv("CALENDAR_RISK_BLEND_WEIGHT", "0.4"))
+
+
+def trimester_week_number(at: Optional[Union[datetime, date]] = None) -> Optional[int]:
+    """
+    1-based week index since TRIMESTER_START_DATE.
+    Returns None if `at` (or today) is before the trimester start.
+    """
+    if at is not None:
+        ref = at.date() if isinstance(at, datetime) else at
+    else:
+        ref = date.today()
+    delta_days = (ref - _TRIMESTER_START_DATE_DATE).days
+    if delta_days < 0:
+        return None
+    return (delta_days // 7) + 1

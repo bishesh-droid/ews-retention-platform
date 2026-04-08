@@ -3,6 +3,7 @@ from sqlalchemy import func
 from datetime import datetime, timedelta
 from typing import List, Dict, Any, Optional, Tuple
 
+from backend.config import trimester_week_number, CURRENT_SEMESTER_NAME
 from backend.database import RiskSnapshot, Prediction
 from backend.schemas.student import Student
 
@@ -13,7 +14,13 @@ _COHORT_CACHE_TTL_SECONDS = 60
 
 class AnalyticsService:
     @staticmethod
-    def capture_risk_snapshot(db: Session, student_id: str, risk_score: float, engagement_score: float):
+    def capture_risk_snapshot(
+        db: Session,
+        student_id: str,
+        risk_score: float,
+        engagement_score: float,
+        week_number: Optional[int] = None,
+    ):
         """
         Creates a new risk snapshot and calculates velocity/acceleration.
         """
@@ -31,13 +38,16 @@ class AnalyticsService:
             # Acceleration = change in velocity
             acceleration = velocity - (last_snapshot.velocity or 0.0)
 
+        wn = week_number if week_number is not None else trimester_week_number()
         snapshot = RiskSnapshot(
             student_id=student_id,
             risk_score=risk_score,
             velocity=velocity,
             acceleration=acceleration,
             engagement_score=engagement_score,
-            timestamp=datetime.utcnow()
+            week_number=wn,
+            semester_name=CURRENT_SEMESTER_NAME,
+            timestamp=datetime.utcnow(),
         )
         db.add(snapshot)
         # Caller commits the transaction.
@@ -90,9 +100,12 @@ class AnalyticsService:
             "snapshots": [
                 {
                     "timestamp": s.timestamp.isoformat(),
+                    "date": s.timestamp.date().isoformat(),
                     "risk_score": s.risk_score,
                     "velocity": s.velocity,
-                    "acceleration": s.acceleration
+                    "acceleration": s.acceleration,
+                    "week_number": s.week_number,
+                    "semester": s.semester_name,
                 } for s in snapshots
             ]
         }

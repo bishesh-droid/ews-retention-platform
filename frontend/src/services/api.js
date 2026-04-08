@@ -516,6 +516,50 @@ export const createIntervention = (payload) =>
 export const updateIntervention = (interventionId, payload) =>
   safeRequest(() => http.patch(`/interventions/${encodeURIComponent(interventionId)}`, payload));
 
+/**
+ * Trigger data ingestion via admin endpoint.
+ * Returns 202 Accepted immediately with a task ID for polling.
+ */
+export const triggerIngestion = async (file = null) => {
+  const formData = new FormData();
+  if (file) formData.append('file', file);
+
+  const response = await fetch(`${API_BASE_URL}/admin/ingest`, {
+    method: 'POST',
+    headers: { Authorization: `Bearer ${sessionStorage.getItem('ews_jwt')}` },
+    body: file ? formData : undefined,
+  });
+
+  if (response.status === 202) {
+    const data = await response.json();
+    return { accepted: true, taskId: data.task_id, message: data.message };
+  }
+  if (!response.ok) {
+    const err = await response.json().catch(() => ({}));
+    throw new Error(err.error?.message || err.message || 'Ingestion failed');
+  }
+  return response.json();
+};
+
+/**
+ * Poll ingestion task status until completion or timeout.
+ */
+export const pollIngestionStatus = async (taskId, maxAttempts = 30, intervalMs = 2000) => {
+  for (let i = 0; i < maxAttempts; i++) {
+    await new Promise((r) => setTimeout(r, intervalMs));
+    const res = await fetch(`${API_BASE_URL}/admin/ingest/status/${encodeURIComponent(taskId)}`, {
+      headers: { Authorization: `Bearer ${sessionStorage.getItem('ews_jwt')}` },
+    });
+    if (!res.ok) {
+      const err = await res.json().catch(() => ({}));
+      throw new Error(err.error?.message || 'Failed to check ingestion status');
+    }
+    const data = await res.json();
+    if (data.status === 'success' || data.status === 'failed') return data;
+  }
+  throw new Error('Ingestion status polling timed out');
+};
+
 const api = {
   getCohortSummary,
   getStudentList,
@@ -549,6 +593,8 @@ const api = {
   getAllInterventions,
   createIntervention,
   updateIntervention,
+  triggerIngestion,
+  pollIngestionStatus,
 };
 
 export default api;

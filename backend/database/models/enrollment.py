@@ -5,7 +5,7 @@ Database model for student-course enrollment with engagement metrics.
 Each row represents one student enrolled in one course.
 """
 
-from sqlalchemy import Column, String, Integer, Float, Boolean, ForeignKey
+from sqlalchemy import Column, String, Integer, Float, Boolean, ForeignKey, DateTime, Index, UniqueConstraint
 from sqlalchemy.orm import relationship
 from backend.database.connection import Base
 
@@ -17,9 +17,17 @@ class Enrollment(Base):
     """
     __tablename__ = "enrollments"
 
+    __table_args__ = (
+        Index('ix_enrollment_last_login', 'last_system_login'),
+        Index('ix_enrollment_last_visited', 'last_visited_date'),
+        Index('ix_enrollment_student_id', 'student_id'),
+        Index('ix_enrollment_course_code', 'course_id'),
+        UniqueConstraint('student_id', 'course_id', name='uq_enrollment_student_course'),
+    )
+
     id = Column(Integer, primary_key=True, autoincrement=True)
-    student_id = Column(String, ForeignKey("students.id"), index=True)
-    course_id = Column(String, ForeignKey("courses.id"), index=True)
+    student_id = Column(String, ForeignKey("students.id", ondelete="CASCADE"), nullable=False, index=True)
+    course_id = Column(String, ForeignKey("courses.id", ondelete="SET NULL"), nullable=True, index=True)
 
     # Content engagement
     content_completed = Column(Integer, default=0)
@@ -53,6 +61,15 @@ class Enrollment(Base):
     # SCORM
     last_scorm_completion_date = Column(String)
     last_scorm_visit_date = Column(String)
+
+    # Course type flag
+    is_optional = Column(Boolean, default=False, nullable=False)
+
+    # Final outcome (for retrospective evaluation of risk scores)
+    # Values: "active" | "completed" | "dropped" | "deferred" | "unknown"
+    final_outcome = Column(String(32), nullable=True, default=None)
+    outcome_source = Column(String(64), nullable=True)  # "exam_data" | "admin_manual" | "inferred_from_activity"
+    outcome_updated_at = Column(DateTime, nullable=True)
 
     # Relationships
     student = relationship("Student", back_populates="enrollments")

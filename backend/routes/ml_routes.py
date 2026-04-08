@@ -2,8 +2,13 @@
 ML prediction routes
 --------------------
 Thin HTTP layer delegating all prediction logic to services.
-ML inference is executed off the main event loop via asyncio.to_thread
-and is protected by a timeout so the server remains responsive.
+
+TODO: No trained ML model exists yet. All predictions currently use
+rule-based scoring (RiskScorer). This module is reserved for future ML.
+See backend/ml/training/calibrate.py for the path to real ML.
+
+ML inference (when available) will be executed off the main event loop
+via asyncio.to_thread and protected by a timeout.
 
 All endpoints require a valid JWT.  Batch/cohort endpoints additionally
 require a staff-level role (faculty / admin / retention team).
@@ -19,6 +24,7 @@ from sqlalchemy.orm import Session
 from sqlalchemy import desc, func, and_, case
 
 from backend.api.deps import get_current_user, get_db_async, require_role
+from backend.application.student.student_application_service import StudentApplicationService
 from backend.database.models.user import User
 from backend.services.ml_service import ml_service
 from backend.services.student_service import StudentService
@@ -189,6 +195,9 @@ async def get_cohort_risk(
         .one()
     )
 
+    # Calculate engagement patterns for the cohort
+    engagement_patterns = StudentApplicationService.get_cohort_engagement_patterns(db, current_user=_user)
+
     if not agg.n:
         total_students = db.query(Student).count()
         return success_response(
@@ -197,6 +206,7 @@ async def get_cohort_risk(
                 "high_risk_count": 0,
                 "critical_risk_count": 0,
                 "total_students": total_students,
+                "engagement_patterns": engagement_patterns,
                 "note": "No predictions stored yet. Run /ml/predict/{id} first.",
             }
         )
@@ -207,6 +217,7 @@ async def get_cohort_risk(
             "high_risk_count": int(agg.high_count or 0),
             "critical_risk_count": int(agg.critical_count or 0),
             "total_students": int(agg.n or 0),
+            "engagement_patterns": engagement_patterns,
         }
     )
 

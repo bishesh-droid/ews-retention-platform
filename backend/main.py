@@ -17,18 +17,21 @@ from fastapi import FastAPI, Request, HTTPException, status
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.responses import JSONResponse
 from sqlalchemy import text
-from slowapi import Limiter
-from slowapi import _rate_limit_exceeded_handler
 from slowapi.errors import RateLimitExceeded
 from slowapi.middleware import SlowAPIMiddleware
-from slowapi.util import get_remote_address
 
-from backend.config import API_HOST, API_PORT, CORS_ORIGINS, REDIS_URL, ENVIRONMENT
+from backend.config import API_HOST, API_PORT, CORS_ORIGINS, REDIS_URL, ENVIRONMENT, validate_security_config, RATE_LIMIT_DEFAULT
+from backend.core.rate_limiting import limiter, rate_limit_exceeded_handler
+from backend.core.errors import (
+    http_exception_handler, validation_exception_handler, unhandled_exception_handler
+)
 from backend.database.connection import init_db, SessionLocal
 from backend.routes import api_router
+from backend.routes.admin_ingest import router as ingest_router
 from backend.core.logger import sys_logger
 from backend.middleware.security_logging import security_and_logging_middleware
 from backend.middleware.request_validation import request_validation_middleware
+from backend.middleware.request_id import RequestIDMiddleware
 from backend.services.infrastructure.scheduler import scheduler_service
 from backend.services.ml_service import ml_service
 from backend.utils.api import AppError, error_response, success_response
@@ -112,6 +115,11 @@ def check_db_connection() -> bool:
 async def lifespan(app: FastAPI):
     """Startup and shutdown sequence."""
     sys_logger.info("Starting EWS Retention Platform API...")
+
+    # Validate security configuration first — crash immediately if misconfigured
+    validate_security_config()
+    sys_logger.info("Security configuration validated.")
+
     validate_environment()
 
     # Health check Redis and select limiter backend.
@@ -135,13 +143,10 @@ async def lifespan(app: FastAPI):
 
     # Initialize rate limiter with selected backend.
     try:
-        limiter = Limiter(
-            key_func=get_remote_address,
-            storage_uri=limiter_storage_uri,
-            default_limits=["100/minute"],
-        )
+        limiter.storage_uri = limiter_storage_uri
+        limiter.default_limits = [RATE_LIMIT_DEFAULT]
         app.state.limiter = limiter
-        app.add_exception_handler(RateLimitExceeded, _rate_limit_exceeded_handler)
+        app.add_exception_handler(RateLimitExceeded, rate_limit_exceeded_handler)
         sys_logger.info(f"Rate limiter initialized with backend: {limiter_storage_uri}")
     except Exception as e:
         sys_logger.error(f"Failed to initialize rate limiter: {e}")
@@ -153,27 +158,34 @@ async def lifespan(app: FastAPI):
 
     # Run XLSX ingestion off the event loop so startup is non-blocking.
     # If ingestion fails the server still starts — it just won't have data.
-    async def _run_ingestion():
+    async def _run_startup_ingestion():
         try:
             from backend.services.core.data_ingestion import ingest_all_data
-            def _run_ingestion_in_thread():
-                db = SessionLocal()
-                try:
-                    ingest_all_data(db)
-                    # Services flush; commit here to finalize the transaction.
-                    db.commit()
-                    sys_logger.info("Data ingestion complete.")
-                except Exception:
-                    db.rollback()
-                    raise
-                finally:
-                    db.close()
+            db = SessionLocal()
+            try:
+                await ingest_all_data(db, triggered_by="startup")
+                # Services flush; commit here to finalize the transaction.
+                db.commit()
+                sys_logger.info("Startup data ingestion complete.")
+            except Exception:
+                db.rollback()
+                raise
+            finally:
+                db.close()
+        except Exception:
+            sys_logger.exception("Startup ingestion failed — application running with stale data")
+            # Do not re-raise — allow server to start even if initial ingestion fails
 
-            await asyncio.to_thread(_run_ingestion_in_thread)
-        except Exception as exc:
-            sys_logger.error(f"Data ingestion error (non-fatal): {exc}")
+    _startup_task = asyncio.create_task(_run_startup_ingestion())
 
-    asyncio.create_task(_run_ingestion())
+    # Add done callback to log any unexpected failure
+    def _on_startup_ingestion_done(task: asyncio.Task):
+        if task.cancelled():
+            sys_logger.warning("Startup ingestion was cancelled")
+        elif task.exception():
+            sys_logger.exception("Startup ingestion raised an unhandled exception", exc_info=task.exception())
+
+    _startup_task.add_done_callback(_on_startup_ingestion_done)
 
     try:
         await scheduler_service.start(run_daily_on_startup=True)
@@ -205,14 +217,31 @@ app = FastAPI(
     lifespan=lifespan,
 )
 
+# Request ID middleware (must be first to capture ID for all subsequent logging)
+app.add_middleware(RequestIDMiddleware)
+
 # CORS
 CORS_ORIGINS_NORMALIZED = parse_cors_origins(CORS_ORIGINS)
+
+# Validate in production — reject dev origins and wildcards
+if ENVIRONMENT != "development":
+    dev_origins = {"http://localhost", "http://127.0.0.1"}
+    for origin in CORS_ORIGINS_NORMALIZED:
+        if any(origin.startswith(dev) for dev in dev_origins):
+            raise RuntimeError(
+                f"Development origin {origin!r} found in CORS_ORIGINS for non-development environment. "
+                "Set CORS_ORIGINS to your production frontend URL."
+            )
+    if "*" in CORS_ORIGINS_NORMALIZED:
+        raise RuntimeError("Wildcard CORS origin not allowed in production. Set explicit origins.")
+
 app.add_middleware(
     CORSMiddleware,
     allow_origins=CORS_ORIGINS_NORMALIZED,
     allow_credentials=True,
-    allow_methods=["GET", "POST", "PUT", "PATCH", "DELETE", "OPTIONS"],
-    allow_headers=["*"],
+    allow_methods=["GET", "POST", "PUT", "PATCH", "DELETE"],
+    allow_headers=["Authorization", "Content-Type", "X-Request-ID",
+                   "X-API-Key-Hash", "X-Timestamp"],
 )
 
 # Rate limiting middleware (slowapi with Redis backend)
@@ -225,41 +254,27 @@ app.middleware("http")(request_validation_middleware)
 
 
 # ---------------------------------------------------------------------------
-# Centralised exception handlers
+# Centralised exception handlers (using standardized errors)
 # ---------------------------------------------------------------------------
 
+from starlette.exceptions import HTTPException as StarletteHTTPException
+from fastapi.exceptions import RequestValidationError
+
+app.add_exception_handler(StarletteHTTPException, http_exception_handler)
+app.add_exception_handler(RequestValidationError, validation_exception_handler)
+app.add_exception_handler(Exception, unhandled_exception_handler)
+
+# Keep AppError handler for custom application errors
 @app.exception_handler(AppError)
 async def app_error_handler(request: Request, exc: AppError):
+    from backend.core.errors import error_response as std_error_response
+    request_id = getattr(request.state, "request_id", None)
     sys_logger.warning(
         f"AppError [{exc.status_code}] {request.method} {request.url.path}: {exc.message}"
     )
     return JSONResponse(
         status_code=exc.status_code,
-        content=error_response(exc.message, exc.details),
-    )
-
-
-@app.exception_handler(HTTPException)
-async def http_exception_handler(request: Request, exc: HTTPException):
-    sys_logger.warning(
-        f"HTTPException [{exc.status_code}] {request.method} {request.url.path}: {exc.detail}"
-    )
-    detail = exc.detail if isinstance(exc.detail, str) else str(exc.detail)
-    return JSONResponse(
-        status_code=exc.status_code,
-        content=error_response(detail),
-    )
-
-
-@app.exception_handler(Exception)
-async def unhandled_exception_handler(request: Request, exc: Exception):
-    sys_logger.error(
-        f"Unhandled exception on {request.method} {request.url.path}: {exc}\n"
-        + traceback.format_exc()
-    )
-    return JSONResponse(
-        status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
-        content=error_response("An internal server error occurred."),
+        content=std_error_response(exc.status_code, exc.message, exc.details, request_id),
     )
 
 
@@ -268,6 +283,7 @@ async def unhandled_exception_handler(request: Request, exc: Exception):
 # ---------------------------------------------------------------------------
 
 app.include_router(api_router, prefix="/api/v1")
+app.include_router(ingest_router, prefix="/api/v1")
 
 
 # ---------------------------------------------------------------------------

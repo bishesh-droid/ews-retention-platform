@@ -9,15 +9,24 @@ from typing import Any, Dict, List, Optional
 from sqlalchemy import Float, Integer, case, cast, func
 from sqlalchemy.orm import Session
 
-from backend.config import RISK_THRESHOLD_HIGH, RISK_THRESHOLD_MEDIUM
+import backend.config as settings
+from backend.config import RISK_THRESHOLD_HIGH, RISK_THRESHOLD_MEDIUM, trimester_week_number
 from backend.database import Course, Enrollment, Student
 from backend.domain.student import build_intervention_recommendation
 from backend.infrastructure.student_repository import StudentRepository
+from backend.database.models.intervention_log import InterventionLog
+from datetime import datetime
 from backend.services.feature_engineering import FeatureEngineer
+from backend.services.calendar_scorer import get_current_week
 from backend.services.risk_scoring import RiskScorer
 
 
 class StudentApplicationService:
+    @staticmethod
+    def _infer_program_from_student(student: Student) -> str:
+        dept = (getattr(student, "parent_department_name", "") or "").lower()
+        return "MSc" if "msc" in dept else "BS"
+
     @staticmethod
     def _prediction_risk_to_0_100(pred_row: Any) -> Optional[float]:
         if pred_row is None:
@@ -29,18 +38,36 @@ class StudentApplicationService:
         enrollment_dicts: List[Dict],
         graded_dicts: Optional[List[Dict]] = None,
         exam_dicts: Optional[List[Dict]] = None,
+        *,
+        is_new_student: bool = False,
+        week_number: Optional[int] = None,
     ) -> Dict:
+        wn = week_number if week_number is not None else trimester_week_number()
         return FeatureEngineer.calculate_all_features(
             enrollment_dicts,
             graded_components=graded_dicts,
             exam_records=exam_dicts,
+            is_new_student=is_new_student,
+            week_number=wn,
         )
 
     @staticmethod
-    def _derive_risk_fields(features: Dict, pred_row: Optional[Any] = None) -> Dict:
+    def _derive_risk_fields(
+        features: Dict,
+        *,
+        graded_dicts: Optional[List[Dict]] = None,
+        program: Optional[str] = None,
+        current_week: Optional[int] = None,
+        pred_row: Optional[Any] = None,
+    ) -> Dict:
         pred_risk_0_100 = StudentApplicationService._prediction_risk_to_0_100(pred_row)
         if pred_risk_0_100 is None:
-            risk_score = RiskScorer.calculate_risk_score(features)
+            risk_score = RiskScorer.calculate_risk_score(
+                features,
+                graded_components=graded_dicts or [],
+                program=program,
+                current_week=current_week,
+            )
             retention_likelihood = RiskScorer.get_retention_likelihood(risk_score)
         else:
             risk_score = pred_risk_0_100
@@ -57,6 +84,7 @@ class StudentApplicationService:
 
     @staticmethod
     def _build_student_metrics_response(student: Student, features: Dict, risk_fields: Dict) -> Dict:
+        engagement_pattern = features.get("engagement_pattern", "on_track")
         return {
             "id": student.id,
             "first_name": student.first_name,
@@ -86,10 +114,21 @@ class StudentApplicationService:
             "trend": features["engagement_trend"],
             "total_courses": features["total_courses"],
             "per_course_breakdown": features["per_course_breakdown"],
-            "attendance_score": features.get("exam_attendance_rate", 0),
+            "exam_attendance_score": features.get("exam_attendance_rate"),  # BREAKING_CHANGE: renamed from attendance_score in v1.1
             "academic_score": features["content_completion_score"],
             "behavioral_score": features["discussion_engagement_score"],
             "stability_score": features["time_investment_score"],
+            "engagement_pattern": engagement_pattern,
+            "engagement_pattern_label": {
+                "disengaged": "Not engaging with platform",
+                "struggling": "Active but needs academic support",
+                "at_risk_normal": "At risk",
+                "on_track": "On track",
+            }.get(engagement_pattern, "Unknown"),
+            "is_ghost": features.get("ghost_info", {}).get("is_ghost", False),
+            "ghost_type": features.get("ghost_info", {}).get("ghost_type"),
+            "requires_activation_outreach": features.get("requires_activation_outreach", False),
+            "score_basis": "rule_based_formula",
         }
 
     @staticmethod
@@ -99,8 +138,23 @@ class StudentApplicationService:
         graded_dicts: Optional[List[Dict]] = None,
         exam_dicts: Optional[List[Dict]] = None,
     ) -> Dict:
-        features = StudentApplicationService._calculate_features(enrollment_dicts, graded_dicts, exam_dicts)
-        risk_fields = StudentApplicationService._derive_risk_fields(features)
+        is_new = (student.old_new_student or "").lower() == "new"
+        wn = trimester_week_number()
+        program = StudentApplicationService._infer_program_from_student(student)
+        current_week = get_current_week(settings.TRIMESTER_START_DATE)
+        features = StudentApplicationService._calculate_features(
+            enrollment_dicts,
+            graded_dicts,
+            exam_dicts,
+            is_new_student=is_new,
+            week_number=wn,
+        )
+        risk_fields = StudentApplicationService._derive_risk_fields(
+            features,
+            graded_dicts=graded_dicts,
+            program=program,
+            current_week=current_week,
+        )
         return StudentApplicationService._build_student_metrics_response(student, features, risk_fields)
 
     @staticmethod
@@ -123,6 +177,7 @@ class StudentApplicationService:
         risk_min: Optional[float] = None,
         risk_max: Optional[float] = None,
         current_user=None,
+        activation_required: Optional[bool] = None,
     ) -> List[Dict]:
         pred_subq = StudentRepository.latest_prediction_rows_subquery(db)
         base = db.query(Student, pred_subq).outerjoin(pred_subq, pred_subq.c.student_id == Student.id)
@@ -135,13 +190,9 @@ class StudentApplicationService:
                 if dept:
                     base = base.filter(Student.parent_department_name == dept)
 
-        risk_expr = cast(pred_subq.c.risk_score, Float)
-        if risk_min is not None:
-            rm = float(risk_min) / 100.0 if float(risk_min) > 1.0 else float(risk_min)
-            base = base.filter(risk_expr.isnot(None)).filter(risk_expr >= rm)
-        if risk_max is not None:
-            rx = float(risk_max) / 100.0 if float(risk_max) > 1.0 else float(risk_max)
-            base = base.filter(risk_expr.isnot(None)).filter(risk_expr <= rx)
+        # Note: Risk filtering is done post-computation (below) using live RiskScorer
+        # results rather than stale Prediction table values. This ensures fresh data
+        # and works even when Prediction table is empty.
 
         sort_expr = StudentRepository.sort_expr_for_students(sort_by, order, pred_subq)
         base = base.order_by(*sort_expr) if isinstance(sort_expr, tuple) else base.order_by(sort_expr)
@@ -157,13 +208,36 @@ class StudentApplicationService:
 
         result: List[Dict] = []
         for student, pred_row in zip(students, pred_rows):
+            is_new = (student.old_new_student or "").lower() == "new"
+            wn = trimester_week_number()
+            program = StudentApplicationService._infer_program_from_student(student)
+            current_week = get_current_week(settings.TRIMESTER_START_DATE)
             features = StudentApplicationService._calculate_features(
                 enrollment_map.get(student.id, []),
                 graded_map.get(student.id, []),
                 exam_map.get(student.id, []),
+                is_new_student=is_new,
+                week_number=wn,
             )
-            risk_fields = StudentApplicationService._derive_risk_fields(features, pred_row=pred_row)
+            risk_fields = StudentApplicationService._derive_risk_fields(
+                features,
+                graded_dicts=graded_map.get(student.id, []),
+                program=program,
+                current_week=current_week,
+                pred_row=pred_row,
+            )
             result.append(StudentApplicationService._build_student_metrics_response(student, features, risk_fields))
+
+        # Post-computation filters for derived fields (risk_score, activation_required)
+        # These use LIVE computed values, not stale Prediction table data
+        if risk_min is not None:
+            rm = float(risk_min)  # Always 0-100 scale, no normalization needed
+            result = [s for s in result if s.get("risk_score", 0) >= rm]
+        if risk_max is not None:
+            rx = float(risk_max)  # Always 0-100 scale, no normalization needed
+            result = [s for s in result if s.get("risk_score", 0) <= rx]
+        if activation_required is not None:
+            result = [s for s in result if s.get("requires_activation_outreach") == activation_required]
 
         reverse = order == "desc"
         computed_fields = [
@@ -175,7 +249,7 @@ class StudentApplicationService:
             "graded_assignment_score",
             "exam_score",
             "exam_attendance_rate",
-            "attendance_score",
+            "exam_attendance_score",  # BREAKING_CHANGE: renamed from attendance_score in v1.1
             "academic_score",
             "behavioral_score",
             "stability_score",
@@ -191,8 +265,17 @@ class StudentApplicationService:
         risk_max: Optional[float] = None,
         current_user=None,
     ) -> int:
-        pred_subq = StudentRepository.latest_prediction_rows_subquery(db)
-        base = db.query(func.count(Student.id)).outerjoin(pred_subq, pred_subq.c.student_id == Student.id)
+        """
+        Get count of students matching filters.
+        
+        Note: Risk filtering is NOT applied at the DB level because the Prediction
+        table may be empty or stale. To filter by risk, use get_all_students()
+        and count the results (risk filter is applied post-computation there).
+        
+        This function returns the total count for pagination purposes when
+        risk filters are not active.
+        """
+        base = db.query(func.count(Student.id))
 
         if current_user is not None:
             role = (getattr(current_user, "role", "") or "").lower()
@@ -202,13 +285,11 @@ class StudentApplicationService:
                 if dept:
                     base = base.filter(Student.parent_department_name == dept)
 
-        risk_expr = cast(pred_subq.c.risk_score, Float)
-        if risk_min is not None:
-            rm = float(risk_min) / 100.0 if float(risk_min) > 1.0 else float(risk_min)
-            base = base.filter(risk_expr.isnot(None)).filter(risk_expr >= rm)
-        if risk_max is not None:
-            rx = float(risk_max) / 100.0 if float(risk_max) > 1.0 else float(risk_max)
-            base = base.filter(risk_expr.isnot(None)).filter(risk_expr <= rx)
+        # Note: Risk filtering is NOT applied here. The Prediction table may be
+        # empty (fresh install) or stale. Risk filtering happens post-computation
+        # in get_all_students() using live RiskScorer results.
+        # For accurate counts with risk filters, use len(get_all_students(...))
+
         return int(base.scalar() or 0)
 
     @staticmethod
@@ -256,6 +337,21 @@ class StudentApplicationService:
             .scalar()
             or 0
         )
+        # Calculate ghost student statistics
+        ghost_stats = {"never_logged_in": 0, "logged_in_never_started": 0, "total_ghosts": 0}
+        students_with_enrollments = db.query(Student).all()
+        for student in students_with_enrollments:
+            enrollment_dicts = StudentRepository.fetch_enrollments_map(db, [student.id]).get(student.id, [])
+            if enrollment_dicts:
+                from backend.services.feature_engineering import FeatureEngineer
+                total_logins = sum(e.get("num_logins", 0) or 0 for e in enrollment_dicts)
+                ghost_info = FeatureEngineer.detect_ghost_student(enrollment_dicts, total_logins)
+                if ghost_info.get("is_ghost"):
+                    ghost_stats["total_ghosts"] += 1
+                    ghost_type = ghost_info.get("ghost_type")
+                    if ghost_type in ghost_stats:
+                        ghost_stats[ghost_type] += 1
+
         return {
             "total_students": int(total_students),
             "at_risk_students": int(high_count),
@@ -263,7 +359,60 @@ class StudentApplicationService:
             "risk_distribution": {"low": int(low_count), "medium": int(medium_count), "high": int(high_count)},
             "total_enrollments": int(total_enrollments),
             "total_courses": int(total_courses),
+            "activation_required_count": ghost_stats["total_ghosts"],
+            "ghost_breakdown": {
+                "never_logged_in": ghost_stats["never_logged_in"],
+                "logged_in_never_started": ghost_stats["logged_in_never_started"],
+            },
         }
+
+    @staticmethod
+    def get_cohort_engagement_patterns(db: Session, current_user=None) -> Dict[str, int]:
+        """
+        Calculate engagement pattern distribution across the cohort.
+
+        Returns:
+            Dict with counts for each engagement pattern category
+        """
+        from backend.database.models.prediction import Prediction
+
+        pred_subq = StudentRepository.latest_prediction_rows_subquery(db)
+        base = db.query(Student).outerjoin(pred_subq, pred_subq.c.student_id == Student.id)
+
+        if current_user is not None:
+            role = (getattr(current_user, "role", "") or "").lower()
+            is_superuser = bool(getattr(current_user, "is_superuser", False))
+            if role == "faculty" and not is_superuser:
+                dept = getattr(current_user, "department", None)
+                if dept:
+                    base = base.filter(Student.parent_department_name == dept)
+
+        students = base.all()
+        if not students:
+            return {"disengaged": 0, "struggling": 0, "at_risk_normal": 0, "on_track": 0}
+
+        student_ids = [s.id for s in students]
+        enrollment_map = StudentRepository.fetch_enrollments_map(db, student_ids)
+        graded_map = StudentRepository.fetch_graded_map(db, student_ids)
+        exam_map = StudentRepository.fetch_exam_map(db, student_ids)
+
+        patterns = {"disengaged": 0, "struggling": 0, "at_risk_normal": 0, "on_track": 0}
+
+        for student in students:
+            is_new = (student.old_new_student or "").lower() == "new"
+            wn = trimester_week_number()
+            features = StudentApplicationService._calculate_features(
+                enrollment_map.get(student.id, []),
+                graded_map.get(student.id, []),
+                exam_map.get(student.id, []),
+                is_new_student=is_new,
+                week_number=wn,
+            )
+            pattern = features.get("engagement_pattern", "on_track")
+            if pattern in patterns:
+                patterns[pattern] += 1
+
+        return patterns
 
     @staticmethod
     def get_courses(db: Session) -> List[Dict]:
@@ -388,6 +537,9 @@ class StudentApplicationService:
             "engagement_score": (100 - risk) / 100.0,
             "retention_likelihood": student_metrics["retention_likelihood"],
             "model_version": "rule_based_v2",
+            "model_type": "rule_based",
+            "model_description": "Weighted engagement formula — not a trained ML model",
+            "score_basis": "rule_based_formula",
             "signal_breakdown": {
                 "academic_signal_score": student_metrics.get("content_completion_score", 0) / 100.0,
                 "engagement_signal_score": student_metrics.get("quiz_engagement_score", 0) / 100.0,
@@ -402,3 +554,89 @@ class StudentApplicationService:
     @staticmethod
     def build_intervention_recommendation(risk_score: float) -> Dict:
         return build_intervention_recommendation(risk_score)
+
+    @staticmethod
+    def _log_intervention_if_new(
+        db: Session,
+        student_org_id: str,
+        intervention: Dict,
+        risk_score: float,
+        week_number: int,
+        semester: str,
+    ) -> Optional[InterventionLog]:
+        """
+        Log an intervention recommendation if one doesn't already exist for this student-week.
+        
+        Only logs for intervention types that are not "none" (skips suppressed interventions).
+        """
+        from backend.database.models.intervention_log import InterventionLog
+        from backend.config import trimester_week_number
+        
+        intervention_type = intervention.get("type")
+        if not intervention_type or intervention_type == "none":
+            return None  # Skip suppressed interventions
+        
+        if week_number is None:
+            week_number = trimester_week_number()
+        
+        existing = db.query(InterventionLog).filter(
+            InterventionLog.student_org_id == student_org_id,
+            InterventionLog.week_number == week_number,
+            InterventionLog.semester_name == semester,
+        ).first()
+        if existing:
+            return existing  # Don't create duplicate for same week
+        
+        log = InterventionLog(
+            student_org_id=student_org_id,
+            intervention_type=intervention_type,
+            engagement_pattern=intervention.get("engagement_pattern"),
+            risk_score_at_recommendation=risk_score,
+            week_number=week_number,
+            semester_name=semester,
+        )
+        db.add(log)
+        db.commit()
+        return log
+
+    @staticmethod
+    def build_and_log_intervention_recommendation(
+        db: Session,
+        student: Student,
+        risk_score: float,
+        features: Dict,
+    ) -> Dict:
+        """
+        Build intervention recommendation and log it to InterventionLog.
+        
+        Args:
+            db: Database session
+            student: Student object with org_defined_id
+            risk_score: Current risk score
+            features: Feature dictionary with engagement_pattern
+            
+        Returns:
+            Intervention recommendation dictionary
+        """
+        from backend.services.core.decision_engine import get_intervention_recommendation
+        
+        engagement_pattern = features.get("engagement_pattern")
+        intervention = get_intervention_recommendation(
+            risk_score,
+            engagement_pattern=engagement_pattern,
+            features=features,
+        )
+        
+        # Log the intervention (if not suppressed)
+        if student.org_defined_id:
+            semester = getattr(student, "semester_name", None) or ""
+            StudentApplicationService._log_intervention_if_new(
+                db=db,
+                student_org_id=student.org_defined_id,
+                intervention=intervention,
+                risk_score=risk_score,
+                week_number=features.get("week_number"),
+                semester=semester,
+            )
+        
+        return intervention

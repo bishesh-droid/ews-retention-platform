@@ -94,29 +94,50 @@ class FeatureEngineer:
         return min(cumulative, required_w1w2)
 
     @staticmethod
-    def calculate_content_completion_score(enrollments: List[Dict]) -> float:
+    def calculate_content_completion_score(
+        enrollments: List[Dict],
+        registry_lookup=None,
+    ) -> Optional[float]:
         """
-        Calculate overall content completion rate across all courses.
+        Calculate overall content completion rate across MANDATORY courses only.
 
-        Data Used: content_completed, content_required per enrollment
+        Optional (self-paced) courses are excluded from this calculation
+        to prevent them from penalizing the student's mandatory completion rate.
+
+        Uses CourseContentRegistry as fallback when enrollment.content_required is null/0.
+
+        Args:
+            enrollments: List of enrollment dictionaries
+            registry_lookup: Optional callable(code, semester) -> content_required
 
         Returns:
-            Score [0-100], where 100 = all content completed in all courses
+            Score [0-100] or None if truly unknown
         """
+        # Filter to mandatory enrollments only
+        mandatory_enrollments = [e for e in enrollments if not e.get("is_optional", False)]
+
         total_completed = 0
         total_required = 0
 
-        for e in enrollments:
-            completed = FeatureEngineer._to_non_negative(e.get('content_completed', 0))
-            required = FeatureEngineer._to_non_negative(e.get('content_required', 0))
-            total_completed += completed
-            total_required += required
+        for e in mandatory_enrollments:
+            done = e.get('content_completed') or 0
+            req = e.get('content_required') or 0
+
+            # Fallback to registry if enrollment value is missing
+            if req == 0 and registry_lookup:
+                req = registry_lookup(
+                    e.get('course_offering_code'),
+                    e.get('semester_name')
+                ) or 0
+
+            if req > 0:
+                total_completed += done
+                total_required += req
 
         if total_required == 0:
-            return 0.0
+            return None  # truly unknown — do not score as 0
 
-        score = (total_completed / total_required) * 100
-        return round(min(100.0, score), 2)
+        return round(min(100.0, (total_completed / total_required) * 100), 2)
 
     @staticmethod
     def calculate_w1w2_completion_score(enrollments: List[Dict]) -> float:
@@ -351,7 +372,17 @@ class FeatureEngineer:
         for e in enrollments:
             content_req = e.get('content_required', 0) or 0
             content_done = e.get('content_completed', 0) or 0
-            pct = round((content_done / content_req * 100), 2) if content_req > 0 else 0.0
+
+            # FIX 1: Add min(100.0, ...) clamp
+            # FIX 2: Return None when content_req is unknown (not 0.0 which is ambiguous)
+            # FIX 3: Add stale_required_count flag when raw percentage exceeds 100
+            if not content_req or content_req <= 0:
+                pct = None  # unknown — content_required not loaded yet
+                stale_required_count = False
+            else:
+                raw_pct = content_done / content_req * 100
+                pct = round(min(100.0, raw_pct), 2)
+                stale_required_count = raw_pct > 100.0
 
             breakdown.append({
                 "course_id": e.get('course_id'),
@@ -359,6 +390,7 @@ class FeatureEngineer:
                 "content_completed": content_done,
                 "content_required": content_req,
                 "completion_pct": pct,
+                "stale_required_count": stale_required_count,
                 "quiz_completed": e.get('quiz_completed', 0) or 0,
                 "total_quiz_attempts": e.get('total_quiz_attempts', 0) or 0,
                 "discussion_posts": e.get('discussion_posts_created', 0) or 0,
@@ -471,9 +503,14 @@ class FeatureEngineer:
         return round((attended / len(exam_records)) * 100, 2)
 
     @staticmethod
-    def calculate_all_features(enrollments: List[Dict],
-                               graded_components: List[Dict] = None,
-                               exam_records: List[Dict] = None) -> Dict:
+    def calculate_all_features(
+        enrollments: List[Dict],
+        graded_components: List[Dict] = None,
+        exam_records: List[Dict] = None,
+        is_new_student: bool = False,
+        week_number: Optional[int] = None,
+        registry_lookup=None,
+    ) -> Dict:
         """
         Calculate all engagement features for a student.
 
@@ -481,13 +518,27 @@ class FeatureEngineer:
             enrollments: List of enrollment dictionaries for one student
             graded_components: List of graded quiz/assignment records
             exam_records: List of exam records
+            is_new_student: If True, apply early-term tolerance (weeks 1–3) for select scores.
+            week_number: Trimester week (1-based). If > 2, W1/W2 completion uses full-term
+                content_completed / content_required (avoids inflated W1W2 without
+                ingestion field content_completed_w1w2).
 
         Returns:
             Dictionary with all calculated features
         """
+        content_completion_score = FeatureEngineer.calculate_content_completion_score(
+            enrollments, registry_lookup=registry_lookup
+        )
+        if week_number is None or week_number <= 2:
+            w1w2_completion_score = FeatureEngineer.calculate_w1w2_completion_score(enrollments)
+        else:
+            # After week 2, cumulative vs W1/W2-only denominator is misleading without
+            # explicit content_completed_w1w2 in ingestion — align with full-term completion.
+            w1w2_completion_score = content_completion_score
+
         features = {
-            "content_completion_score": FeatureEngineer.calculate_content_completion_score(enrollments),
-            "w1w2_completion_score": FeatureEngineer.calculate_w1w2_completion_score(enrollments),
+            "content_completion_score": content_completion_score,
+            "w1w2_completion_score": w1w2_completion_score,
             "quiz_engagement_score": FeatureEngineer.calculate_quiz_engagement_score(enrollments),
             "discussion_engagement_score": FeatureEngineer.calculate_discussion_engagement_score(enrollments),
             "login_consistency_score": FeatureEngineer.calculate_login_consistency_score(enrollments),
@@ -500,18 +551,192 @@ class FeatureEngineer:
             "total_courses": len(enrollments),
         }
 
+        if is_new_student and week_number is not None and week_number <= 3:
+            features["content_completion_score"] = min(
+                100.0, features["content_completion_score"] * 1.20
+            )
+            features["login_consistency_score"] = min(
+                100.0, features["login_consistency_score"] * 1.20
+            )
+
         if graded_components:
             features["graded_quiz_score"] = FeatureEngineer.calculate_graded_quiz_score(graded_components)
             features["graded_assignment_score"] = FeatureEngineer.calculate_graded_assignment_score(graded_components)
         else:
-            features["graded_quiz_score"] = 0.0
-            features["graded_assignment_score"] = 0.0
+            features["graded_quiz_score"] = None
+            features["graded_assignment_score"] = None
 
         if exam_records:
             features["exam_score"] = FeatureEngineer.calculate_exam_score(exam_records)
             features["exam_attendance_rate"] = FeatureEngineer.calculate_exam_attendance_rate(exam_records)
         else:
-            features["exam_score"] = 0.0
-            features["exam_attendance_rate"] = 0.0
+            features["exam_score"] = None
+            features["exam_attendance_rate"] = None
+
+        # Calculate engagement pattern based on raw behavioral features
+        features["engagement_pattern"] = FeatureEngineer.classify_engagement_pattern(features)
+
+        # Detect ghost students (zero engagement patterns)
+        # Need to extract login count from enrollment data
+        total_logins = sum(e.get("num_logins", 0) or 0 for e in enrollments)
+        features["ghost_info"] = FeatureEngineer.detect_ghost_student(enrollments, total_logins)
+
+        # Calculate self-directed learning score from optional course engagement
+        features["self_directed_learning_score"] = FeatureEngineer.calculate_self_directed_learning_score(enrollments)
+
+        # Calculate academic flags from exam records (UFM, defaulter reasons)
+        features["academic_flags"] = FeatureEngineer.calculate_academic_flags(exam_records or [])
 
         return features
+
+    @staticmethod
+    def calculate_academic_flags(exam_records: List[Dict]) -> Dict:
+        """
+        Extract high-signal academic flags from exam records.
+
+        Flags:
+        - ufm_flagged: Unfair Means (academic misconduct) detected
+        - deferred: Student formally deferred to next trimester
+        - dropout_intent: Strong dropout signal (refund request, etc.)
+        - not_activated: Student never activated account
+        - health_support_needed: Health-related absence
+        - unknown_defaulter: No reason given for absence
+
+        Args:
+            exam_records: List of exam record dictionaries
+
+        Returns:
+            Dictionary of boolean flags
+        """
+        ufm = any(r.get("ufm_flagged") for r in exam_records)
+        reasons = [r.get("defaulter_reason") for r in exam_records if r.get("defaulter_reason")]
+
+        return {
+            "ufm_flagged":          ufm,
+            "deferred":             any(r == "deferred" for r in reasons),
+            "dropout_intent":       any(r == "dropout_intent" for r in reasons),
+            "not_activated":        any(r == "not_activated" for r in reasons),
+            "health_support_needed": any(r == "health_support" for r in reasons),
+            "unknown_defaulter":    any(r == "unknown_high_risk" for r in reasons),
+        }
+
+    @staticmethod
+    def calculate_self_directed_learning_score(enrollments: List[Dict]) -> float:
+        """
+        Calculate self-directed learning score from optional course engagement.
+
+        Students engaging with self-paced optional courses demonstrate
+        self-directed learning motivation — a strong predictor of retention.
+        This score is generous: intent matters more than completion.
+
+        Args:
+            enrollments: List of enrollment dictionaries
+
+        Returns:
+            Score [0-100] based on optional course engagement
+        """
+        optional = [e for e in enrollments if e.get("is_optional", False)]
+        if not optional:
+            return 0.0
+
+        scores = []
+        for e in optional:
+            req = e.get("content_required") or 0
+            done = e.get("content_completed") or 0
+            if req > 0:
+                scores.append(min(1.0, done / req))
+            elif done > 0:
+                scores.append(1.0)  # completed something in a course with no required count
+
+        if not scores:
+            return 0.0
+
+        # Even partial engagement gets a boost — scale so 30% completion = 80 score
+        raw = sum(scores) / len(scores)
+        return min(100.0, raw * 100 * 2.5)  # generous multiplier for intent
+
+    @staticmethod
+    def detect_ghost_student(enrollments: List[Dict], student_login_count: int) -> Dict:
+        """
+        Detect "ghost" students with zero meaningful engagement.
+
+        Ghost students are qualitatively different from low-engagement students:
+        - never_logged_in: Zero logins to the LMS at all
+        - logged_in_never_started: Has logged in but never accessed course content
+
+        Args:
+            enrollments: List of enrollment dictionaries for one student
+            student_login_count: Total number of logins across all courses
+
+        Returns:
+            Dictionary with ghost detection results
+        """
+        total_courses = len(enrollments)
+        zero_progress_courses = sum(1 for e in enrollments if (e.get("content_completed") or 0) == 0)
+        total_time = sum(e.get("total_time_spent", 0) or 0 for e in enrollments)
+
+        if total_courses == 0:
+            return {"is_ghost": False, "ghost_type": None, "zero_progress_course_count": 0, "total_enrolled_courses": 0}
+
+        all_zero_progress = zero_progress_courses == total_courses
+
+        if student_login_count == 0:
+            ghost_type = "never_logged_in"
+            is_ghost = True
+        elif all_zero_progress and total_time < 300:
+            ghost_type = "logged_in_never_started"
+            is_ghost = True
+        else:
+            ghost_type = None
+            is_ghost = False
+
+        return {
+            "is_ghost": is_ghost,
+            "ghost_type": ghost_type,
+            "zero_progress_course_count": zero_progress_courses,
+            "total_enrolled_courses": total_courses,
+            "total_time_seconds": total_time,
+        }
+
+    @staticmethod
+    def classify_engagement_pattern(features: Dict) -> str:
+        """
+        Classify student into engagement pattern based on behavioral signals.
+
+        Uses raw features (login_count, content_completion_rate, time_spent,
+        graded_quiz_score, risk_score) to distinguish between disengaged
+        students (not using platform) and struggling students (trying but
+        not succeeding academically).
+
+        Args:
+            features: Dictionary of calculated features from calculate_all_features
+
+        Returns:
+            One of: "disengaged", "struggling", "at_risk_normal", "on_track"
+        """
+        # Extract raw values from features dict
+        login_count = features.get("login_count", 0)
+        content_completion_rate = features.get("content_completion_score", 0) / 100.0
+        total_time_seconds = features.get("total_time_spent", 0)
+        graded_quiz_score = features.get("graded_quiz_score")
+        risk_score = features.get("risk_score", 0)
+
+        # Rule 1: Disengaged - very low login and completion
+        if login_count < 5 and content_completion_rate < 0.05:
+            return "disengaged"
+
+        # Rule 2: Struggling - high login, low completion, significant time spent, poor quiz performance
+        if (
+            login_count > 80
+            and content_completion_rate < 0.20
+            and total_time_seconds > 7200
+            and (graded_quiz_score is None or graded_quiz_score < 55)
+        ):
+            return "struggling"
+
+        # Rule 3: At risk but normal pattern
+        if risk_score >= 40:
+            return "at_risk_normal"
+
+        # Rule 4: On track
+        return "on_track"

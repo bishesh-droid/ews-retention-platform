@@ -16,6 +16,9 @@ from .user import User
 from .academic import GradedComponent, ExamRecord
 from .goals_and_risks import Goal, RiskSnapshot
 from .audit import AuditLog
+from .ingestion_run import IngestionRun
+from .course_content_registry import CourseContentRegistry
+from .intervention_log import InterventionLog
 from .canonical import (
     DimStudent,
     DimCourse,
@@ -45,6 +48,9 @@ __all__ = [
     "Goal",
     "RiskSnapshot",
     "AuditLog",
+    "IngestionRun",
+    "CourseContentRegistry",
+    "InterventionLog",
     "DimStudent",
     "DimCourse",
     "FactAcademicPerformance",

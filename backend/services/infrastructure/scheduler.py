@@ -19,11 +19,17 @@ from backend.database.models.enrollment import Enrollment
 from backend.database.models.goals_and_risks import RiskSnapshot
 from backend.database.models.prediction import Prediction
 from backend.database.models.student import Student
+import backend.config as settings
+from backend.config import trimester_week_number
 from backend.database.connection import SessionLocal
 from backend.services.feature_engineering import FeatureEngineer
+from backend.services.calendar_scorer import get_current_week
 from backend.services.risk_scoring import RiskScorer
 
 logger = logging.getLogger(__name__)
+
+# Async lock to prevent overlapping prediction jobs
+_prediction_job_lock = asyncio.Lock()
 
 
 @contextmanager
@@ -96,9 +102,12 @@ def generate_daily_predictions() -> None:
             graded_map.setdefault(graded_component.student_id, []).append(
                 {
                     "component_type": graded_component.component_type,
+                    "component_number": graded_component.component_number,
                     "score": graded_component.score,
                     "max_score": graded_component.max_score,
                     "missed": graded_component.missed,
+                    "course_name": graded_component.course_name,
+                    "course_code": graded_component.course_code,
                 }
             )
 
@@ -131,15 +140,30 @@ def generate_daily_predictions() -> None:
                 break
             last_id = batch[-1].id
             total_processed += len(batch)
+            logger.info(f"Starting batch prediction for {len(batch)} students (batch ending at id={last_id})")
+            processed = 0
+            errors = 0
 
             for student in batch:
                 try:
+                    now_utc = datetime.now(timezone.utc).replace(tzinfo=None)
+                    wn = trimester_week_number(now_utc)
+                    is_new = (student.old_new_student or "").lower() == "new"
+                    program = "MSc" if "msc" in ((student.parent_department_name or "").lower()) else "BS"
+                    current_week = get_current_week(settings.TRIMESTER_START_DATE)
                     features = FeatureEngineer.calculate_all_features(
                         enrollment_map.get(student.id, []),
                         graded_components=graded_map.get(student.id, []),
                         exam_records=exam_map.get(student.id, []),
+                        is_new_student=is_new,
+                        week_number=wn,
                     )
-                    risk_score = RiskScorer.calculate_risk_score(features)
+                    risk_score = RiskScorer.calculate_risk_score(
+                        features,
+                        graded_components=graded_map.get(student.id, []) or [],
+                        program=program,
+                        current_week=current_week,
+                    )
                     # Engagement is computed from observed behaviors (not the complement of risk):
                     # - content completion (60%)
                     # - attendance rate (40%)
@@ -152,7 +176,6 @@ def generate_daily_predictions() -> None:
                         + float(attendance_rate or 0.0) * 0.4
                     )
                     engagement_score = max(0.0, min(1.0, engagement_score_0_100 / 100.0))
-                    now_utc = datetime.now(timezone.utc).replace(tzinfo=None)
 
                     db.add(
                         Prediction(
@@ -171,14 +194,18 @@ def generate_daily_predictions() -> None:
                             student_id=student.id,
                             risk_score=risk_score / 100.0,
                             engagement_score=engagement_score,
+                            week_number=wn,
+                            semester_name=settings.CURRENT_SEMESTER_NAME,
                             timestamp=now_utc,
                         )
                     )
                     created_snapshots += 1
+                    processed += 1
                 except Exception:
                     logger.exception(
                         "[SCHEDULER] Failed creating prediction for student_id=%s", student.id
                     )
+                    errors += 1
 
     logger.info(
         "[SCHEDULER] Daily prediction job complete. students=%s predictions=%s snapshots=%s",
@@ -210,16 +237,21 @@ class SchedulerService:
         self._last_weekly_error: Optional[str] = None
 
     async def _run_daily_job_once(self, reason: str) -> None:
-        self._last_daily_run_at = datetime.now(timezone.utc)
-        logger.info("[SCHEDULER] Triggering daily prediction job (%s).", reason)
-        try:
-            await asyncio.to_thread(generate_daily_predictions)
-            self._last_daily_success_at = datetime.now(timezone.utc)
-            self._last_daily_error = None
-            logger.info("[SCHEDULER] Daily prediction job finished successfully.")
-        except Exception as exc:
-            self._last_daily_error = str(exc)
-            logger.exception("[SCHEDULER] Daily prediction job failed (%s).", reason)
+        # Skip if previous job still running (CROSS-4)
+        if _prediction_job_lock.locked():
+            logger.warning("[SCHEDULER] Daily prediction job skipped — previous run still in progress")
+            return
+        async with _prediction_job_lock:
+            self._last_daily_run_at = datetime.now(timezone.utc)
+            logger.info("[SCHEDULER] Triggering daily prediction job (%s).", reason)
+            try:
+                await asyncio.to_thread(generate_daily_predictions)
+                self._last_daily_success_at = datetime.now(timezone.utc)
+                self._last_daily_error = None
+                logger.info("[SCHEDULER] Daily prediction job finished successfully.")
+            except Exception as exc:
+                self._last_daily_error = str(exc)
+                logger.exception("[SCHEDULER] Daily prediction job failed (%s).", reason)
 
     async def _run_weekly_job_once(self, reason: str) -> None:
         self._last_weekly_run_at = datetime.now(timezone.utc)

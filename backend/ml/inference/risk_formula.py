@@ -8,12 +8,9 @@ The formula is rule-based and designed to be interpretable by stakeholders.
 RISK SCORE FORMULA:
     risk_score = sum(weight_i * normalized_signal_i) for all signals
 
-SIGNAL WEIGHTS (configurable via environment variables):
-    - academic_signal:       0.30 (GPA trend, grades)
-    - engagement_signal:     0.25 (login frequency, LMS activity)
-    - consistency_signal:    0.20 (attendance pattern, mobility)
-    - intent_signal:         0.15 (declining performance trajectory)
-    - responsiveness_signal: 0.10 (suspension history, reminder response)
+Signal weights for the five advisor-facing dimensions are derived from
+``backend.config.FEATURE_WEIGHTS`` (same source as ``RiskScorer``), using
+``SIGNAL_TO_FEATURE`` to roll up granular features into explainability labels.
 
 NORMALIZATION:
     - All signals normalized to [0, 1] range
@@ -25,30 +22,30 @@ The actual ML model predictions should be used for decision-making.
 This formula helps explain WHY a student has a certain risk level.
 """
 
-import logging
-from typing import Dict, List, Tuple, Optional
-from backend.config import SIGNAL_WEIGHTS
+from typing import Dict, List
 
-logger = logging.getLogger(__name__)
+from backend.config import FEATURE_WEIGHTS
+
+SIGNAL_TO_FEATURE = {
+    "academic": ["content_completion", "quiz_engagement", "assignment"],
+    "engagement": ["discussion", "time_investment"],
+    "consistency": ["login_consistency"],
+    "intent": ["content_completion"],
+    "responsiveness": ["quiz_engagement"],
+}
 
 
 def get_signal_weights() -> Dict[str, float]:
     """
-    Get current signal weights from configuration.
+    Map explainability signal names to weights, summed from FEATURE_WEIGHTS.
 
     Returns:
-        Dictionary mapping signal names to their weights.
-        Weights should sum to 1.0.
+        Dictionary mapping signal names to their aggregate weights.
     """
-    weights = SIGNAL_WEIGHTS.copy()
-
-    # Validate weights sum to ~1.0 (allow small floating point error)
-    total = sum(weights.values())
-    if abs(total - 1.0) > 0.01:
-        logger.warning(f"Signal weights sum to {total}, not 1.0. Normalizing.")
-        weights = {k: v / total for k, v in weights.items()}
-
-    return weights
+    return {
+        signal: sum(FEATURE_WEIGHTS.get(k, 0.0) for k in keys)
+        for signal, keys in SIGNAL_TO_FEATURE.items()
+    }
 
 
 def calculate_weighted_risk(signals: Dict[str, float]) -> float:
@@ -72,11 +69,11 @@ def calculate_weighted_risk(signals: Dict[str, float]) -> float:
 
     # Map signal dict keys to weight keys
     signal_mapping = {
-        'academic_signal_score': 'academic',
-        'engagement_signal_score': 'engagement',
-        'consistency_signal_score': 'consistency',
-        'intent_signal_score': 'intent',
-        'responsiveness_signal_score': 'responsiveness'
+        "academic_signal_score": "academic",
+        "engagement_signal_score": "engagement",
+        "consistency_signal_score": "consistency",
+        "intent_signal_score": "intent",
+        "responsiveness_signal_score": "responsiveness",
     }
 
     risk = 0.0
@@ -123,19 +120,19 @@ def get_risk_contribution_breakdown(signals: Dict[str, float]) -> List[Dict]:
     weights = get_signal_weights()
 
     signal_display_names = {
-        'academic': 'Academic Performance',
-        'engagement': 'Platform Engagement',
-        'consistency': 'Attendance Consistency',
-        'intent': 'Performance Trajectory',
-        'responsiveness': 'Responsiveness'
+        "academic": "Academic Performance",
+        "engagement": "Platform Engagement",
+        "consistency": "Attendance Consistency",
+        "intent": "Performance Trajectory",
+        "responsiveness": "Responsiveness",
     }
 
     signal_mapping = {
-        'academic_signal_score': 'academic',
-        'engagement_signal_score': 'engagement',
-        'consistency_signal_score': 'consistency',
-        'intent_signal_score': 'intent',
-        'responsiveness_signal_score': 'responsiveness'
+        "academic_signal_score": "academic",
+        "engagement_signal_score": "engagement",
+        "consistency_signal_score": "consistency",
+        "intent_signal_score": "intent",
+        "responsiveness_signal_score": "responsiveness",
     }
 
     breakdown = []
@@ -151,22 +148,24 @@ def get_risk_contribution_breakdown(signals: Dict[str, float]) -> List[Dict]:
         contribution = weight * signal_value
         total_contribution += contribution
 
-        breakdown.append({
-            'signal_name': signal_display_names.get(weight_key, weight_key),
-            'signal_key': weight_key,
-            'weight': round(weight, 3),
-            'score': round(signal_value, 3),
-            'contribution': round(contribution, 4),
-            'percentage': 0  # Will be calculated below
-        })
+        breakdown.append(
+            {
+                "signal_name": signal_display_names.get(weight_key, weight_key),
+                "signal_key": weight_key,
+                "weight": round(weight, 3),
+                "score": round(signal_value, 3),
+                "contribution": round(contribution, 4),
+                "percentage": 0,  # Will be calculated below
+            }
+        )
 
     # Calculate percentage contribution
     if total_contribution > 0:
         for item in breakdown:
-            item['percentage'] = round((item['contribution'] / total_contribution) * 100, 1)
+            item["percentage"] = round((item["contribution"] / total_contribution) * 100, 1)
 
     # Sort by contribution descending
-    breakdown.sort(key=lambda x: x['contribution'], reverse=True)
+    breakdown.sort(key=lambda x: x["contribution"], reverse=True)
 
     return breakdown
 
@@ -189,17 +188,17 @@ def explain_risk_score(risk_score: float, signals: Dict[str, float]) -> Dict:
     """
     # Categorize risk
     if risk_score < 0.30:
-        category = 'low'
-        category_description = 'on track'
+        category = "low"
+        category_description = "on track"
     elif risk_score < 0.60:
-        category = 'moderate'
-        category_description = 'showing some warning signs'
+        category = "moderate"
+        category_description = "showing some warning signs"
     elif risk_score < 0.80:
-        category = 'high'
-        category_description = 'at significant risk'
+        category = "high"
+        category_description = "at significant risk"
     else:
-        category = 'critical'
-        category_description = 'requiring immediate attention'
+        category = "critical"
+        category_description = "requiring immediate attention"
 
     breakdown = get_risk_contribution_breakdown(signals)
     top_factors = breakdown[:2] if len(breakdown) >= 2 else breakdown
@@ -222,20 +221,20 @@ def explain_risk_score(risk_score: float, signals: Dict[str, float]) -> Dict:
         explanation = f"This student is {category_description} with a risk score of {risk_score*100:.0f}%."
 
     return {
-        'risk_score': round(risk_score, 3),
-        'risk_percentage': round(risk_score * 100, 1),
-        'risk_category': category,
-        'category_description': category_description,
-        'breakdown': breakdown,
-        'top_factors': top_factors,
-        'explanation': explanation,
-        'weights_used': get_signal_weights()
+        "risk_score": round(risk_score, 3),
+        "risk_percentage": round(risk_score * 100, 1),
+        "risk_category": category,
+        "category_description": category_description,
+        "breakdown": breakdown,
+        "top_factors": top_factors,
+        "explanation": explanation,
+        "weights_used": get_signal_weights(),
     }
 
 
 def simulate_what_if(
     current_signals: Dict[str, float],
-    adjustments: Dict[str, float]
+    adjustments: Dict[str, float],
 ) -> Dict:
     """
     Simulate risk score if certain signals change.
@@ -264,14 +263,15 @@ def simulate_what_if(
     simulated_explanation = explain_risk_score(simulated_risk, simulated_signals)
 
     return {
-        'current_risk': round(current_risk, 3),
-        'simulated_risk': round(simulated_risk, 3),
-        'risk_change': round(simulated_risk - current_risk, 3),
-        'risk_change_percentage': round((simulated_risk - current_risk) * 100, 1),
-        'current_category': current_explanation['risk_category'],
-        'simulated_category': simulated_explanation['risk_category'],
-        'category_changed': current_explanation['risk_category'] != simulated_explanation['risk_category'],
-        'adjustments_applied': adjustments,
-        'current_breakdown': current_explanation['breakdown'],
-        'simulated_breakdown': simulated_explanation['breakdown']
+        "current_risk": round(current_risk, 3),
+        "simulated_risk": round(simulated_risk, 3),
+        "risk_change": round(simulated_risk - current_risk, 3),
+        "risk_change_percentage": round((simulated_risk - current_risk) * 100, 1),
+        "current_category": current_explanation["risk_category"],
+        "simulated_category": simulated_explanation["risk_category"],
+        "category_changed": current_explanation["risk_category"]
+        != simulated_explanation["risk_category"],
+        "adjustments_applied": adjustments,
+        "current_breakdown": current_explanation["breakdown"],
+        "simulated_breakdown": simulated_explanation["breakdown"],
     }

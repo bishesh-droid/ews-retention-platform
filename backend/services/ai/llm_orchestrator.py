@@ -1,5 +1,8 @@
 import os
+import logging
 from typing import Dict, List, Optional, Any
+
+logger = logging.getLogger(__name__)
 
 try:
     import google.generativeai as genai
@@ -198,6 +201,7 @@ class LLMOrchestrator:
                 "validation": validation
             }
         except Exception as e:
+            logger.exception("LLM call failed", extra={"operation": "explain_risk_change", "student_id": student_id})
             return {
                 "content": f"Error generating explanation: {str(e)}",
                 "confidence": "low",
@@ -245,6 +249,7 @@ class LLMOrchestrator:
                 "timestamp": student_context.get("retrieved_at")
             }
         except Exception as e:
+            logger.exception("LLM call failed", extra={"operation": "generate_student_advice", "student_id": student_id})
             return {
                 "content": "I'm having trouble generating advice right now. Please try again later.",
                 "confidence": "low",
@@ -294,6 +299,7 @@ class LLMOrchestrator:
                 "risk_category": student_context.get("risk_category", "unknown")
             }
         except Exception as e:
+            logger.exception("LLM call failed", extra={"operation": "summarize_student_profile", "student_id": student_id})
             return {
                 "content": "Unable to generate summary.",
                 "confidence": "low",
@@ -338,6 +344,7 @@ class LLMOrchestrator:
                 "student_id": student_id
             }
         except Exception as e:
+            logger.exception("LLM call failed", extra={"operation": "suggest_interventions", "student_id": student_id})
             return {
                 "content": "Unable to generate intervention suggestions.",
                 "confidence": "low",
@@ -382,6 +389,7 @@ class LLMOrchestrator:
                 "cohort_size": cohort_context.get("total_students", 0)
             }
         except Exception as e:
+            logger.exception("LLM call failed", extra={"operation": "analyze_cohort_patterns"})
             return {
                 "content": "Unable to analyze cohort patterns.",
                 "confidence": "low",
@@ -427,6 +435,7 @@ class LLMOrchestrator:
                 "scenario": scenario
             }
         except Exception as e:
+            logger.exception("LLM call failed", extra={"operation": "simulate_what_if", "student_id": student_id})
             return {
                 "content": "Unable to run simulation.",
                 "confidence": "low",
@@ -461,6 +470,7 @@ class LLMOrchestrator:
                 "report_type": report_type
             }
         except Exception as e:
+            logger.exception("LLM call failed", extra={"operation": "generate_report_narrative", "report_type": report_type})
             return {
                 "content": "Unable to generate report narrative.",
                 "confidence": "low",

@@ -11,7 +11,7 @@ additionally require a staff-level role (faculty / admin / retention team).
 from typing import List, Optional, Dict, Any
 from datetime import datetime, timedelta
 
-from fastapi import APIRouter, Depends, HTTPException, Query
+from fastapi import APIRouter, Depends, HTTPException, Query, Body
 from sqlalchemy.orm import Session
 from sqlalchemy import desc
 
@@ -20,6 +20,7 @@ from backend.database.models.user import User
 from backend.schemas.intervention import Intervention
 from backend.database import Prediction, RiskSnapshot, Intervention as DbIntervention
 from backend.database.models.student import Student
+from backend.database.models.intervention_log import InterventionLog
 from backend.presentation.student import build_weekly_summary_response
 from backend.services.student_service import StudentService
 from backend.services.risk_scoring import RiskScorer
@@ -28,6 +29,9 @@ router = APIRouter()
 
 # Shorthand: any authenticated staff member (not a plain student account).
 _STAFF_ROLES = ["faculty", "admin", "retention team"]
+
+# Any logged-in advisor can act on interventions
+_ADVISOR_ROLES = ["faculty", "admin", "retention team", "advisor"]
 
 
 @router.get("/students/{student_id}/interventions", response_model=List[Intervention])
@@ -41,6 +45,177 @@ def get_student_interventions(
     if not interventions:
         raise HTTPException(status_code=404, detail=f"No interventions found for student '{student_id}'")
     return interventions
+
+
+# =============================================================================
+# Intervention Log Endpoints
+# =============================================================================
+
+@router.get("/students/{org_id}/intervention-logs")
+def get_student_intervention_logs(
+    org_id: str,
+    db: Session = Depends(get_db),
+    _user: User = Depends(require_role(_STAFF_ROLES)),
+):
+    """
+    Returns all InterventionLog records for this student, ordered by recommended_at DESC.
+    Used on the student detail page to show advisor history.
+    """
+    logs = (
+        db.query(InterventionLog)
+        .filter(InterventionLog.student_org_id == org_id)
+        .order_by(desc(InterventionLog.recommended_at))
+        .all()
+    )
+
+    return [
+        {
+            "id": log.id,
+            "student_org_id": log.student_org_id,
+            "recommended_at": log.recommended_at.isoformat() if log.recommended_at else None,
+            "intervention_type": log.intervention_type,
+            "engagement_pattern": log.engagement_pattern,
+            "risk_score_at_recommendation": log.risk_score_at_recommendation,
+            "week_number": log.week_number,
+            "semester_name": log.semester_name,
+            "reviewed": log.reviewed,
+            "acted_on": log.acted_on,
+            "acted_on_at": log.acted_on_at.isoformat() if log.acted_on_at else None,
+            "acted_on_by": log.acted_on_by,
+            "dismissed_reason": log.dismissed_reason,
+            "notes": log.notes,
+            "outcome": log.outcome,
+            "outcome_delta": log.outcome_delta,
+        }
+        for log in logs
+    ]
+
+
+@router.patch("/intervention-logs/{log_id}/act")
+def act_on_intervention(
+    log_id: int,
+    body: Dict[str, Any] = Body(default={}),
+    db: Session = Depends(get_db),
+    current_user: User = Depends(require_role(_ADVISOR_ROLES)),
+):
+    """
+    Mark an intervention as acted upon by the advisor.
+    
+    Body: {"notes": str (optional)}
+    Sets acted_on=True, acted_on_at=now, acted_on_by=current_user.username
+    """
+    log = db.query(InterventionLog).filter(InterventionLog.id == log_id).first()
+    if not log:
+        raise HTTPException(status_code=404, detail="Intervention log not found")
+    
+    log.acted_on = True
+    log.acted_on_at = datetime.utcnow()
+    log.acted_on_by = getattr(current_user, "username", "unknown")
+    log.reviewed = True
+    
+    notes = body.get("notes")
+    if notes:
+        log.notes = notes
+    
+    db.commit()
+    
+    return {
+        "id": log.id,
+        "student_org_id": log.student_org_id,
+        "intervention_type": log.intervention_type,
+        "acted_on": log.acted_on,
+        "acted_on_at": log.acted_on_at.isoformat() if log.acted_on_at else None,
+        "acted_on_by": log.acted_on_by,
+        "reviewed": log.reviewed,
+        "notes": log.notes,
+    }
+
+
+@router.patch("/intervention-logs/{log_id}/dismiss")
+def dismiss_intervention(
+    log_id: int,
+    body: Dict[str, str] = Body(...),
+    db: Session = Depends(get_db),
+    current_user: User = Depends(require_role(_ADVISOR_ROLES)),
+):
+    """
+    Dismiss an intervention recommendation.
+    
+    Body: {"reason": str}
+    Sets acted_on=False, reviewed=True, dismissed_reason=reason
+    """
+    log = db.query(InterventionLog).filter(InterventionLog.id == log_id).first()
+    if not log:
+        raise HTTPException(status_code=404, detail="Intervention log not found")
+    
+    reason = body.get("reason")
+    if not reason:
+        raise HTTPException(status_code=400, detail="reason is required")
+    
+    log.acted_on = False
+    log.acted_on_at = datetime.utcnow()
+    log.acted_on_by = getattr(current_user, "username", "unknown")
+    log.reviewed = True
+    log.dismissed_reason = reason
+    
+    db.commit()
+    
+    return {
+        "id": log.id,
+        "student_org_id": log.student_org_id,
+        "intervention_type": log.intervention_type,
+        "acted_on": log.acted_on,
+        "reviewed": log.reviewed,
+        "dismissed_reason": log.dismissed_reason,
+        "acted_on_by": log.acted_on_by,
+    }
+
+
+@router.get("/intervention-logs/pending")
+def get_pending_interventions(
+    db: Session = Depends(get_db),
+    _user: User = Depends(require_role(_ADVISOR_ROLES)),
+    program: Optional[str] = None,
+    semester: Optional[str] = None,
+    week: Optional[int] = None,
+    type: Optional[str] = None,
+):
+    """
+    Returns all pending (reviewed=False) InterventionLog records.
+    Used as the advisor's action queue — their to-do list.
+    
+    Ordered by risk_score_at_recommendation DESC (highest risk first).
+    """
+    query = db.query(InterventionLog).filter(InterventionLog.reviewed == False)
+    
+    if semester:
+        query = query.filter(InterventionLog.semester_name == semester)
+    if week:
+        query = query.filter(InterventionLog.week_number == week)
+    if type:
+        query = query.filter(InterventionLog.intervention_type == type)
+    
+    # Join with Student to get name and support program filter
+    query = query.join(Student, InterventionLog.student_org_id == Student.org_defined_id)
+    
+    if program:
+        query = query.filter(Student.parent_department_name.ilike(f"%{program}%"))
+    
+    logs = query.order_by(desc(InterventionLog.risk_score_at_recommendation)).all()
+    
+    return [
+        {
+            "log_id": log.id,
+            "student_org_id": log.student_org_id,
+            "student_name": f"{log.student.first_name} {log.student.last_name}".strip() if log.student else "",
+            "risk_score": log.risk_score_at_recommendation,
+            "intervention_type": log.intervention_type,
+            "engagement_pattern": log.engagement_pattern,
+            "recommended_at": log.recommended_at.isoformat() if log.recommended_at else None,
+            "week_number": log.week_number,
+        }
+        for log in logs
+    ]
 
 
 @router.get("/overview")
@@ -190,7 +365,12 @@ def get_student_risk_trend(
         risk_val = float(raw_risk)
         if risk_val <= 1.0:
             risk_val *= 100.0
-        points.append({"timestamp": ts, "risk_score": round(max(0.0, min(100.0, risk_val)), 2)})
+        points.append({
+            "timestamp": ts,
+            "risk_score": round(max(0.0, min(100.0, risk_val)), 2),
+            "week_number": p.week_number,
+            "semester": p.semester_name,
+        })
 
     return {"student_id": student_id, "points": points}
 

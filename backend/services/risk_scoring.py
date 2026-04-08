@@ -10,9 +10,27 @@ from math import isfinite
 from typing import Dict, Optional, Tuple
 
 from backend.config import (
-    RISK_THRESHOLD_MEDIUM,
+    CALENDAR_RISK_BLEND_WEIGHT,
+    FEATURE_WEIGHTS,
     RISK_THRESHOLD_HIGH,
+    RISK_THRESHOLD_MEDIUM,
 )
+from backend.services.calendar_scorer import calculate_calendar_adjusted_risk
+
+# Logical config keys -> keys returned by FeatureEngineer.calculate_all_features()
+_LOGICAL_TO_FEATURE_KEY: Dict[str, str] = {
+    "content_completion": "content_completion_score",
+    "login_consistency": "login_consistency_score",
+    "quiz_engagement": "quiz_engagement_score",
+    "assignment": "assignment_score",
+    "time_investment": "time_investment_score",
+    "discussion": "discussion_engagement_score",
+    "self_directed_learning": "self_directed_learning_score",
+}
+
+
+def _feature_score_key(logical: str) -> str:
+    return _LOGICAL_TO_FEATURE_KEY.get(logical, f"{logical}_score")
 
 
 class RiskScorer:
@@ -21,14 +39,7 @@ class RiskScorer:
     # Feature schema aligned with backend/services/feature_engineering.py.
     # We intentionally exclude graded/exam features from the fallback score
     # to avoid chronology leakage and keep scoring usable early in term.
-    FEATURE_WEIGHTS: Dict[str, float] = {
-        "content_completion_score": 0.30,
-        "login_consistency_score": 0.20,
-        "quiz_engagement_score": 0.15,
-        "assignment_score": 0.15,
-        "time_investment_score": 0.10,
-        "discussion_engagement_score": 0.10,
-    }
+    # Weights are loaded from backend.config.FEATURE_WEIGHTS (env-overridable).
 
     FEATURE_LABELS: Dict[str, str] = {
         "content_completion_score": "Content Completion",
@@ -74,14 +85,20 @@ class RiskScorer:
         """
         Return weighted engagement and observed weight mass.
         Missing values do not default to 0 (which would inflate risk).
+
+        For self_directed_learning: high score = low risk, so we invert.
         """
         weighted_sum = 0.0
         observed_weight = 0.0
 
-        for feature_key, weight in RiskScorer.FEATURE_WEIGHTS.items():
-            score = RiskScorer._to_valid_score(features.get(feature_key))
+        for logical_key, weight in FEATURE_WEIGHTS.items():
+            score = RiskScorer._to_valid_score(features.get(_feature_score_key(logical_key)))
             if score is None:
                 continue
+            # Self-directed learning is a risk REDUCER - invert the score
+            # High SDL score (100) -> 0 risk contribution, Low SDL (0) -> 100 risk contribution
+            if logical_key == "self_directed_learning":
+                score = 100.0 - score
             weighted_sum += weight * score
             observed_weight += weight
 
@@ -91,7 +108,13 @@ class RiskScorer:
         return weighted_sum / observed_weight, observed_weight
 
     @staticmethod
-    def calculate_risk_score(features: Dict) -> float:
+    def calculate_risk_score(
+        features: Dict,
+        *,
+        graded_components: Optional[list] = None,
+        program: Optional[str] = None,
+        current_week: int | None = None,
+    ) -> float:
         """
         Calculate overall risk score from available engagement features.
 
@@ -101,26 +124,87 @@ class RiskScorer:
         - Includes a bounded zero-progress penalty.
         """
         weighted_engagement, observed_weight = RiskScorer._compute_weighted_engagement(features)
-        total_weight = sum(RiskScorer.FEATURE_WEIGHTS.values())
+        total_weight = sum(FEATURE_WEIGHTS.values())
 
         if observed_weight == 0.0 or total_weight <= 0.0:
-            return RiskScorer.NEUTRAL_RISK_SCORE
+            existing_score = RiskScorer.NEUTRAL_RISK_SCORE
+        else:
+            base_risk = 100.0 - weighted_engagement
 
-        base_risk = 100.0 - weighted_engagement
+            # Confidence from feature coverage; avoids overconfident extremes when sparse.
+            coverage = max(0.0, min(1.0, observed_weight / total_weight))
+            existing_score = (base_risk * coverage) + (RiskScorer.NEUTRAL_RISK_SCORE * (1.0 - coverage))
 
-        # Confidence from feature coverage; avoids overconfident extremes when sparse.
-        coverage = max(0.0, min(1.0, observed_weight / total_weight))
-        risk_score = (base_risk * coverage) + (RiskScorer.NEUTRAL_RISK_SCORE * (1.0 - coverage))
+            # Zero-progress adds bounded risk directly with nonlinear sensitivity.
+            # This increases penalty only when zero-progress dominates course load.
+            zero_ratio = RiskScorer._to_valid_score((features.get("zero_progress_ratio", 0.0) or 0.0) * 100.0)
+            if zero_ratio is not None:
+                z = zero_ratio / 100.0
+                existing_score += min(15.0, (z**1.5) * 15.0)
 
-        # Zero-progress adds bounded risk directly with nonlinear sensitivity.
-        # This increases penalty only when zero-progress dominates course load.
-        zero_ratio = RiskScorer._to_valid_score((features.get("zero_progress_ratio", 0.0) or 0.0) * 100.0)
-        if zero_ratio is not None:
-            z = zero_ratio / 100.0
-            risk_score += min(15.0, (z ** 1.5) * 15.0)
+        if not isfinite(existing_score):
+            existing_score = RiskScorer.NEUTRAL_RISK_SCORE
+
+        risk_score = existing_score
+
+        if current_week is not None:
+            cal = calculate_calendar_adjusted_risk(
+                student_features=features,
+                graded_components=graded_components or [],
+                program=program,
+                current_week=int(current_week),
+            )
+            calendar_risk_score = float(cal.get("calendar_risk_score") or 0.0)
+            risk_score = (1.0 - CALENDAR_RISK_BLEND_WEIGHT) * existing_score + CALENDAR_RISK_BLEND_WEIGHT * calendar_risk_score
+
+            # Mutate features so callers can include these signals in responses.
+            features["calendar_risk_score"] = round(calendar_risk_score, 2)
+            features["overdue_components"] = cal.get("overdue_components", [])
+            features["calendar_expected_pct"] = cal.get("expected_pct", 0.0)
+            features["calendar_actual_pct"] = cal.get("actual_pct", 0.0)
 
         if not isfinite(risk_score):
             return RiskScorer.NEUTRAL_RISK_SCORE
+
+        # Ghost student override: Force high risk for students with zero engagement
+        # This happens AFTER all other calculations so it cannot be diluted
+        ghost_info = features.get("ghost_info", {})
+        if ghost_info.get("is_ghost"):
+            risk_score = 95.0
+            features["risk_override_reason"] = f"ghost_student:{ghost_info.get('ghost_type')}"
+            features["requires_activation_outreach"] = True
+
+        # Academic flags overrides (exam-based high-signal indicators)
+        flags = features.get("academic_flags", {})
+
+        if flags.get("dropout_intent"):
+            # Strongest signal: student requested refund / indicated intent to leave
+            risk_score = 100.0
+            features["risk_score"] = risk_score
+            features["risk_override_reason"] = "dropout_intent_detected"
+
+        elif flags.get("ufm_flagged"):
+            # Academic misconduct: elevated risk
+            risk_score = min(100.0, risk_score + 20.0)
+            features["risk_score"] = risk_score
+            features["risk_override_reason"] = "ufm_flagged"
+
+        elif flags.get("unknown_defaulter"):
+            # No reason given for absence: elevated risk
+            risk_score = min(100.0, risk_score + 15.0)
+            features["risk_score"] = risk_score
+            features["risk_override_reason"] = "exam_defaulter_no_reason"
+
+        elif flags.get("deferred"):
+            # Deferred students are NOT at risk — officially continuing next term
+            risk_score = 0.0
+            features["risk_score"] = risk_score
+            features["risk_override_reason"] = "formally_deferred"
+            features["suppress_intervention"] = True
+
+        elif flags.get("health_support_needed"):
+            # Do not change risk score — but route to welfare team
+            features["health_referral_needed"] = True
 
         return round(max(0.0, min(100.0, risk_score)), 2)
 
@@ -151,11 +235,12 @@ class RiskScorer:
         """Identify which observed component contributes most to risk."""
         risk_contributions: Dict[str, float] = {}
 
-        for feature_key, weight in RiskScorer.FEATURE_WEIGHTS.items():
-            score = RiskScorer._to_valid_score(features.get(feature_key))
+        for logical_key, weight in FEATURE_WEIGHTS.items():
+            score_key = _feature_score_key(logical_key)
+            score = RiskScorer._to_valid_score(features.get(score_key))
             if score is None:
                 continue
-            label = RiskScorer.FEATURE_LABELS[feature_key]
+            label = RiskScorer.FEATURE_LABELS[score_key]
             risk_contributions[label] = (100.0 - score) * weight
 
         if not risk_contributions:
@@ -167,22 +252,27 @@ class RiskScorer:
         """Return risk-by-component breakdown for observed features."""
         breakdown: Dict[str, object] = {}
 
-        for feature_key in RiskScorer.FEATURE_WEIGHTS:
-            score = RiskScorer._to_valid_score(features.get(feature_key))
+        for logical_key in FEATURE_WEIGHTS:
+            score_key = _feature_score_key(logical_key)
+            score = RiskScorer._to_valid_score(features.get(score_key))
+            suffix = score_key.replace("_score", "")
             if score is None:
-                breakdown[f"{feature_key.replace('_score', '')}_risk"] = None
+                breakdown[f"{suffix}_risk"] = None
             else:
-                breakdown[f"{feature_key.replace('_score', '')}_risk"] = round(100.0 - score, 2)
+                breakdown[f"{suffix}_risk"] = round(100.0 - score, 2)
 
-        breakdown["weights"] = RiskScorer.FEATURE_WEIGHTS
+        breakdown["weights"] = {
+            _feature_score_key(k): v for k, v in FEATURE_WEIGHTS.items()
+        }
         breakdown["coverage"] = round(
             (
                 sum(
                     weight
-                    for key, weight in RiskScorer.FEATURE_WEIGHTS.items()
-                    if RiskScorer._to_valid_score(features.get(key)) is not None
+                    for logical_key, weight in FEATURE_WEIGHTS.items()
+                    if RiskScorer._to_valid_score(features.get(_feature_score_key(logical_key)))
+                    is not None
                 )
-                / sum(RiskScorer.FEATURE_WEIGHTS.values())
+                / sum(FEATURE_WEIGHTS.values())
             ),
             3,
         )
