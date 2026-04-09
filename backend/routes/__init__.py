@@ -33,6 +33,7 @@ from . import (
     ml_routes,
     monitoring,
     interventions,
+    audit,
 )
 
 api_router = APIRouter()
@@ -40,6 +41,7 @@ api_router.include_router(auth.router, prefix="/auth", tags=["auth"])
 api_router.include_router(student_v1.router, prefix="/student", tags=["student"])
 api_router.include_router(faculty_v1.router, prefix="/faculty", tags=["faculty"])
 api_router.include_router(admin_v1.router, prefix="/admin", tags=["admin"])
+api_router.include_router(audit.router, prefix="/audit-log", tags=["audit"])  # FERPA compliance
 api_router.include_router(retention_v1.router, prefix="/retention", tags=["retention"])
 api_router.include_router(analytics.router, prefix="/analytics", tags=["analytics"])
 api_router.include_router(goals.router, prefix="/goals", tags=["goals"])

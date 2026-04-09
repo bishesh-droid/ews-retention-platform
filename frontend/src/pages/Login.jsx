@@ -245,9 +245,6 @@ const Login = () => {
                     </form>
 
                     <p style={{ textAlign: 'center', fontSize: '12px', color: '#6B5E8E', marginTop: '20px', marginBottom: 0 }}>
-                        Default: <span style={{ color: '#A78BFA', fontWeight: 500 }}>admin</span> / <span style={{ color: '#A78BFA', fontWeight: 500 }}>admin123</span>
-                    </p>
-                    <p style={{ textAlign: 'center', fontSize: '12px', color: '#6B5E8E', marginTop: '10px', marginBottom: 0 }}>
                         No account?{' '}
                         <Link to="/signup" style={{ color: '#A78BFA', fontWeight: 600, textDecoration: 'none' }}>
                             Request access

@@ -7,9 +7,9 @@ Provides risk predictions calculated from real engagement data.
 from fastapi import APIRouter, Depends, HTTPException, Query
 from sqlalchemy.orm import Session
 
-from backend.api.deps import get_db, get_current_user
+from backend.api.deps import get_db, get_current_user, require_resource_ownership
 from backend.services.student_service import StudentService
-from backend.database import Student
+from backend.database import Student, User
 from backend.utils.api import success_response
 from fastapi import Depends
 
@@ -50,9 +50,15 @@ def get_all_predictions(
 def get_student_prediction(
     student_id: str,
     include_decisions: bool = Query(True),
-    db: Session = Depends(get_db)
+    db: Session = Depends(get_db),
+    current_user = Depends(require_resource_ownership("student_id")),
 ):
-    """Get prediction for a specific student."""
+    """
+    Get prediction for a specific student.
+
+    FERPA-compliant: Only staff (faculty/admin) or the student themselves
+    can access this endpoint.
+    """
     student = StudentService.get_student_by_id(db, student_id)
 
     if not student:

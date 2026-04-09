@@ -7,11 +7,19 @@ Pydantic schemas for student data validation and serialization.
 from pydantic import BaseModel, ConfigDict, Field
 from typing import Dict, List, Any, Optional
 
+from backend.schemas.common import STUDENT_ID_FIELD
+
 
 class StudentBase(BaseModel):
-    """Base student schema with engagement-based fields."""
-    id: str
-    org_defined_id: Optional[str] = None
+    """Base student schema with engagement-based fields and strict ID validation."""
+    # Strict student ID validation: alphanumeric, underscores, hyphens only; 4-20 chars
+    # This prevents injection attacks while allowing common ID formats
+    id: str = STUDENT_ID_FIELD
+    org_defined_id: Optional[str] = Field(
+        None,
+        pattern=r'^[A-Za-z0-9_-]{4,20}$',
+        description="Organization-defined student ID (4-20 alphanumeric chars)"
+    )
     first_name: Optional[str] = None
     last_name: Optional[str] = None
     old_new_student: Optional[str] = None

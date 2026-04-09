@@ -1,0 +1,17 @@
+{
+  "feature_names": [
+    "content_completion_score",
+    "login_consistency_score",
+    "quiz_engagement_score",
+    "assignment_score",
+    "time_investment_score",
+    "discussion_engagement_score",
+    "self_directed_learning_score",
+    "w1w2_completion_score",
+    "zero_progress_ratio",
+    "graded_quiz_score",
+    "graded_assignment_score",
+    "exam_score"
+  ],
+  "n_features": 12
+}

@@ -17,17 +17,28 @@ REMOVED (was a critical vulnerability):
 
 from typing import List, Optional
 
-from fastapi import Depends, HTTPException, status
+from fastapi import Depends, HTTPException, Request, status
 from fastapi.security import OAuth2PasswordBearer
 from jose import JWTError, jwt
+from sqlalchemy import select
 from sqlalchemy.orm import Session
+from sqlalchemy.ext.asyncio import AsyncSession
 
 from backend.config import ALGORITHM, SECRET_KEY
 from backend.database.connection import get_db, get_db_async
 from backend.database.models.user import User
 
 # Re-exported so routes can write `deps.User` without an extra import.
-__all__ = ["get_db", "get_db_async", "get_current_user", "require_role", "User"]
+__all__ = [
+    "get_db",
+    "get_db_async",
+    "get_current_user",
+    "get_current_user_async",
+    "require_role",
+    "require_resource_ownership",
+    "User",
+    "AsyncSession",
+]
 
 # auto_error=True: FastAPI returns a standards-compliant 401 + WWW-Authenticate
 # header automatically when no Bearer token is present, before our code runs.
@@ -91,6 +102,62 @@ def get_current_user(
     return user
 
 
+async def get_current_user_async(
+    db: AsyncSession = Depends(get_db_async),
+    token: str = Depends(reusable_oauth2),
+) -> User:
+    """
+    Async version: Decode a Bearer JWT and return the corresponding User row.
+
+    Usage in async routes:
+        @router.get("/students/{student_id}")
+        async def get_student(
+            student_id: str,
+            current_user: User = Depends(get_current_user_async),
+            db: AsyncSession = Depends(get_db_async),
+        ):
+            result = await db.execute(select(Student).where(Student.id == student_id))
+            ...
+
+    Raises:
+      401 Unauthorized — token absent, malformed, expired, or signature invalid.
+      403 Forbidden    — token is valid but the account is inactive.
+    """
+    credentials_exc = HTTPException(
+        status_code=status.HTTP_401_UNAUTHORIZED,
+        detail="Could not validate credentials",
+        headers={"WWW-Authenticate": "Bearer"},
+    )
+
+    try:
+        payload = jwt.decode(token, SECRET_KEY, algorithms=[ALGORITHM])
+        user_id: Optional[str] = payload.get("sub")
+        if user_id is None:
+            raise credentials_exc
+    except JWTError:
+        raise credentials_exc
+
+    try:
+        uid = int(user_id)
+    except (ValueError, TypeError):
+        raise credentials_exc
+
+    # Async database query
+    result = await db.execute(select(User).where(User.id == uid))
+    user = result.scalar_one_or_none()
+
+    if user is None:
+        raise credentials_exc
+
+    if not user.is_active:
+        raise HTTPException(
+            status_code=status.HTTP_403_FORBIDDEN,
+            detail="Account is inactive.",
+        )
+
+    return user
+
+
 # ---------------------------------------------------------------------------
 # Authorization
 # ---------------------------------------------------------------------------
@@ -130,3 +197,82 @@ def require_role(required_roles: List[str]):
         return current_user
 
     return checker
+
+
+class ResourceOwnershipChecker:
+    """
+    Callable FastAPI dependency that enforces resource ownership for FERPA compliance.
+
+    Access is granted if any of the following are true:
+      1. User has role "faculty" or "admin" (staff can access any student)
+      2. User's username/email matches the requested student_id (own record)
+      3. User is a superuser
+
+    Usage:
+        @router.get("/predictions/{student_id}")
+        def get_prediction(
+            student_id: str,
+            current_user: User = Depends(ResourceOwnershipChecker()),
+        ):
+            ...
+
+        With explicit student_id parameter:
+        @router.get("/students/{org_id}")
+        def get_student(
+            org_id: str,
+            current_user: User = Depends(ResourceOwnershipChecker(student_id_param="org_id")),
+        ):
+            ...
+    """
+
+    def __init__(self, student_id_param: str = "student_id"):
+        self.student_id_param = student_id_param
+
+    def __call__(
+        self,
+        request: Request,
+        current_user: User = Depends(get_current_user),
+    ) -> User:
+        # Extract student_id from path parameters
+        student_id = request.path_params.get(self.student_id_param, "")
+
+        # Staff roles can access any student record
+        staff_roles = {"faculty", "admin", "retention team"}
+        user_role = (current_user.role or "").lower()
+
+        if user_role in staff_roles:
+            return current_user
+
+        # Superusers bypass all checks
+        if current_user.is_superuser:
+            return current_user
+
+        # Students can only access their own records
+        # Match by username (id field) or email
+        user_identifier = current_user.username or current_user.email or ""
+        if user_identifier == student_id:
+            return current_user
+
+        # FERPA violation - deny access with generic message
+        raise HTTPException(
+            status_code=status.HTTP_403_FORBIDDEN,
+            detail="Access denied. You do not have permission to access this resource.",
+        )
+
+
+# Convenience factory function matching the expected pattern
+def require_resource_ownership(student_id_param: str = "student_id"):
+    """
+    Factory function that returns a ResourceOwnershipChecker.
+
+    This provides a cleaner import pattern for routes:
+        from backend.api.deps import require_resource_ownership
+
+        @router.get("/{student_id}")
+        def get_student(
+            student_id: str,
+            user: User = Depends(require_resource_ownership()),
+        ):
+            ...
+    """
+    return ResourceOwnershipChecker(student_id_param)

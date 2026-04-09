@@ -4,16 +4,16 @@ Provides mock responses for LLM-powered features.
 Real LLM integration can be added later.
 """
 
-from fastapi import APIRouter, Depends, Query
+from fastapi import APIRouter, Depends, Query, Request
 from sqlalchemy.orm import Session
 from typing import Optional, Dict, Any
 from pydantic import BaseModel
 from datetime import datetime
 
 from backend.api.deps import get_db, get_current_user
+from backend.core.rate_limiting import require_llm_rate_limit
 from backend.services.student_service import StudentService
 from backend.utils.api import success_response
-from fastapi import Depends
 
 router = APIRouter(dependencies=[Depends(get_current_user)])
 
@@ -48,7 +48,11 @@ class ReportNarrativeRequest(BaseModel):
 
 
 @router.post("/explain-risk-change")
-def explain_risk_change(request: RiskExplanationRequest, db: Session = Depends(get_db)):
+def explain_risk_change(
+    request: RiskExplanationRequest,
+    db: Session = Depends(get_db),
+    _rate_limit: None = Depends(require_llm_rate_limit()),
+):
     """Explain why a student's risk score changed."""
     student = StudentService.get_student_by_id(db, request.student_id)
     if not student:
@@ -69,7 +73,11 @@ def explain_risk_change(request: RiskExplanationRequest, db: Session = Depends(g
 
 
 @router.post("/student-advice")
-def get_student_advice(request: StudentAdviceRequest, db: Session = Depends(get_db)):
+def get_student_advice(
+    request: StudentAdviceRequest,
+    db: Session = Depends(get_db),
+    _rate_limit: None = Depends(require_llm_rate_limit()),
+):
     """Generate personalized advice for a student."""
     student = StudentService.get_student_by_id(db, request.student_id)
     if not student:
@@ -94,7 +102,11 @@ def get_student_advice(request: StudentAdviceRequest, db: Session = Depends(get_
 
 
 @router.post("/faculty-summary")
-def get_faculty_summary(request: FacultySummaryRequest, db: Session = Depends(get_db)):
+def get_faculty_summary(
+    request: FacultySummaryRequest,
+    db: Session = Depends(get_db),
+    _rate_limit: None = Depends(require_llm_rate_limit()),
+):
     """Generate a student profile summary for faculty."""
     student = StudentService.get_student_by_id(db, request.student_id)
     if not student:
@@ -116,7 +128,11 @@ def get_faculty_summary(request: FacultySummaryRequest, db: Session = Depends(ge
 
 
 @router.post("/intervention-suggestions")
-def get_intervention_suggestions(request: InterventionRequest, db: Session = Depends(get_db)):
+def get_intervention_suggestions(
+    request: InterventionRequest,
+    db: Session = Depends(get_db),
+    _rate_limit: None = Depends(require_llm_rate_limit()),
+):
     """Get intervention suggestions for a student."""
     student = StudentService.get_student_by_id(db, request.student_id)
     if not student:
@@ -149,7 +165,11 @@ def get_intervention_suggestions(request: InterventionRequest, db: Session = Dep
 
 
 @router.get("/prioritize-students")
-def get_priority_queue(limit: int = Query(20, ge=1, le=100), db: Session = Depends(get_db)):
+def get_priority_queue(
+    limit: int = Query(20, ge=1, le=100),
+    db: Session = Depends(get_db),
+    _rate_limit: None = Depends(require_llm_rate_limit()),
+):
     """Get a priority queue of students needing intervention."""
     students = StudentService.get_all_students(db, 0, limit, "risk_score", "desc", risk_min=40.0)
     queue = [
@@ -169,7 +189,12 @@ def get_priority_queue(limit: int = Query(20, ge=1, le=100), db: Session = Depen
 
 
 @router.get("/similar-students/{student_id}")
-def find_similar_students(student_id: str, limit: int = Query(5, ge=1, le=20), db: Session = Depends(get_db)):
+def find_similar_students(
+    student_id: str,
+    limit: int = Query(5, ge=1, le=20),
+    db: Session = Depends(get_db),
+    _rate_limit: None = Depends(require_llm_rate_limit()),
+):
     """Find students with similar risk profiles."""
     student = StudentService.get_student_by_id(db, student_id)
     if not student:
@@ -189,7 +214,11 @@ def find_similar_students(student_id: str, limit: int = Query(5, ge=1, le=20), d
 
 
 @router.post("/what-if-simulation")
-def run_what_if_simulation(request: WhatIfRequest, db: Session = Depends(get_db)):
+def run_what_if_simulation(
+    request: WhatIfRequest,
+    db: Session = Depends(get_db),
+    _rate_limit: None = Depends(require_llm_rate_limit()),
+):
     """Simulate what-if scenarios."""
     student = StudentService.get_student_by_id(db, request.student_id)
     if not student:
@@ -221,7 +250,11 @@ def run_what_if_simulation(request: WhatIfRequest, db: Session = Depends(get_db)
 
 
 @router.get("/weekly-brief/{student_id}")
-def get_weekly_brief(student_id: str, db: Session = Depends(get_db)):
+def get_weekly_brief(
+    student_id: str,
+    db: Session = Depends(get_db),
+    _rate_limit: None = Depends(require_llm_rate_limit()),
+):
     """Generate a weekly academic progress brief."""
     student = StudentService.get_student_by_id(db, student_id)
     if not student:
@@ -240,7 +273,11 @@ def get_weekly_brief(student_id: str, db: Session = Depends(get_db)):
 
 
 @router.post("/cohort-analysis")
-def analyze_cohort(cohort_filters: Optional[Dict[str, Any]] = None, db: Session = Depends(get_db)):
+def analyze_cohort(
+    cohort_filters: Optional[Dict[str, Any]] = None,
+    db: Session = Depends(get_db),
+    _rate_limit: None = Depends(require_llm_rate_limit()),
+):
     """Analyze cohort patterns."""
     stats = StudentService.get_overview_stats(db)
     analytics = StudentService.get_analytics_data(db)
@@ -254,7 +291,10 @@ def analyze_cohort(cohort_filters: Optional[Dict[str, Any]] = None, db: Session 
 
 
 @router.get("/revenue-risk-translation")
-def get_revenue_risk(db: Session = Depends(get_db)):
+def get_revenue_risk(
+    db: Session = Depends(get_db),
+    _rate_limit: None = Depends(require_llm_rate_limit()),
+):
     """Translate academic risk to revenue impact."""
     stats = StudentService.get_overview_stats(db)
     at_risk = stats["at_risk_students"]
@@ -269,7 +309,10 @@ def get_revenue_risk(db: Session = Depends(get_db)):
 
 
 @router.get("/dropout-pattern-explanation")
-def explain_dropout_patterns(db: Session = Depends(get_db)):
+def explain_dropout_patterns(
+    db: Session = Depends(get_db),
+    _rate_limit: None = Depends(require_llm_rate_limit()),
+):
     """Explain dropout patterns in cohorts."""
     analytics = StudentService.get_analytics_data(db)
     data = {
@@ -281,7 +324,10 @@ def explain_dropout_patterns(db: Session = Depends(get_db)):
 
 
 @router.get("/institutional-insights")
-def get_institutional_insights(db: Session = Depends(get_db)):
+def get_institutional_insights(
+    db: Session = Depends(get_db),
+    _rate_limit: None = Depends(require_llm_rate_limit()),
+):
     """Get system-wide institutional insights."""
     stats = StudentService.get_overview_stats(db)
     data = {
@@ -295,7 +341,10 @@ def get_institutional_insights(db: Session = Depends(get_db)):
 
 
 @router.get("/pattern-discovery")
-def discover_patterns(db: Session = Depends(get_db)):
+def discover_patterns(
+    db: Session = Depends(get_db),
+    _rate_limit: None = Depends(require_llm_rate_limit()),
+):
     """Run pattern discovery."""
     analytics = StudentService.get_analytics_data(db)
     patterns = analytics.get("department_summary", [])
@@ -304,7 +353,11 @@ def discover_patterns(db: Session = Depends(get_db)):
 
 
 @router.post("/generate-report-narrative")
-def generate_report_narrative(request: ReportNarrativeRequest, db: Session = Depends(get_db)):
+def generate_report_narrative(
+    request: ReportNarrativeRequest,
+    db: Session = Depends(get_db),
+    _rate_limit: None = Depends(require_llm_rate_limit()),
+):
     """Generate auto-narrative for reports."""
     data = {
         "narrative": f"This {request.report_type} report provides an overview of student retention metrics based on current engagement data.",
@@ -315,7 +368,10 @@ def generate_report_narrative(request: ReportNarrativeRequest, db: Session = Dep
 
 
 @router.get("/intervention-effectiveness")
-def get_intervention_effectiveness(db: Session = Depends(get_db)):
+def get_intervention_effectiveness(
+    db: Session = Depends(get_db),
+    _rate_limit: None = Depends(require_llm_rate_limit()),
+):
     """Analyze intervention effectiveness."""
     data = {
         "total_interventions": 0,

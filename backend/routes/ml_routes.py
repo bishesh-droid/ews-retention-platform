@@ -264,3 +264,23 @@ async def get_model_status(
     """Report the current ML pipeline status. Any authenticated user."""
     stats = ml_service.get_runtime_stats()
     return success_response(stats, message="ML pipeline status")
+
+
+@router.get("/model-info")
+async def get_model_info(
+    _user: User = Depends(get_current_user),
+) -> Dict:
+    """
+    Get detailed information about the loaded ML model.
+
+    Returns:
+        - model_type: Type of model (XGBoostClassifier or "none")
+        - model_loaded: Whether a model is currently loaded
+        - features: List of 12 DB-derived feature names used by the model
+        - n_features: Number of features (12)
+        - metrics: Model performance metrics (AUC-ROC, precision, recall, F1)
+        - training_info: Training metadata (samples, class distribution, CV folds)
+        - feature_importance: Ranked feature importance scores
+    """
+    info = ml_service.get_model_info()
+    return success_response(info, message="Model information")

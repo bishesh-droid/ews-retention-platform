@@ -15,6 +15,8 @@ from fastapi import APIRouter, Depends, HTTPException, Query, Body
 from sqlalchemy.orm import Session
 from sqlalchemy import desc
 
+from fastapi import Request
+
 from backend.api.deps import get_db, get_current_user, require_role
 from backend.database.models.user import User
 from backend.schemas.intervention import Intervention
@@ -24,6 +26,7 @@ from backend.database.models.intervention_log import InterventionLog
 from backend.presentation.student import build_weekly_summary_response
 from backend.services.student_service import StudentService
 from backend.services.risk_scoring import RiskScorer
+from backend.core.audit_logger import log_data_access, log_bulk_data_access
 
 router = APIRouter()
 
@@ -258,6 +261,7 @@ def get_students(
     risk_min: Optional[float] = Query(None, ge=0, le=100),
     risk_max: Optional[float] = Query(None, ge=0, le=100),
     db: Session = Depends(get_db),
+    request: Request = None,
     current_user: User = Depends(require_role(_STAFF_ROLES)),
 ):
     """Get paginated list of students with engagement metrics. Staff only."""
@@ -277,6 +281,18 @@ def get_students(
         risk_max=risk_max,
         current_user=current_user,
     )
+
+    # FERPA audit logging: log bulk student data access
+    student_ids = [s.get("id") for s in students if s.get("id")]
+    log_bulk_data_access(
+        db=db,
+        user=current_user,
+        action="READ",
+        resource_type="student",
+        resource_ids=student_ids,
+        request=request,
+    )
+
     return {
         "students": students,
         "total": total,
@@ -289,12 +305,24 @@ def get_students(
 def get_student_detail(
     student_id: str,
     db: Session = Depends(get_db),
+    request: Request = None,
     current_user: User = Depends(require_role(_STAFF_ROLES)),
 ):
     """Get detailed engagement information for a single student. Staff only."""
     student = StudentService.get_student_by_id(db, student_id, current_user=current_user)
     if not student:
         raise HTTPException(status_code=404, detail=f"Student '{student_id}' not found")
+
+    # FERPA audit logging: log individual student data access
+    log_data_access(
+        db=db,
+        user=current_user,
+        action="READ",
+        resource_type="student",
+        resource_id=student_id,
+        request=request,
+    )
+
     return student
 
 
@@ -302,12 +330,24 @@ def get_student_detail(
 def get_student_weekly_summary(
     student_id: str,
     db: Session = Depends(get_db),
+    request: Request = None,
     current_user: User = Depends(require_role(_STAFF_ROLES)),
 ):
     """Get a lightweight weekly-style summary for the student portal. Staff only."""
     student = StudentService.get_student_by_id(db, student_id, current_user=current_user)
     if not student:
         raise HTTPException(status_code=404, detail=f"Student '{student_id}' not found")
+
+    # FERPA audit logging: log enrollment data access
+    log_data_access(
+        db=db,
+        user=current_user,
+        action="READ",
+        resource_type="student_enrollment",
+        resource_id=student_id,
+        request=request,
+        details={"endpoint": "weekly-summary"},
+    )
 
     enrollments = StudentService._get_enrollment_dicts(db, student_id)
 
@@ -335,9 +375,21 @@ def get_student_risk_trend(
     student_id: str,
     limit: int = Query(8, ge=2, le=52),
     db: Session = Depends(get_db),
+    request: Request = None,
     current_user: User = Depends(require_role(_STAFF_ROLES)),
 ):
     """Return risk score trend points for a student. Staff only."""
+    # FERPA audit logging: log prediction data access
+    log_data_access(
+        db=db,
+        user=current_user,
+        action="READ",
+        resource_type="student_prediction",
+        resource_id=student_id,
+        request=request,
+        details={"endpoint": "risk-trend", "limit": limit},
+    )
+
     # Faculty are restricted to their department
     base = db.query(Student.id).filter(Student.id == student_id)
     role = (current_user.role or "").lower()

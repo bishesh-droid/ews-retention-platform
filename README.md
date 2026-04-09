@@ -38,7 +38,7 @@ The EWS Retention Platform (codenamed "Meridian") is a comprehensive system desi
 - **Scheduled Predictions** — Daily job (03:00 UTC) recomputes risk scores for all students
 - **Risk Trend Tracking** — Historical snapshots enable velocity and acceleration analysis
 
-### API Features (20+ Endpoints)
+### API Features (24 Route Modules, 100+ Endpoints)
 
 | Category | Endpoints |
 |----------|-----------|
@@ -295,11 +295,12 @@ ews-retention-platform/
 ├── backend/                      # FastAPI application
 │   ├── main.py                   # Application entry point
 │   ├── config/                   # Centralized configuration
-│   ├── routes/                   # 22 API route modules
+│   ├── routes/                   # 24 API route modules
 │   │   ├── auth.py              # Authentication endpoints
 │   │   ├── students.py          # Student management
 │   │   ├── interventions.py     # Intervention tracking
 │   │   ├── llm.py               # AI/LLM endpoints
+│   │   ├── audit.py             # FERPA audit logging
 │   │   └── ...
 │   ├── services/                 # Business logic layer
 │   │   ├── feature_engineering.py   # Feature calculation
@@ -403,11 +404,19 @@ WEIGHT_SELF_DIRECTED_LEARNING=0.05
 
 ### Security Recommendations
 
-1. Replace hardcoded frontend auth with proper JWT flow
-2. Enable HTTPS with HSTS for production
-3. Add email verification for registration
-4. Implement per-student data isolation
-5. Use Redis for distributed rate limiting
+**Implemented Security Features:**
+- ✅ Security Headers middleware (HSTS, CSP, X-Frame-Options, etc.)
+- ✅ FERPA-compliant audit logging for data access
+- ✅ PII masking in backend logs
+- ✅ Rate limiting with SlowAPI
+- ✅ Input sanitization with bleach and encoding bypass protection
+
+**Still Recommended:**
+- [ ] Replace hardcoded frontend auth with proper JWT flow
+- [ ] Enable HTTPS for production (HSTS headers ready)
+- [ ] Add email verification for registration
+- [ ] Implement per-student data isolation
+- [ ] Use Redis for distributed rate limiting
 
 ---
 
@@ -470,13 +479,44 @@ This project is licensed under the MIT License.
 
 ---
 
+## CI/CD
+
+### GitHub Actions Workflow
+
+The project includes automated CI/CD pipelines in `.github/workflows/`:
+
+| Workflow | Triggers | Description |
+|----------|----------|-------------|
+| `ci.yml` | Push/PR to main/develop | Runs tests, linting, security scans |
+
+**CI Jobs:**
+- **test-backend**: Pytest on Python 3.11 & 3.12
+- **test-frontend**: Jest tests on Node 18 & 20
+- **security-scan**: Bandit + detect-secrets
+- **docker-build**: Image build verification
+
+### Running Locally
+
+```bash
+# Simulate CI locally
+pip install -r requirements.txt -r requirements-dev.txt
+pytest backend/tests -v --tb=short
+flake8 backend/ --count --statistics
+bandit -r backend/
+```
+
+---
+
 ## Support
 
 For questions or issues:
-- Open a GitHub Issue
-- Review documentation in `/docs` directory
-- Check `ARCHITECTURE.md` for system design details
-- See `SECURITY.md` for vulnerability reporting
+- Open a [GitHub Issue](../../issues)
+- Review documentation in [`docs/`](./docs/):
+  - [`API_REFERENCE.md`](./docs/API_REFERENCE.md) - API documentation
+  - [`ARCHITECTURE.md`](./docs/ARCHITECTURE.md) - Design decisions
+  - [`DEPLOYMENT.md`](./docs/DEPLOYMENT.md) - Deployment guide
+- See [`SECURITY.md`](./SECURITY.md) for vulnerability reporting
+- Check [`CODE_OF_CONDUCT.md`](./CODE_OF_CONDUCT.md) for community guidelines
 
 ---
 

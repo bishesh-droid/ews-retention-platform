@@ -32,6 +32,7 @@ from backend.core.logger import sys_logger
 from backend.middleware.security_logging import security_and_logging_middleware
 from backend.middleware.request_validation import request_validation_middleware
 from backend.middleware.request_id import RequestIDMiddleware
+from backend.middleware.security_headers import SecurityHeadersMiddleware
 from backend.services.infrastructure.scheduler import scheduler_service
 from backend.services.ml_service import ml_service
 from backend.utils.api import AppError, error_response, success_response
@@ -219,6 +220,10 @@ app = FastAPI(
 
 # Request ID middleware (must be first to capture ID for all subsequent logging)
 app.add_middleware(RequestIDMiddleware)
+
+# Security Headers middleware (add early so headers are present on all responses,
+# including error responses from subsequent middleware and route handlers)
+app.add_middleware(SecurityHeadersMiddleware)
 
 # CORS
 CORS_ORIGINS_NORMALIZED = parse_cors_origins(CORS_ORIGINS)

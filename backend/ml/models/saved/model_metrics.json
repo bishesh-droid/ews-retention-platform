@@ -1,0 +1,69 @@
+{
+  "model_type": "XGBoostClassifier",
+  "n_features": 12,
+  "n_samples": 5000,
+  "class_distribution": {
+    "retained": 2560,
+    "dropped_out": 2440
+  },
+  "test_set": {
+    "auc_roc": 0.7184,
+    "precision": 0.6632,
+    "recall": 0.6537,
+    "f1_score": 0.6584
+  },
+  "cross_validation": {
+    "folds": 5,
+    "auc_mean": 0.7157
+  },
+  "feature_importance": [
+    {
+      "feature": "content_completion_score",
+      "importance": 0.1763
+    },
+    {
+      "feature": "zero_progress_ratio",
+      "importance": 0.1035
+    },
+    {
+      "feature": "quiz_engagement_score",
+      "importance": 0.0812
+    },
+    {
+      "feature": "w1w2_completion_score",
+      "importance": 0.0799
+    },
+    {
+      "feature": "login_consistency_score",
+      "importance": 0.0753
+    },
+    {
+      "feature": "exam_score",
+      "importance": 0.0741
+    },
+    {
+      "feature": "graded_quiz_score",
+      "importance": 0.0714
+    },
+    {
+      "feature": "time_investment_score",
+      "importance": 0.0699
+    },
+    {
+      "feature": "assignment_score",
+      "importance": 0.0698
+    },
+    {
+      "feature": "graded_assignment_score",
+      "importance": 0.0673
+    },
+    {
+      "feature": "discussion_engagement_score",
+      "importance": 0.0665
+    },
+    {
+      "feature": "self_directed_learning_score",
+      "importance": 0.0648
+    }
+  ]
+}

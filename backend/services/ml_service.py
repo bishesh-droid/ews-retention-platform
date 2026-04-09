@@ -30,7 +30,8 @@ trend, velocity, and history endpoints have real data to serve.
 import json
 import logging
 from datetime import datetime, timezone
-from typing import Any, Dict, List, Optional
+from pathlib import Path
+from typing import Any, Dict, List, Optional, Tuple
 
 from sqlalchemy.orm import Session
 
@@ -56,39 +57,74 @@ logger = sys_logger
 def _try_load_joblib_models() -> Optional[Any]:
     """
     Try to load the XGBoost joblib model.
-    Returns the pipeline object or None.
-    Logs a warning explaining why it cannot be used for scoring if the
-    feature schema does not match.
+    Returns the model object or None if not available/compatible.
+    Validates that the model expects the correct 12 DB-derived features.
     """
     try:
         import joblib
         from pathlib import Path
+        import json
 
         model_path = (
             Path(__file__).resolve().parent.parent
             / "ml" / "models" / "saved" / "retention_model_xgboost.joblib"
         )
+        features_path = model_path.parent / "feature_names.json"
+        metrics_path = model_path.parent / "model_metrics.json"
+
         if not model_path.exists():
-            logger.info("No joblib model found — rule-based scoring only.")
+            logger.info("No XGBoost model found — rule-based scoring only.")
             return None
 
+        # Load feature metadata if available
+        expected_features = None
+        if features_path.exists():
+            try:
+                with open(features_path) as f:
+                    feature_meta = json.load(f)
+                    expected_features = feature_meta.get("feature_names", [])
+                    logger.info(f"Model expects features: {expected_features}")
+            except Exception:
+                pass
+
+        # Load the model
         model = joblib.load(model_path)
 
-        # The joblib model expects 32 absrate/mpa/nsusp/mobility features.
-        # Our DB-derived features are different (content, quiz, time, etc.).
-        # Until the model is retrained on DB features we cannot use it.
-        clf = model.named_steps.get("classifier") if hasattr(model, "named_steps") else None
-        expected_features = getattr(clf, "n_features_in_", None)
-        logger.warning(
-            f"Joblib model loaded ({model_path.name}) but expects "
-            f"{expected_features} absrate/mpa features which differ from "
-            "DB-derived LMS features. Model will NOT be used for scoring "
-            "until retrained on DB features. Using rule-based scoring."
-        )
-        return None  # Intentionally disabled until retrained
+        # Validate feature count
+        n_features_in = getattr(model, "n_features_in_", None)
+        if n_features_in is not None and expected_features:
+            if n_features_in == len(expected_features):
+                logger.info(
+                    f"XGBoost model loaded successfully ({model_path.name}) "
+                    f"with {n_features_in} features matching DB-derived schema."
+                )
+
+                # Load and log metrics
+                if metrics_path.exists():
+                    try:
+                        with open(metrics_path) as f:
+                            metrics = json.load(f)
+                            logger.info(
+                                f"Model metrics: AUC-ROC={metrics.get('test_set', {}).get('auc_roc', 'N/A')}, "
+                                f"F1={metrics.get('test_set', {}).get('f1_score', 'N/A')}"
+                            )
+                    except Exception:
+                        pass
+
+                return model
+            else:
+                logger.warning(
+                    f"Model feature count mismatch: model expects {n_features_in}, "
+                    f"but DB-derived features have {len(expected_features)}. "
+                    "Using rule-based scoring."
+                )
+                return None
+        else:
+            logger.warning("Could not validate model feature schema. Using rule-based scoring.")
+            return None
 
     except Exception as exc:
-        logger.info(f"Joblib model not loaded: {exc}")
+        logger.info(f"XGBoost model not loaded: {exc}")
         return None
 
 
@@ -114,6 +150,76 @@ class MLService:
         logger.info("MLService initialised (rule-based scoring, DB-backed features)")
 
     # ------------------------------------------------------------------
+    # Feature extraction for ML model
+    # ------------------------------------------------------------------
+
+    # 12 DB-derived features expected by the XGBoost model
+    _MODEL_FEATURES: List[str] = [
+        "content_completion_score",
+        "login_consistency_score",
+        "quiz_engagement_score",
+        "assignment_score",
+        "time_investment_score",
+        "discussion_engagement_score",
+        "self_directed_learning_score",
+        "w1w2_completion_score",
+        "zero_progress_ratio",
+        "graded_quiz_score",
+        "graded_assignment_score",
+        "exam_score",
+    ]
+
+    def _extract_model_features(self, features: Dict[str, Any]) -> List[float]:
+        """
+        Extract the 12 DB-derived features in the correct order for model inference.
+        Handles missing values by using defaults.
+        """
+        values = []
+        for feat_name in self._MODEL_FEATURES:
+            val = features.get(feat_name)
+            if val is None:
+                # Use sensible defaults based on feature type
+                if feat_name == "zero_progress_ratio":
+                    val = 0.5  # Unknown = moderate risk
+                else:
+                    val = 0.0  # Scores default to 0
+            values.append(float(val))
+        return values
+
+    def _get_model_prediction(self, features: Dict[str, Any]) -> Tuple[Optional[float], Optional[float]]:
+        """
+        Get prediction from XGBoost model if available.
+
+        Returns:
+            Tuple of (dropout_probability, model_confidence) or (None, None) if no model.
+        """
+        if _JOBLIB_MODEL is None:
+            return None, None
+
+        try:
+            import numpy as np
+
+            # Extract features in correct order
+            feature_vector = self._extract_model_features(features)
+            X = np.array([feature_vector])
+
+            # Get prediction probability
+            proba = _JOBLIB_MODEL.predict_proba(X)[0]
+            dropout_proba = proba[1]  # Probability of class 1 (dropped out)
+
+            # Convert to risk score (0-100)
+            risk_score = dropout_proba * 100
+
+            # Confidence = max probability
+            confidence = max(proba)
+
+            return risk_score, confidence
+
+        except Exception as exc:
+            logger.warning(f"Model prediction failed: {exc}")
+            return None, None
+
+    # ------------------------------------------------------------------
     # Primary entry points
     # ------------------------------------------------------------------
 
@@ -128,6 +234,10 @@ class MLService:
         """
         Compute and return a risk prediction for one student.
 
+        Uses XGBoost model if available, otherwise falls back to rule-based scoring.
+        When both are available, blends predictions (30% model / 70% rule-based)
+        for robustness while maintaining interpretability.
+
         Parameters
         ----------
         student_id  : student primary key (email / org_defined_id)
@@ -140,7 +250,8 @@ class MLService:
         -------
         dict with keys:
             student_id, risk_score (0-100), risk_category, retention_likelihood,
-            dominant_risk_factor, risk_breakdown, model_used, prediction_timestamp
+            dominant_risk_factor, risk_breakdown, model_used, model_confidence,
+            prediction_timestamp
         """
         try:
             features = FeatureEngineer.calculate_all_features(
@@ -150,12 +261,34 @@ class MLService:
                 is_new_student=False,
                 week_number=trimester_week_number(),
             )
-            risk_score = RiskScorer.calculate_risk_score(
+
+            # Get rule-based score (always calculated)
+            rule_based_score = RiskScorer.calculate_risk_score(
                 features,
                 graded_components=graded or [],
                 program=None,
                 current_week=get_current_week(settings.TRIMESTER_START_DATE),
             )
+
+            # Try to get XGBoost model prediction
+            model_score, model_confidence = self._get_model_prediction(features)
+
+            # Blend scores if model is available
+            if model_score is not None:
+                # Blend: 30% model, 70% rule-based for stability
+                risk_score = 0.30 * model_score + 0.70 * rule_based_score
+                model_used = True
+                model_type = "xgboost_blended"
+                model_description = "XGBoost + rule-based ensemble (30/70 blend)"
+                score_basis = "ml_model_with_rule_fallback"
+            else:
+                risk_score = rule_based_score
+                model_used = False
+                model_type = "rule_based"
+                model_description = "Weighted engagement formula — not a trained ML model"
+                score_basis = "rule_based_formula"
+                model_confidence = None
+
             risk_category = RiskScorer.get_risk_category(risk_score)
             retention = RiskScorer.get_retention_likelihood(risk_score)
             dominant = RiskScorer.get_dominant_risk_factor(features)
@@ -163,16 +296,19 @@ class MLService:
 
             result: Dict[str, Any] = {
                 "student_id": student_id,
-                "risk_score": risk_score,           # 0-100
-                "engagement_risk_score": risk_score, # Clarified name — same value
-                "risk_category": risk_category,     # "low" | "medium" | "high"
+                "risk_score": round(risk_score, 2),
+                "engagement_risk_score": round(risk_score, 2),
+                "risk_category": risk_category,
                 "retention_likelihood": retention,
                 "dominant_risk_factor": dominant,
                 "risk_breakdown": breakdown,
-                "model_used": False,                # True once a retrained model is available
-                "model_type": "rule_based",
-                "model_description": "Weighted engagement formula — not a trained ML model",
-                "score_basis": "rule_based_formula",
+                "model_used": model_used,
+                "model_type": model_type,
+                "model_description": model_description,
+                "model_confidence": round(model_confidence, 4) if model_confidence else None,
+                "rule_based_score": round(rule_based_score, 2),
+                "ml_model_score": round(model_score, 2) if model_score else None,
+                "score_basis": score_basis,
                 "prediction_error": False,
                 "prediction_timestamp": datetime.now(timezone.utc).isoformat(),
                 "features": {
@@ -279,14 +415,84 @@ class MLService:
     # ------------------------------------------------------------------
 
     def get_runtime_stats(self) -> Dict[str, Any]:
+        """Get runtime statistics and model status."""
+        model_loaded = _JOBLIB_MODEL is not None
+
+        if model_loaded:
+            status = "XGBoost model loaded — blended scoring active (30% ML / 70% rule-based)"
+        else:
+            status = (
+                "No XGBoost model loaded — rule-based scoring only. "
+                "Run train_xgboost.py to train and enable ML inference."
+            )
+
         return {
             "total_predictions": len(self._cache),
-            "model_used": False,
-            "model_status": (
-                "No model loaded — rule-based scoring active. "
-                "Retrain on DB-derived features to enable ML inference."
-            ),
+            "model_loaded": model_loaded,
+            "model_used": model_loaded,  # backward compat
+            "model_status": status,
         }
+
+    def get_model_info(self) -> Dict[str, Any]:
+        """
+        Get detailed information about the loaded ML model.
+
+        Returns model type, feature list, and performance metrics.
+        """
+        # Load metrics if available
+        metrics = None
+        model_path = (
+            Path(__file__).resolve().parent.parent
+            / "ml" / "models" / "saved" / "retention_model_xgboost.joblib"
+        )
+        metrics_path = model_path.parent / "model_metrics.json"
+
+        if metrics_path.exists():
+            try:
+                with open(metrics_path) as f:
+                    metrics = json.load(f)
+            except Exception:
+                pass
+
+        if _JOBLIB_MODEL is None:
+            return {
+                "model_type": "none",
+                "model_loaded": False,
+                "model_path": str(model_path),
+                "features": self._MODEL_FEATURES,
+                "n_features": len(self._MODEL_FEATURES),
+                "description": "No ML model loaded — rule-based scoring only",
+                "metrics": None,
+                "training_info": None,
+            }
+
+        # Get model info from loaded model
+        model_info = {
+            "model_type": "XGBoostClassifier",
+            "model_loaded": True,
+            "model_path": str(model_path),
+            "features": self._MODEL_FEATURES,
+            "n_features": len(self._MODEL_FEATURES),
+            "description": "XGBoost classifier trained on 12 DB-derived engagement features",
+        }
+
+        # Add metrics if available
+        if metrics:
+            model_info["metrics"] = {
+                "auc_roc": metrics.get("test_set", {}).get("auc_roc"),
+                "precision": metrics.get("test_set", {}).get("precision"),
+                "recall": metrics.get("test_set", {}).get("recall"),
+                "f1_score": metrics.get("test_set", {}).get("f1_score"),
+            }
+            model_info["training_info"] = {
+                "n_samples": metrics.get("n_samples"),
+                "class_distribution": metrics.get("class_distribution"),
+                "cross_validation_folds": metrics.get("cross_validation", {}).get("folds"),
+                "training_params": metrics.get("training_params"),
+            }
+            model_info["feature_importance"] = metrics.get("feature_importance", [])
+
+        return model_info
 
     # ------------------------------------------------------------------
     # Internal helpers

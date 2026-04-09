@@ -7,9 +7,9 @@ from fastapi import APIRouter, Depends, HTTPException, Query
 from sqlalchemy.orm import Session
 from typing import Optional
 
-from backend.api.deps import get_db, get_current_user
+from backend.api.deps import get_db, get_current_user, require_resource_ownership
 from backend.services.student_service import StudentService
-from backend.database import Student
+from backend.database import Student, User
 from backend.utils.api import success_response
 from fastapi import Depends
 
@@ -20,8 +20,17 @@ router = APIRouter(
 
 
 @router.get("/{student_id}")
-def get_student_features(student_id: str, db: Session = Depends(get_db)):
-    """Get computed engagement features for a student."""
+def get_student_features(
+    student_id: str,
+    db: Session = Depends(get_db),
+    current_user = Depends(require_resource_ownership("student_id")),
+):
+    """
+    Get computed engagement features for a student.
+
+    FERPA-compliant: Only staff (faculty/admin) or the student themselves
+    can access this endpoint.
+    """
     student = StudentService.get_student_by_id(db, student_id)
 
     if not student:
@@ -65,10 +74,23 @@ def get_student_features(student_id: str, db: Session = Depends(get_db)):
 @router.post("/compute")
 def compute_features(
     student_id: Optional[str] = None,
-    db: Session = Depends(get_db)
+    db: Session = Depends(get_db),
+    current_user: User = Depends(get_current_user),
 ):
-    """Trigger feature computation. Features are computed on-the-fly from enrollment data."""
+    """
+    Trigger feature computation. Features are computed on-the-fly from enrollment data.
+
+    FERPA-compliant: When student_id is provided, only staff or the student
+    themselves can trigger computation.
+    """
     if student_id:
+        # Enforce resource ownership for per-student computation
+        checker = require_resource_ownership("student_id")
+        # Manually invoke checker with request context
+        from fastapi import Request
+        request = Request(scope={"type": "http", "path_params": {"student_id": student_id}})
+        checker(request=request, current_user=current_user)
+
         student = StudentService.get_student_by_id(db, student_id)
         if not student:
             raise HTTPException(status_code=404, detail="Student not found")

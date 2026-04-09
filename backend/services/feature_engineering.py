@@ -1,20 +1,54 @@
 """
 Feature Engineering Service for EWS Retention Platform.
 
+DEPRECATED: This module is kept for backward compatibility.
+The feature engineering system has been refactored into modular extractors:
+
+    backend/services/features/
+    ├── academic.py      - AcademicFeatureExtractor
+    ├── engagement.py    - EngagementFeatureExtractor
+    ├── consistency.py   - ConsistencyFeatureExtractor
+    ├── intent.py        - IntentFeatureExtractor
+    └── composer.py      - FeatureEngineer (public interface)
+
+Please update imports to use the new modular structure:
+    from backend.services.features import FeatureEngineer
+
 Derives engagement metrics from the Engagement_Analysis.xlsx data.
 All features are calculated from Enrollment records per student.
 
-Feature Categories:
-- Content Engagement: content completion rate across courses
-- Quiz Engagement: quiz completion and attempt patterns
-- Discussion Engagement: posts created, replies, reads
-- Login Consistency: login frequency and recency
-- Time Investment: total time spent in content
+Feature Categories (mapped to 4 domains):
+- Academic: Graded performance, exam scores, academic flags
+- Engagement: Content/quiz/discussion activity, time investment
+- Consistency: Login patterns, ghost detection, behavioral trends
+- Intent: Engagement pattern classification, motivation signals
 """
 
 from typing import Dict, List, Optional
 from datetime import datetime
 import math
+import warnings
+
+# Import the new modular structure for delegation
+from backend.services.features import (
+    FeatureEngineer as _NewFeatureEngineer,
+    AcademicFeatureExtractor,
+    EngagementFeatureExtractor,
+    ConsistencyFeatureExtractor,
+    IntentFeatureExtractor,
+    AcademicFeatures,
+    EngagementFeatures,
+    ConsistencyFeatures,
+    IntentFeatures,
+)
+
+# Emit deprecation warning when this module is imported
+warnings.warn(
+    "backend.services.feature_engineering is deprecated. "
+    "Use backend.services.features instead.",
+    DeprecationWarning,
+    stacklevel=2
+)
 
 
 class FeatureEngineer:
@@ -740,3 +774,47 @@ class FeatureEngineer:
 
         # Rule 4: On track
         return "on_track"
+
+    # =========================================================================
+    # BACKWARD COMPATIBILITY: Delegate to new modular structure
+    # =========================================================================
+
+    @staticmethod
+    def get_features(
+        student_id: str,
+        db,
+        is_new_student: bool = False,
+        week_number: Optional[int] = None
+    ) -> Dict:
+        """
+        Backward-compatible public interface - delegates to new FeatureEngineer.
+        
+        This ensures existing route handlers continue to work without changes.
+        """
+        engineer = _NewFeatureEngineer()
+        return engineer.get_features(student_id, db, is_new_student, week_number)
+
+    @staticmethod
+    def calculate_all_features(
+        enrollments: List[Dict],
+        graded_components: List[Dict] = None,
+        exam_records: List[Dict] = None,
+        is_new_student: bool = False,
+        week_number: Optional[int] = None,
+        registry_lookup=None,
+    ) -> Dict:
+        """
+        Backward-compatible static method - delegates to new modular extractors.
+        """
+        return _NewFeatureEngineer.calculate_all_features(
+            enrollments=enrollments,
+            graded_components=graded_components,
+            exam_records=exam_records,
+            is_new_student=is_new_student,
+            week_number=week_number,
+            registry_lookup=registry_lookup,
+        )
+
+
+# Maintain backward compatibility for direct imports
+security_manager = FeatureEngineer()

@@ -40,7 +40,7 @@ const http = axios.create({
   headers: {
     'Content-Type': 'application/json',
   },
-  withCredentials: false,
+  withCredentials: true, // Enable for httpOnly cookie support
 });
 
 // Lightweight global toast utility (no component changes required)
@@ -82,19 +82,19 @@ const showGlobalToast = (message) => {
   }
 };
 
-// Request interceptor to attach JWT token to all outgoing requests
+// Note: JWT token is now managed by AuthContext and attached via its own interceptor.
+// This interceptor can be used for additional headers if needed.
 http.interceptors.request.use(
   (config) => {
-    const token = sessionStorage.getItem('ews_jwt');
-    if (token) {
-      config.headers.Authorization = `Bearer ${token}`;
-    }
+    // Token attachment is handled by AuthContext's apiClient interceptor
+    // This ensures tokens are never stored in localStorage/sessionStorage
     return config;
   },
   (error) => Promise.reject(error),
 );
 
 // Global response interceptor for centralized error handling
+// Note: 401 handling with token refresh is managed by AuthContext
 http.interceptors.response.use(
   (response) => response,
   (error) => {
@@ -109,11 +109,14 @@ http.interceptors.response.use(
       data: error?.response?.data,
     });
 
+    // Note: 401 Unauthorized is handled by AuthContext with automatic token refresh
+    // Only handle non-401 errors here
     if (status === 401) {
-      // Clear stale token and redirect unauthenticated users to login
-      sessionStorage.removeItem('ews_jwt');
+      // Let AuthContext handle 401 with token refresh
+      // Only redirect if we're not on the login page already
       if (typeof window !== 'undefined' && !window.location.pathname.startsWith('/login')) {
-        window.location.href = '/login';
+        // AuthContext will handle the redirect after refresh attempt fails
+        console.warn('Authentication required — token refresh will be attempted');
       }
     } else if (status >= 500) {
       // Show a non-blocking toast notification for server errors
@@ -524,10 +527,14 @@ export const triggerIngestion = async (file = null) => {
   const formData = new FormData();
   if (file) formData.append('file', file);
 
+  // Note: Token is attached by AuthContext's axios interceptor automatically
+  // We use the axios instance for consistency
+  const token = typeof window !== 'undefined' && window.__AUTH_TOKEN__ ? window.__AUTH_TOKEN__ : '';
   const response = await fetch(`${API_BASE_URL}/admin/ingest`, {
     method: 'POST',
-    headers: { Authorization: `Bearer ${sessionStorage.getItem('ews_jwt')}` },
+    headers: token ? { Authorization: `Bearer ${token}` } : {},
     body: file ? formData : undefined,
+    credentials: 'include', // Include httpOnly cookies
   });
 
   if (response.status === 202) {
@@ -547,8 +554,10 @@ export const triggerIngestion = async (file = null) => {
 export const pollIngestionStatus = async (taskId, maxAttempts = 30, intervalMs = 2000) => {
   for (let i = 0; i < maxAttempts; i++) {
     await new Promise((r) => setTimeout(r, intervalMs));
+    const token = typeof window !== 'undefined' && window.__AUTH_TOKEN__ ? window.__AUTH_TOKEN__ : '';
     const res = await fetch(`${API_BASE_URL}/admin/ingest/status/${encodeURIComponent(taskId)}`, {
-      headers: { Authorization: `Bearer ${sessionStorage.getItem('ews_jwt')}` },
+      headers: token ? { Authorization: `Bearer ${token}` } : {},
+      credentials: 'include', // Include httpOnly cookies
     });
     if (!res.ok) {
       const err = await res.json().catch(() => ({}));

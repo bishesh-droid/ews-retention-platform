@@ -10,7 +10,7 @@ from pydantic import BaseModel
 from typing import Optional, Dict, Any
 import json
 
-from backend.api.deps import get_db, get_current_user
+from backend.api.deps import get_db, get_current_user, require_resource_ownership
 from backend.database import RawEvent
 from fastapi import Depends
 
@@ -79,9 +79,15 @@ def get_student_events(
     student_id: str,
     event_source: str = None,
     limit: int = 100,
-    db: Session = Depends(get_db)
+    db: Session = Depends(get_db),
+    current_user = Depends(require_resource_ownership("student_id")),
 ):
-    """Get raw events for a student, optionally filtered by source."""
+    """
+    Get raw events for a student, optionally filtered by source.
+
+    FERPA-compliant: Only staff (faculty/admin) or the student themselves
+    can access this endpoint.
+    """
     query = db.query(RawEvent).filter(RawEvent.student_id == student_id)
 
     if event_source:
