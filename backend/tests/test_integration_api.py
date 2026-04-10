@@ -6,7 +6,6 @@ Tests for the EWS Integration API endpoints.
 
 import pytest
 from unittest.mock import MagicMock
-from fastapi.testclient import TestClient
 
 
 # We need to mock the database before importing the app
@@ -15,13 +14,6 @@ def mock_db():
     """Create a mock database session."""
     db = MagicMock()
     return db
-
-
-@pytest.fixture
-def client():
-    """Create a test client with mocked dependencies."""
-    from backend.main import app
-    return TestClient(app)
 
 
 class TestIntegrationAuth:

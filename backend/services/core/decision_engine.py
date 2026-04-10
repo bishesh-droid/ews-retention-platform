@@ -14,7 +14,7 @@ Thresholds are configurable via environment variables (see backend/config.py):
 
 import logging
 import numpy as np
-from typing import Dict, Any
+from typing import Dict, Any, Optional
 from backend.config import (
     INTERVENTION_THRESHOLDS,
     INTERVENTION_COOLDOWN_DAYS,
@@ -31,62 +31,57 @@ THRESHOLD_MENTOR = INTERVENTION_THRESHOLDS['mentor_outreach']
 THRESHOLD_URGENT = INTERVENTION_THRESHOLDS['urgent']
 
 
-def get_intervention_recommendation(
-    risk_score: float,
-    engagement_pattern: str = None,
-    features: Dict[str, Any] = None,
-) -> Dict[str, Any]:
-    """
-    Apply decision thresholds and return recommended intervention.
-
-    Args:
-        risk_score: Risk score on the 0–100 scale (same scale as config thresholds).
-        engagement_pattern: Optional engagement pattern classification ("disengaged",
-            "struggling", "at_risk_normal", "on_track") to enable tailored interventions.
-        features: Optional features dictionary for ghost detection and other
-            feature-based routing decisions.
-
-    Returns:
-        Dictionary with intervention details
-    """
+def _validate_risk_score(risk_score: float) -> float:
+    """Validate and normalize risk score."""
     if risk_score is None or np.isnan(risk_score) or np.isinf(risk_score):
         logger.error(
             f"Invalid risk_score in decision engine: {risk_score}. Using neutral default 50.0"
         )
-        risk_score = 50.0
-
+        return 50.0
     assert 0.0 <= risk_score <= 100.0, f"Expected risk score in [0,100], got {risk_score}"
+    return risk_score
 
-    # Ghost student activation outreach takes ABSOLUTE priority
-    # These students need human intervention, not automated messaging
-    if features and features.get("requires_activation_outreach"):
-        ghost_type = features.get("ghost_info", {}).get("ghost_type", "unknown")
-        return {
-            "type": "activation_outreach",
-            "priority": "critical",
-            "ghost_type": ghost_type,
-            "channels": ["direct_call", "email", "admissions_escalation"],
-            "action_items": [
-                "Call student directly — do not send automated message",
-                "Verify student received welcome email and login credentials",
-                "Check if student has a platform access or technical issue",
-                "If no response within 48 hours, escalate to admissions team",
-                "Log outcome in intervention tracker",
-            ] if ghost_type == "never_logged_in" else [
-                "Student has logged in but never accessed course content",
-                "Send personalised onboarding walkthrough link",
-                "Schedule a 15-minute orientation call with student support team",
-                "Check if student is aware of how to navigate the LMS",
-            ],
-            "suppress_automated_messages": True,
-        }
 
-    # Academic flags routing (exam-based high-signal indicators)
-    flags = features.get("academic_flags", {}) if features else {}
+def _handle_ghost_outreach(features: Dict[str, Any]) -> Optional[Dict[str, Any]]:
+    """Handle ghost student activation outreach if needed."""
+    if not features or not features.get("requires_activation_outreach"):
+        return None
+    ghost_type = features.get("ghost_info", {}).get("ghost_type", "unknown")
+    action_items = (
+        [
+            "Call student directly — do not send automated message",
+            "Verify student received welcome email and login credentials",
+            "Check if student has a platform access or technical issue",
+            "If no response within 48 hours, escalate to admissions team",
+            "Log outcome in intervention tracker",
+        ]
+        if ghost_type == "never_logged_in"
+        else [
+            "Student has logged in but never accessed course content",
+            "Send personalised onboarding walkthrough link",
+            "Schedule a 15-minute orientation call with student support team",
+            "Check if student is aware of how to navigate the LMS",
+        ]
+    )
+    return {
+        "type": "activation_outreach",
+        "priority": "critical",
+        "ghost_type": ghost_type,
+        "channels": ["direct_call", "email", "admissions_escalation"],
+        "action_items": action_items,
+        "suppress_automated_messages": True,
+    }
 
-    if features and features.get("suppress_intervention"):
-        # Student formally deferred — enrolled in next trimester
+
+def _handle_academic_flags(features: Dict[str, Any]) -> Optional[Dict[str, Any]]:
+    """Handle academic flags like dropout intent, UFM, health referrals."""
+    if not features:
+        return None
+
+    if features.get("suppress_intervention"):
         return {"type": "none", "reason": "Student formally deferred — enrolled in next trimester"}
+
+    flags = features.get("academic_flags", {})
 
     if flags.get("dropout_intent"):
         return {
@@ -113,7 +108,7 @@ def get_intervention_recommendation(
             ],
         }
 
-    if features and features.get("health_referral_needed"):
+    if features.get("health_referral_needed"):
         return {
             "type": "welfare_referral",
             "priority": "medium",
@@ -124,8 +119,13 @@ def get_intervention_recommendation(
                 "Offer assignment extension or medical leave if appropriate",
             ],
         }
+    return None
 
-    # Pattern-specific interventions take priority over generic threshold logic
+
+def _get_pattern_intervention(
+    engagement_pattern: str, risk_score: float
+) -> Optional[Dict[str, Any]]:
+    """Get intervention based on engagement pattern."""
     if engagement_pattern == "struggling":
         return {
             "type": "academic_support",
@@ -155,21 +155,30 @@ def get_intervention_recommendation(
             "message_tone": "warm",
             "suppress_sales_contact": False,
         }
+    return None
 
+
+def _get_threshold_intervention(risk_score: float) -> Dict[str, Any]:
+    """Get intervention based on risk score thresholds."""
     if risk_score < THRESHOLD_NO_ACTION:
         return {
+            "type": "no_action",
             "action_type": "no_action",
             "threshold_category": "low_risk",
             "channels": [],
             "assigned_team": "none",
             "message_template": None,
             "urgency": "none",
-            "description": "Student is on track, no intervention needed",
+            "description": (
+                "Student is on track, no intervention needed. "
+                "Continue to monitor engagement and risk score."
+            ),
             "threshold_used": THRESHOLD_NO_ACTION,
         }
 
-    elif risk_score < THRESHOLD_GENTLE:
+    if risk_score < THRESHOLD_GENTLE:
         return {
+            "type": "gentle_reminder",
             "action_type": "gentle_reminder",
             "threshold_category": "gentle_reminder",
             "channels": ["email"],
@@ -180,8 +189,9 @@ def get_intervention_recommendation(
             "threshold_used": THRESHOLD_GENTLE,
         }
 
-    elif risk_score < THRESHOLD_MENTOR:
+    if risk_score < THRESHOLD_MENTOR:
         return {
+            "type": "mentor_outreach",
             "action_type": "mentor_outreach",
             "threshold_category": "mentor_outreach",
             "channels": ["email", "mentor_call"],
@@ -192,8 +202,9 @@ def get_intervention_recommendation(
             "threshold_used": THRESHOLD_MENTOR,
         }
 
-    elif risk_score < THRESHOLD_URGENT:
+    if risk_score < THRESHOLD_URGENT:
         return {
+            "type": "mentor_outreach",
             "action_type": "mentor_outreach",
             "threshold_category": "mentor_outreach_escalated",
             "channels": ["email", "mentor_call"],
@@ -207,17 +218,51 @@ def get_intervention_recommendation(
             "threshold_used": THRESHOLD_URGENT,
         }
 
-    else:
-        return {
-            "action_type": "urgent_intervention",
-            "threshold_category": "urgent_intervention",
-            "channels": ["sales_call", "whatsapp", "incentive_offer"],
-            "assigned_team": "sales",
-            "message_template": "urgent_intervention_package",
-            "urgency": "high",
-            "description": "Immediate escalation to sales team with multi-channel outreach and incentive offer",
-            "threshold_used": THRESHOLD_URGENT,
-        }
+    return {
+        "type": "urgent_intervention",
+        "action_type": "urgent_intervention",
+        "threshold_category": "urgent_intervention",
+        "channels": ["sales_call", "whatsapp", "incentive_offer"],
+        "assigned_team": "sales",
+        "message_template": "urgent_intervention_package",
+        "urgency": "high",
+        "description": "Immediate escalation to sales team with multi-channel outreach and incentive offer",
+        "threshold_used": THRESHOLD_URGENT,
+    }
+
+
+def get_intervention_recommendation(
+    risk_score: float,
+    engagement_pattern: str = None,
+    features: Dict[str, Any] = None,
+) -> Dict[str, Any]:
+    """
+    Apply decision thresholds and return recommended intervention.
+
+    Args:
+        risk_score: Risk score on the 0–100 scale (same scale as config thresholds).
+        engagement_pattern: Optional engagement pattern classification ("disengaged",
+            "struggling", "at_risk_normal", "on_track") to enable tailored interventions.
+        features: Optional features dictionary for ghost detection and other
+            feature-based routing decisions.
+
+    Returns:
+        Dictionary with intervention details
+    """
+    risk_score = _validate_risk_score(risk_score)
+    features = features or {}
+
+    # Check interventions in priority order
+    if result := _handle_ghost_outreach(features):
+        return result
+
+    if result := _handle_academic_flags(features):
+        return result
+
+    if result := _get_pattern_intervention(engagement_pattern, risk_score):
+        return result
+
+    return _get_threshold_intervention(risk_score)
 
 
 def should_trigger_intervention(
@@ -277,7 +322,7 @@ Your Learning Support Team
         "mentor_outreach_email": f"""
 Dear {student_name},
 
-We've noticed some changes in your engagement and would like to offer you additional support. 
+We've noticed some changes in your engagement and would like to offer you additional support.
 
 A dedicated mentor from our faculty team will be reaching out to you shortly to discuss how we can help you succeed in your courses.
 

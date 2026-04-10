@@ -126,7 +126,8 @@ class StudentRepository:
         rows = db.query(GradedComponent).filter(GradedComponent.student_id.in_(student_ids)).all()
         out: Dict[str, List[Dict]] = {sid: [] for sid in student_ids}
         for g in rows:
-            out.setdefault(g.student_id, []).append(
+            sid = g.student_id or ""
+            out.setdefault(sid, []).append(
                 {
                     "component_type": g.component_type,
                     "component_number": g.component_number,
@@ -153,7 +154,8 @@ class StudentRepository:
         )
         out: Dict[str, List[Dict]] = {sid: [] for sid in student_ids}
         for e in rows:
-            out.setdefault(e.student_id, []).append(
+            sid = e.student_id or ""
+            out.setdefault(sid, []).append(
                 {
                     "course_code": e.course_code,
                     "course_name": e.course_name,

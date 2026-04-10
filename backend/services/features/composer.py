@@ -166,17 +166,17 @@ class FeatureEngineer:
         # This is a stub - implement based on your actual data access pattern
         # Example: return EnrollmentService.get_student_enrollments(db, student_id)
         from backend.services.student_service import StudentService
-        return StudentService.get_enrollments_for_student(db, student_id)
+        return StudentService._get_enrollment_dicts(db, student_id)
 
     def _fetch_graded_components(self, student_id: str, db: Session) -> List[Dict]:
         """Fetch graded quiz/assignment records for a student."""
         from backend.services.student_service import StudentService
-        return StudentService.get_graded_components_for_student(db, student_id)
+        return StudentService._get_graded_components(db, student_id)
 
     def _fetch_exam_records(self, student_id: str, db: Session) -> List[Dict]:
         """Fetch exam records for a student."""
         from backend.services.student_service import StudentService
-        return StudentService.get_exam_records_for_student(db, student_id)
+        return StudentService._get_exam_records(db, student_id)
 
     # =========================================================================
     # Static methods for backward compatibility

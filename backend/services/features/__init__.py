@@ -5,7 +5,7 @@ Modular feature extraction system organized by domain.
 
 Usage:
     from backend.services.features import FeatureEngineer
-    
+
     engineer = FeatureEngineer(registry_lookup=optional_func)
     features = engineer.get_features(student_id, db)
 

@@ -15,7 +15,7 @@ class GoalsService:
             student_id=student_id,
             type=goal_type,
             title=title,
-            target_value=target_value,
+            target_value=target_value,  # type: ignore[arg-type]
             end_date=end_date,
             status="active"
         )
@@ -44,17 +44,21 @@ class GoalsService:
         for goal in active_goals:
             # Update progress based on type
             if goal.type == "login":
-                goal.current_value = float(sum(int(e.num_logins or 0) for e in enrollments))  # type: ignore[assignment, arg-type]
+                goal.current_value = float(  # type: ignore[assignment]
+                    sum(int(e.num_logins or 0) for e in enrollments)  # type: ignore[arg-type]
+                )
             elif goal.type == "assignment":
-                goal.current_value = float(sum(int(e.num_assignment_submissions or 0) for e in enrollments))  # type: ignore[assignment, arg-type]
+                goal.current_value = float(  # type: ignore[assignment]
+                    sum(int(e.num_assignment_submissions or 0) for e in enrollments)  # type: ignore[arg-type]
+                )
             elif goal.type == "attendance":
                 # logic for attendance percentage...
                 pass
 
             # Check if goal reached
-            if goal.current_value >= goal.target_value:
+            if goal.current_value >= goal.target_value:  # type: ignore[operator]
                 goal.status = "completed"  # type: ignore[assignment]
-            elif goal.end_date < datetime.utcnow():
+            elif goal.end_date and goal.end_date < datetime.utcnow():
                 goal.status = "failed"  # type: ignore[assignment]
 
             db.add(goal)

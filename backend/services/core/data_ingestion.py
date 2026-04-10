@@ -497,8 +497,15 @@ async def _ingest_engagement_data(db: Session, files: dict, owner_thread_id: int
             logger.warning("No valid engagement rows", extra={"file": path.name})
         else:
             stats.files_processed.append({"name": path.name, "rows": valid_rows})
-            logger.info("Engagement data processed", extra={
-                        "file": path.name, "valid_rows": valid_rows, "students_created": stats.students_created, "students_updated": stats.students_updated})
+            logger.info(
+                "Engagement data processed",
+                extra={
+                    "file": path.name,
+                    "valid_rows": valid_rows,
+                    "students_created": stats.students_created,
+                    "students_updated": stats.students_updated,
+                },
+            )
 
         _merge_course_content_sheet(db, wb)
         db.flush()

@@ -191,7 +191,9 @@ def print_evaluation_report(metrics: Dict[str, Any], df: pd.DataFrame, threshold
     print("                 Predicted")
     print("                 Not Risk    Risk")
     print(
-        f"Actual Not Risk    {cm['true_negatives']:4d}      {cm['false_positives']:4d}   (specificity: {metrics['specificity']:.3f})")
+        f"Actual Not Risk    {cm['true_negatives']:4d}      {cm['false_positives']:4d}"
+        f"   (specificity: {metrics['specificity']:.3f})"
+    )
     print(f"Actual At Risk     {cm['false_negatives']:4d}      {cm['true_positives']:4d}   (recall: {metrics['recall']:.3f})")
 
     print("\n--- Outcome Breakdown ---")

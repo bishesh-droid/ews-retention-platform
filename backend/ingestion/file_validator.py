@@ -226,7 +226,11 @@ class FileValidator:
                         status=ValidationStatus.REJECTED,
                         file_path=file_path,
                         messages=[
-                            f"ERROR: Inconsistent column counts. Expected {expected_cols}, found variance in {len(inconsistent_rows)} rows"],
+                            (
+                                f"ERROR: Inconsistent column counts. Expected {expected_cols}, "
+                                f"found variance in {len(inconsistent_rows)} rows"
+                            ),
+                        ],
                         metadata=metadata
                     )
 

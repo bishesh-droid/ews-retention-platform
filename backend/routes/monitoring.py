@@ -43,7 +43,9 @@ async def health_check(db: Session = Depends(get_db)):
         health["last_ingestion"] = "never"
         health["ingestion_status"] = "warning"
     else:
-        age_hours = (datetime.now(timezone.utc) - latest_run.run_at.replace(tzinfo=timezone.utc)).total_seconds() / 3600  # type: ignore[union-attr]
+        age_hours = (
+            datetime.now(timezone.utc) - latest_run.run_at.replace(tzinfo=timezone.utc)  # type: ignore[union-attr]
+        ).total_seconds() / 3600
         health["last_ingestion_hours_ago"] = round(age_hours, 1)
         health["last_ingestion_status"] = latest_run.status or ""
         if latest_run.status != "success" or age_hours > 48:

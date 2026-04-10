@@ -117,7 +117,11 @@ class AnalyticsService:
             RiskSnapshot.student_id, RiskSnapshot.timestamp.desc()
         ).distinct(RiskSnapshot.student_id).all()
 
-        sorted_snapshots = sorted(latest_snapshots, key=lambda x: float(x.velocity or 0), reverse=True)  # type: ignore[arg-type]
+        sorted_snapshots = sorted(
+            latest_snapshots,
+            key=lambda x: float(x.velocity or 0),  # type: ignore[arg-type]
+            reverse=True,
+        )
         return sorted_snapshots[:limit]
 
     @staticmethod

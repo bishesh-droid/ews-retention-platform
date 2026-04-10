@@ -293,7 +293,9 @@ class LLMOrchestrator:
                 "error": student_context.get("error", "Student context unavailable")
             }
 
-        system_message_profile_summary = f"You are an AI assistant helping {for_role} quickly understand a student's situation."
+        system_message_profile_summary = (
+            f"You are an AI assistant helping {for_role} quickly understand a student's situation."
+        )
         user_message_profile_summary = self._build_faculty_summary_prompt(student_context, for_role)
 
         try:
@@ -342,7 +344,9 @@ class LLMOrchestrator:
                 "error": student_context.get("error", "Student context unavailable")
             }
 
-        system_message_interventions = "You are an intervention specialist suggesting evidence-based actions for at-risk students."
+        system_message_interventions = (
+            "You are an intervention specialist suggesting evidence-based actions for at-risk students."
+        )
         user_message_interventions = self._build_intervention_prompt(student_context)
 
         try:
@@ -408,7 +412,9 @@ class LLMOrchestrator:
                 "error": cohort_context.get("error", "Cohort context unavailable")
             }
 
-        system_message_cohort_analysis = "You are a retention analyst translating academic risk into business insights for sales/retention teams."
+        system_message_cohort_analysis = (
+            "You are a retention analyst translating academic risk into business insights for sales/retention teams."
+        )
         user_message_cohort_analysis = self._build_cohort_analysis_prompt(cohort_context)
 
         try:

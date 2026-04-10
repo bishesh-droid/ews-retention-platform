@@ -5,7 +5,7 @@ Provides functions for logging data access for FERPA compliance.
 
 Usage:
     from backend.core.audit_logger import log_data_access
-    
+
     log_data_access(
         db=db_session,
         user=current_user,

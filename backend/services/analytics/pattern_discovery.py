@@ -64,9 +64,10 @@ class PatternDiscoveryEngine:
         attendance_risk_correlation = []
 
         for student in students:
-            if student.absrate7 is not None and student.predictions:
+            absrate7 = getattr(student, 'absrate7', None)
+            if absrate7 is not None and student.predictions:
                 # Convert absence rate to attendance
-                attendance = (1 - student.absrate7) * 100
+                attendance = (1 - absrate7) * 100  # type: ignore[attr-defined]
                 risk = student.predictions[0].risk_score
                 attendance_risk_correlation.append((attendance, risk))
 
@@ -86,7 +87,10 @@ class PatternDiscoveryEngine:
                 return {
                     "type": "attendance_policy_impact",
                     "title": "Attendance Strongly Correlates with Risk",
-                    "description": f"Students with <75% attendance have {risk_diff:.0f} points higher risk on average. This suggests attendance policy may be a critical retention lever.",
+                    "description": (
+                        f"Students with <75% attendance have {risk_diff:.0f} points higher risk on average. "
+                        f"This suggests attendance policy may be a critical retention lever."
+                    ),
                     "evidence": {
                         "low_attendance_avg_risk": round(avg_low, 1),
                         "high_attendance_avg_risk": round(avg_high, 1),
@@ -94,7 +98,10 @@ class PatternDiscoveryEngine:
                         "sample_size": len(attendance_risk_correlation)
                     },
                     "confidence": "high" if len(attendance_risk_correlation) > 20 else "medium",
-                    "suggested_action": "Consider flexible attendance policies or early intervention for students below 75% attendance."
+                    "suggested_action": (
+                        "Consider flexible attendance policies or early intervention "
+                        "for students below 75% attendance."
+                    ),
                 }
 
         return None
@@ -105,8 +112,10 @@ class PatternDiscoveryEngine:
 
         for student in students:
             # Compare Q1 to Q4 of most recent quarter
-            if student.q1mpa7 is not None and student.q4mpa7 is not None:
-                improvement = student.q4mpa7 - student.q1mpa7
+            q1mpa7 = getattr(student, 'q1mpa7', None)
+            q4mpa7 = getattr(student, 'q4mpa7', None)
+            if q1mpa7 is not None and q4mpa7 is not None:
+                improvement = q4mpa7 - q1mpa7  # type: ignore[attr-defined]
                 risk = student.predictions[0].risk_score if student.predictions else None
                 if risk is not None:
                     gpa_trends.append((improvement, risk))
@@ -126,7 +135,11 @@ class PatternDiscoveryEngine:
                 return {
                     "type": "gpa_trend_impact",
                     "title": "GPA Trends Predict Risk Better Than Absolute GPA",
-                    "description": f"Students with declining GPA (Q1→Q4) have {avg_risk_declined - avg_risk_improved:.0f} points higher risk than improving students, regardless of starting GPA.",
+                    "description": (
+                        f"Students with declining GPA (Q1→Q4) have "
+                        f"{avg_risk_declined - avg_risk_improved:.0f} points higher risk than improving students, "
+                        f"regardless of starting GPA."
+                    ),
                     "evidence": {
                         "improved_students_avg_risk": round(avg_risk_improved, 1),
                         "declined_students_avg_risk": round(avg_risk_declined, 1),
@@ -134,7 +147,10 @@ class PatternDiscoveryEngine:
                         "declined_count": len(declined_students)
                     },
                     "confidence": "medium",
-                    "suggested_action": "Monitor GPA trends (not just absolute values) and intervene on declining students early."
+                    "suggested_action": (
+                        "Monitor GPA trends (not just absolute values) and "
+                        "intervene on declining students early."
+                    ),
                 }
 
         return None
@@ -153,14 +169,20 @@ class PatternDiscoveryEngine:
             return {
                 "type": "intervention_gap",
                 "title": "High-Risk Students Not Receiving Interventions",
-                "description": f"{gap_percentage:.0f}% of high-risk students (70%+ risk) have received zero interventions. This represents a coverage gap.",
+                "description": (
+                    f"{gap_percentage:.0f}% of high-risk students (70%+ risk) have received zero interventions. "
+                    f"This represents a coverage gap."
+                ),
                 "evidence": {
                     "high_risk_count": len(high_risk_students),
                     "without_intervention_count": len(students_without_interventions),
                     "gap_percentage": round(gap_percentage, 1)
                 },
                 "confidence": "high",
-                "suggested_action": f"Prioritize outreach to {len(students_without_interventions)} high-risk students with no intervention history."
+                "suggested_action": (
+                    f"Prioritize outreach to {len(students_without_interventions)} high-risk students "
+                    f"with no intervention history."
+                ),
             }
 
         return None
@@ -180,7 +202,10 @@ class PatternDiscoveryEngine:
             return {
                 "type": "risk_clustering",
                 "title": "High Concentration of Critical-Risk Students",
-                "description": f"{critical_pct:.0f}% of students are in critical risk zone (>80%). This suggests systemic challenges beyond individual issues.",
+                "description": (
+                    f"{critical_pct:.0f}% of students are in critical risk zone (>80%). "
+                    f"This suggests systemic challenges beyond individual issues."
+                ),
                 "evidence": {
                     "critical_risk_count": critical_risk,
                     "total_students": total_students,
@@ -188,7 +213,10 @@ class PatternDiscoveryEngine:
                     "average_risk": round(statistics.mean(risk_scores), 1)
                 },
                 "confidence": "high",
-                "suggested_action": "Investigate institution-wide factors (curriculum difficulty, support resources, scheduling) affecting large cohorts."
+                "suggested_action": (
+                    "Investigate institution-wide factors (curriculum difficulty, "
+                    "support resources, scheduling) affecting large cohorts."
+                ),
             }
 
         return None
@@ -223,17 +251,22 @@ class PatternDiscoveryEngine:
         late_strong = []
 
         for student in students:
-            if student.q1mpa7 is not None and student.q4mpa7 is not None:
-                if student.q1mpa7 > student.q4mpa7:
+            q1mpa7 = getattr(student, 'q1mpa7', None)
+            q4mpa7 = getattr(student, 'q4mpa7', None)
+            if q1mpa7 is not None and q4mpa7 is not None:
+                if q1mpa7 > q4mpa7:  # type: ignore[attr-defined]
                     early_strong.append(student)
-                elif student.q4mpa7 > student.q1mpa7:
+                elif q4mpa7 > q1mpa7:  # type: ignore[attr-defined]
                     late_strong.append(student)
 
         if len(early_strong) > len(late_strong) * 1.5:  # 50% more early-strong students
             return {
                 "type": "performance_timing",
                 "title": "Students Struggle More in Later Quarters",
-                "description": f"{len(early_strong)} students perform better Q1 than Q4, vs {len(late_strong)} improving. This suggests curriculum difficulty increases or fatigue sets in.",
+                "description": (
+                    f"{len(early_strong)} students perform better Q1 than Q4, vs {len(late_strong)} improving. "
+                    f"This suggests curriculum difficulty increases or fatigue sets in."
+                ),
                 "evidence": {
                     "early_strong_count": len(early_strong),
                     "late_strong_count": len(late_strong)
@@ -246,8 +279,8 @@ class PatternDiscoveryEngine:
 
     def _analyze_suspension_impact(self, students: List[Student]) -> Optional[Dict]:
         """Check if suspensions correlate with risk."""
-        students_with_suspensions = [s for s in students if s.nsusp7 and s.nsusp7 > 0]
-        students_without_suspensions = [s for s in students if not s.nsusp7 or s.nsusp7 == 0]
+        students_with_suspensions = [s for s in students if getattr(s, 'nsusp7', None) and getattr(s, 'nsusp7', 0) > 0]
+        students_without_suspensions = [s for s in students if not getattr(s, 'nsusp7', None) or getattr(s, 'nsusp7', 0) == 0]
 
         if len(students_with_suspensions) < 3 or len(students_without_suspensions) < 3:
             return None
@@ -262,7 +295,10 @@ class PatternDiscoveryEngine:
             return {
                 "type": "suspension_correlation",
                 "title": "Suspensions Highly Correlate with Dropout Risk",
-                "description": f"Students with any suspension history have {risk_diff:.0f} points higher average risk. Suspension may be both symptom and cause of disengagement.",
+                "description": (
+                    f"Students with any suspension history have {risk_diff:.0f} points higher average risk. "
+                    f"Suspension may be both symptom and cause of disengagement."
+                ),
                 "evidence": {
                     "with_suspension_avg_risk": round(avg_risk_with_susp, 1),
                     "without_suspension_avg_risk": round(avg_risk_without_susp, 1),

@@ -77,7 +77,12 @@ class StudentService:
         )
 
     @staticmethod
-    def get_student_count_filtered(db: Session, risk_min: Optional[float] = None, risk_max: Optional[float] = None, current_user=None) -> int:
+    def get_student_count_filtered(
+        db: Session,
+        risk_min: Optional[float] = None,
+        risk_max: Optional[float] = None,
+        current_user=None,
+    ) -> int:
         return StudentApplicationService.get_student_count_filtered(
             db, risk_min=risk_min, risk_max=risk_max, current_user=current_user
         )

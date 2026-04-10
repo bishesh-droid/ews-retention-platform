@@ -183,7 +183,7 @@ def generate_daily_predictions() -> None:
                     engagement_score = max(0.0, min(1.0, engagement_score_0_100 / 100.0))
 
                     db.add(
-                        Prediction(
+                        Prediction(  # type: ignore[arg-type]
                             student_id=student.id,
                             risk_score=risk_score / 100.0,
                             engagement_score=engagement_score,
@@ -415,7 +415,8 @@ class SchedulerService:
         )
         self._started = True
         logger.info(
-            "[SCHEDULER] Started. Daily job: 03:00 UTC. Weekly job: Sunday 04:00 UTC. Monthly purge: 1st at 02:00 UTC. Daily backup: 03:00 UTC."
+            "[SCHEDULER] Started. Daily job: 03:00 UTC. Weekly job: Sunday 04:00 UTC. "
+            "Monthly purge: 1st at 02:00 UTC. Daily backup: 03:00 UTC."
         )
 
         # Ensure predictions are generated in environments where the app may restart

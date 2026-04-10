@@ -106,7 +106,8 @@ async def trigger_ingestion(
                 f.write(content)
             saved_file_path = str(dest)
             logger.info(
-                f"File saved: {unique_filename} ({len(content)} bytes) from upload: {file.filename!r} by {current_user.username}"
+                f"File saved: {unique_filename} ({len(content)} bytes) "
+                f"from upload: {file.filename!r} by {current_user.username}"
             )
         except Exception:
             logger.exception(f"File upload failed for {file.filename!r}", extra={"filename": file.filename})

@@ -40,7 +40,10 @@ class InterventionIntelligence:
             recommendations.append({
                 "intervention_type": "Academic Coaching",
                 "priority": "high",
-                "reasoning": f"Student's GPA ({student.predictions[0].grades:.2f}) is below 2.5, indicating academic difficulty.",
+                "reasoning": (
+                    f"Student's GPA ({student.predictions[0].grades:.2f}) is below 2.5, "
+                    f"indicating academic difficulty."
+                ),
                 "success_probability": 0.75,
                 "evidence": "Similar students improved risk by avg 18 points after coaching",
                 "estimated_impact": "15-20 point risk reduction",
@@ -60,11 +63,14 @@ class InterventionIntelligence:
             })
 
         # Recommendation 3: Counseling (for high risk with interventions already)
-        if risk_score > 70 and len(student.interventions) > 0:
+        if risk_score > 70 and student.interventions and len(list(student.interventions)) > 0:  # type: ignore[arg-type]
             recommendations.append({
                 "intervention_type": "Intensive Counseling",
                 "priority": "high",
-                "reasoning": f"Risk remains high ({risk_score:.0f}%) despite {len(student.interventions)} previous interventions.",
+                "reasoning": (
+                    f"Risk remains high ({risk_score:.0f}%) despite "
+                    f"{len(list(student.interventions))} previous interventions."  # type: ignore[arg-type]
+                ),
                 "success_probability": 0.50,
                 "evidence": "Multi-intervention students need deeper support beyond academics",
                 "estimated_impact": "Holistic approach, variable impact",
@@ -84,8 +90,8 @@ class InterventionIntelligence:
             })
 
         # Sort by priority and success probability
-        priority_order = {"critical": 0, "high": 1, "medium": 2, "low": 3}
-        recommendations.sort(key=lambda x: (priority_order[x["priority"]], -x["success_probability"]))
+        priority_order: Dict[str, int] = {"critical": 0, "high": 1, "medium": 2, "low": 3}
+        recommendations.sort(key=lambda x: (priority_order.get(x["priority"], 3), -x["success_probability"]))
 
         return recommendations[:3]  # Top 3 recommendations
 
@@ -109,13 +115,13 @@ class InterventionIntelligence:
         # Count intervention types
         intervention_types: Dict[str, Any] = {}
         for student in students_with_interventions:
-            for intervention in student.interventions:
-                action = intervention.action
-                if action not in intervention_types:
+            for intervention in student.interventions:  # type: ignore[attr-defined]
+                action = getattr(intervention, 'action', None)
+                if action and action not in intervention_types:
                     intervention_types[action] = {"count": 0, "students": []}
                 intervention_types[action]["count"] += 1
-                if student.id not in intervention_types[action]["students"]:
-                    intervention_types[action]["students"].append(student.id)
+                if student.id not in intervention_types[str(action)]["students"]:  # type: ignore[index]
+                    intervention_types[str(action)]["students"].append(student.id)  # type: ignore[index]
 
         total_interventions = sum(data["count"] for data in intervention_types.values())
         coverage = len(students_with_interventions) / len(all_students) * 100 if all_students else 0
@@ -125,7 +131,10 @@ class InterventionIntelligence:
             "unique_students_reached": len(students_with_interventions),
             "coverage_percentage": round(coverage, 1),
             "intervention_types": {k: v["count"] for k, v in intervention_types.items()},
-            "avg_interventions_per_student": round(total_interventions / len(students_with_interventions), 1) if students_with_interventions else 0
+            "avg_interventions_per_student": (
+                round(total_interventions / len(students_with_interventions), 1)
+                if students_with_interventions else 0
+            )
         }
 
     def find_similar_students(self, student_id: str, limit: int = 5) -> List[Dict[str, Any]]:
@@ -170,10 +179,10 @@ class InterventionIntelligence:
                     "attendance": round(student.predictions[0].attendance, 1),
                     "grades": round(student.predictions[0].grades, 2),
                     "similarity_score": round(similarity_score, 1),
-                    "interventions_received": len(student.interventions),
+                    "interventions_received": len(list(student.interventions)),  # type: ignore[arg-type]
                     "intervention_details": [
-                        {"action": i.action, "date": str(i.date)}
-                        for i in student.interventions[-3:]  # Last 3
+                        {"action": getattr(i, 'action', None), "date": str(getattr(i, 'date', None))}
+                        for i in list(student.interventions)[-3:]  # type: ignore[attr-defined]
                     ]
                 })
 
@@ -199,7 +208,7 @@ class InterventionIntelligence:
 
         for student in students_with_predictions:
             risk = student.predictions[0].risk_score
-            intervention_count = len(student.interventions)
+            intervention_count = len(list(student.interventions)) if student.interventions else 0  # type: ignore[arg-type]
 
             # Urgency score: high risk + few/no interventions = urgent
             urgency_score = risk - (intervention_count * 5)  # Reduce urgency if already intervened
@@ -236,10 +245,10 @@ class InterventionIntelligence:
         elif intervention_count > 2:
             reasons.append(f"{intervention_count} interventions with limited improvement")
 
-        if prediction.attendance < 70:
+        if prediction.attendance is not None and prediction.attendance < 70:
             reasons.append("very low attendance")
 
-        if prediction.grades < 2.0:
+        if prediction.grades is not None and prediction.grades < 2.0:
             reasons.append("failing grades")
 
         return "; ".join(reasons) if reasons else "moderate priority"

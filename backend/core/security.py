@@ -76,12 +76,88 @@ class SecurityManager:
             text,
             tags=[],  # No HTML tags allowed
             attributes={},  # No attributes allowed
-            styles=[],  # No CSS styles allowed
             protocols=[],  # No URL protocols allowed
             strip=True  # Strip disallowed tags instead of escaping
         )
 
         return sanitized
+
+    @staticmethod
+    def _decode_url_encoding(text: str) -> str:
+        """Decode URL percent-encoded strings if they contain suspicious content."""
+        url_encoded_pattern = re.compile(r'%[0-9a-fA-F]{2}')
+        if not url_encoded_pattern.search(text):
+            return text
+        try:
+            import urllib.parse
+            decoded = urllib.parse.unquote(text)
+            if '<' in decoded or 'script' in decoded.lower():
+                return decoded
+        except Exception:
+            pass
+        return text
+
+    @staticmethod
+    def _decode_unicode_escapes(text: str) -> str:
+        """Decode Unicode escape sequences (\uXXXX and \xXX)."""
+        unicode_escape_pattern = re.compile(chr(92) + 'u[0-9a-fA-F]{4}|' + chr(92) + 'x[0-9a-fA-F]{2}')
+        if not unicode_escape_pattern.search(text):
+            return text
+        try:
+            return text.encode('utf-8').decode('unicode_escape')
+        except (UnicodeDecodeError, UnicodeEncodeError):
+            return text
+
+    @staticmethod
+    def _strip_null_bytes(text: str) -> str:
+        """Remove null bytes in various encodings."""
+        text = text.replace('\x00', '').replace('\u0000', '')
+        return re.sub(r'%00|\\x00|\\u0000', '', text, flags=re.IGNORECASE)
+
+    @staticmethod
+    def _normalize_newlines(text: str) -> str:
+        """Normalize newlines and limit consecutive ones."""
+        text = text.replace('\r\n', '\n').replace('\r', '\n')
+        return re.sub(r'\n{4,}', '\n\n\n', text)
+
+    @staticmethod
+    def _apply_bleach_sanitization(text: str) -> str:
+        """Apply bleach HTML sanitization."""
+        return bleach.clean(
+            text,
+            tags=[],  # No HTML tags allowed
+            attributes={},  # No attributes allowed
+            protocols=[],  # No URL protocols allowed
+            strip=True  # Strip disallowed tags instead of escaping
+        )
+
+    @staticmethod
+    def _remove_control_chars(text: str) -> str:
+        """Remove control characters except normal whitespace."""
+        return ''.join(
+            char for char in text
+            if char == '\n' or char == '\t' or (ord(char) >= 32 and ord(char) <= 126) or ord(char) > 127
+        )
+
+    @staticmethod
+    def _check_double_encoding(original: str, text: str) -> str:
+        """Check for and handle double-encoding attempts."""
+        url_encoded_pattern = re.compile(r'%[0-9a-fA-F]{2}')
+        if '%25' not in original or not url_encoded_pattern.search(text):
+            return text
+        try:
+            import urllib.parse
+            return urllib.parse.unquote(text)
+        except Exception:
+            return text
+
+    @staticmethod
+    def _truncate_text(text: str, max_length: Optional[int]) -> str:
+        """Truncate text to safe maximum length."""
+        max_len = max_length or SecurityManager.LLM_MAX_FREE_TEXT_LENGTH
+        if len(text) <= max_len:
+            return text
+        return text[:max_len].rsplit(' ', 1)[0] + '...'
 
     @staticmethod
     def llm_sanitize(text: str, max_length: Optional[int] = None) -> str:
@@ -114,83 +190,27 @@ class SecurityManager:
 
         original_for_detection = text
 
-        # Step 1: Detect and handle URL encoding attempts
-        # Check for percent-encoded strings (common bypass technique)
-        url_encoded_pattern = re.compile(r'%[0-9a-fA-F]{2}')
-        if url_encoded_pattern.search(text):
-            # Potential URL encoding attack - log and fully sanitize
-            try:
-                import urllib.parse
-                decoded = urllib.parse.unquote(text)
-                # If decoding reveals HTML/script tags, aggressively sanitize
-                if '<' in decoded or 'script' in decoded.lower():
-                    text = decoded
-            except Exception:
-                pass  # Continue with original text if decoding fails
+        # Apply sanitization steps
+        text = SecurityManager._decode_url_encoding(text)
+        text = SecurityManager._decode_unicode_escapes(text)
 
-        # Step 2: Handle Unicode escape sequences (\u003c, \x3c, etc.)
-        # These are common encoding bypass techniques
-        unicode_escape_pattern = re.compile(r'\\u[0-9a-fA-F]{4}|\\x[0-9a-fA-F]{2}')
-        if unicode_escape_pattern.search(text):
-            try:
-                # Decode unicode escapes (both \uXXXX and \xXX formats)
-                decoded = text.encode('utf-8').decode('unicode_escape')
-                text = decoded
-            except (UnicodeDecodeError, UnicodeEncodeError):
-                pass  # Continue with original if decoding fails
-
-        # Step 3: Decode HTML entities (&lt;, &gt;, &#60;, &#x3C;)
         import html
         text = html.unescape(text)
 
-        # Step 4: Strip null bytes (various encodings: %00, \x00, \u0000)
-        text = text.replace('\x00', '').replace('\u0000', '')
-        # Also remove common null byte representations
-        text = re.sub(r'%00|\\x00|\\u0000', '', text, flags=re.IGNORECASE)
+        text = SecurityManager._strip_null_bytes(text)
+        text = SecurityManager._normalize_newlines(text)
+        text = SecurityManager._apply_bleach_sanitization(text)
 
-        # Step 5: Normalize newlines to prevent injection sequences
-        text = text.replace('\r\n', '\n').replace('\r', '\n')
-        # Limit consecutive newlines to prevent delimiter injection
-        text = re.sub(r'\n{4,}', '\n\n\n', text)
-
-        # Step 6: Apply bleach HTML sanitization
-        text = bleach.clean(
-            text,
-            tags=[],  # No HTML tags allowed
-            attributes={},  # No attributes allowed
-            styles=[],  # No CSS styles allowed
-            protocols=[],  # No URL protocols allowed
-            strip=True  # Strip disallowed tags instead of escaping
-        )
-
-        # Step 7: Remove prompt injection patterns
+        # Remove prompt injection patterns
         text = SecurityManager._INJECTION_REGEX.sub('[REDACTED]', text)
 
-        # Step 8: Remove control characters except normal whitespace
-        # Allow: space, tab, newline (already normalized), printable ASCII, extended Unicode
-        text = ''.join(
-            char for char in text
-            if char == '\n' or char == '\t' or (ord(char) >= 32 and ord(char) <= 126) or ord(char) > 127
-        )
+        text = SecurityManager._remove_control_chars(text)
+        text = SecurityManager._check_double_encoding(original_for_detection, text)
+        text = SecurityManager._truncate_text(text, max_length)
 
-        # Step 9: Check for double-encoding attempts (e.g., %253C which is % encoded %3C)
-        # If we still see percent signs after previous decoding, it might be double-encoded
-        if '%25' in original_for_detection and url_encoded_pattern.search(text):
-            # Potential double encoding - apply one more round of unquoting
-            try:
-                import urllib.parse
-                text = urllib.parse.unquote(text)
-            except Exception:
-                pass
-
-        # Step 10: Truncate to safe maximum length
-        max_len = max_length or SecurityManager.LLM_MAX_FREE_TEXT_LENGTH
-        if len(text) > max_len:
-            text = text[:max_len].rsplit(' ', 1)[0] + '...'
-
-        # Step 11: Final cleanup
+        # Final cleanup
         text = text.strip()
-        text = re.sub(r'\s+', ' ', text)  # Normalize multiple spaces
+        text = re.sub(r'\s+', ' ', text)
 
         return text
 

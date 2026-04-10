@@ -21,7 +21,10 @@ from sqlalchemy import text
 from slowapi.errors import RateLimitExceeded
 from slowapi.middleware import SlowAPIMiddleware
 
-from backend.config import API_HOST, API_PORT, CORS_ORIGINS, REDIS_URL, ENVIRONMENT, validate_security_config, RATE_LIMIT_DEFAULT
+from backend.config import (
+    API_HOST, API_PORT, CORS_ORIGINS, REDIS_URL, ENVIRONMENT,
+    validate_security_config, RATE_LIMIT_DEFAULT,
+)
 from backend.core.rate_limiting import limiter, rate_limit_exceeded_handler
 from backend.core.errors import (
     http_exception_handler, validation_exception_handler, unhandled_exception_handler
@@ -280,7 +283,12 @@ async def app_error_handler(request: Request, exc: AppError):
     )
     return JSONResponse(
         status_code=exc.status_code,
-        content=std_error_response(exc.status_code, exc.message, str(exc.details) if exc.details else None, request_id),  # type: ignore[arg-type]
+        content=std_error_response(
+            exc.status_code,
+            exc.message,
+            str(exc.details) if exc.details else None,
+            request_id,
+        ),  # type: ignore[arg-type]
     )
 
 

@@ -147,7 +147,10 @@ def compute_engagement_signals(student_id: str, db: Session, lookback_days: int 
     avg_session_duration = 30.0  # Default 30 minutes
 
     # Video completion rate
-    video_events = [e for e in website_events if json.loads(str(e.event_data) if e.event_data else "{}").get("event_type") == "video_watch"]
+    video_events = [
+        e for e in website_events
+        if json.loads(str(e.event_data) if e.event_data else "{}").get("event_type") == "video_watch"
+    ]
     if video_events:
         completion_rates = []
         for event in video_events:
@@ -251,14 +254,15 @@ def compute_intent_signals(student_id: str, db: Session, lookback_days: int = 30
     days_inactive = 0
     if all_events:
         last_event = all_events[0]
-        days_inactive = (datetime.utcnow() - last_event.timestamp).days
+        if last_event.timestamp:
+            days_inactive = (datetime.utcnow() - last_event.timestamp).days  # type: ignore[operator]
     else:
         days_inactive = lookback_days
 
     # Engagement trend (compare first half vs second half of period)
     mid_date = cutoff_date + timedelta(days=lookback_days // 2)
-    first_half = [e for e in all_events if e.timestamp < mid_date]
-    second_half = [e for e in all_events if e.timestamp >= mid_date]
+    first_half = [e for e in all_events if e.timestamp and e.timestamp < mid_date]  # type: ignore[operator]
+    second_half = [e for e in all_events if e.timestamp and e.timestamp >= mid_date]  # type: ignore[operator]
 
     engagement_trend = 0.0
     if first_half:
@@ -350,7 +354,7 @@ def compute_all_features(student_id: str, db: Session) -> Optional[EngineeredFea
         responsiveness = compute_responsiveness_signals(student_id, db)
 
         # Create EngineeredFeatures object
-        features = EngineeredFeatures(
+        features = EngineeredFeatures(  # type: ignore[arg-type]
             student_id=student_id,
             computation_date=date.today(),
             # Academic

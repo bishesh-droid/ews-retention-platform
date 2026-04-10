@@ -20,7 +20,10 @@ except ImportError:
 from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
 from backend.database import Student, Prediction
-from backend.config import LLM_PROVIDER, GEMINI_API_KEY, GEMINI_MODEL, CLAUDE_API_KEY, CLAUDE_MODEL, LLM_TEMPERATURE, LLM_MAX_TOKENS
+from backend.config import (
+    LLM_PROVIDER, GEMINI_API_KEY, GEMINI_MODEL,
+    CLAUDE_API_KEY, CLAUDE_MODEL, LLM_TEMPERATURE, LLM_MAX_TOKENS,
+)
 from backend.core.security import security_manager
 
 PROMPTS_DIR = 'prompts'

@@ -28,7 +28,10 @@ def mock_db_no_predictions():
     mock_subquery.c.risk_score = MagicMock()
 
     # Empty result for any query
-    session.query.return_value.outerjoin.return_value.filter.return_value.order_by.return_value.offset.return_value.limit.return_value.all.return_value = []
+    (
+        session.query.return_value.outerjoin.return_value.filter.return_value
+        .order_by.return_value.offset.return_value.limit.return_value.all.return_value
+    ) = []
 
     return session
 
@@ -69,11 +72,13 @@ def test_risk_filter_works_without_prediction_table():
     the Prediction table would return empty results on fresh installs.
     """
     # We need to mock at the repository level since we're testing the service
-    with patch('backend.infrastructure.student_repository.StudentRepository.latest_prediction_rows_subquery') as mock_pred_subq, \
-            patch('backend.infrastructure.student_repository.StudentRepository.fetch_enrollments_map') as mock_enroll_map, \
-            patch('backend.infrastructure.student_repository.StudentRepository.fetch_graded_map') as mock_graded_map, \
-            patch('backend.infrastructure.student_repository.StudentRepository.fetch_exam_map') as mock_exam_map, \
-            patch('backend.infrastructure.student_repository.StudentRepository.sort_expr_for_students') as mock_sort_expr:
+    with (
+        patch('backend.infrastructure.student_repository.StudentRepository.latest_prediction_rows_subquery') as mock_pred_subq,
+        patch('backend.infrastructure.student_repository.StudentRepository.fetch_enrollments_map') as mock_enroll_map,
+        patch('backend.infrastructure.student_repository.StudentRepository.fetch_graded_map') as mock_graded_map,
+        patch('backend.infrastructure.student_repository.StudentRepository.fetch_exam_map') as mock_exam_map,
+        patch('backend.infrastructure.student_repository.StudentRepository.sort_expr_for_students') as mock_sort_expr,
+    ):
 
         # Setup mock DB session
         mock_db = MagicMock(spec=Session)
@@ -102,7 +107,10 @@ def test_risk_filter_works_without_prediction_table():
         mock_student_low.semester_name = "Trimester 1"
 
         # Return both students from DB query
-        mock_db.query.return_value.outerjoin.return_value.filter.return_value.order_by.return_value.offset.return_value.limit.return_value.all.return_value = [
+        (
+            mock_db.query.return_value.outerjoin.return_value.filter.return_value
+            .order_by.return_value.offset.return_value.limit.return_value.all.return_value
+        ) = [
             (mock_student_high, None),
             (mock_student_low, None),
         ]
@@ -131,8 +139,9 @@ def test_risk_filter_works_without_prediction_table():
         # The key validation: all returned students should have risk_score >= 60
         # (or the list should be empty if no students match, not due to DB bug)
         for student in result:
-            assert student.get("risk_score", 0) >= 60, \
+            assert student.get("risk_score", 0) >= 60, (
                 f"Student {student.get('id')} has risk_score {student.get('risk_score')} < 60"
+            )
 
 
 def test_risk_filter_0_to_100_scale():
@@ -144,18 +153,23 @@ def test_risk_filter_0_to_100_scale():
     # Test that values are used directly without normalization
     # risk_min=60 should filter to >= 60, not >= 0.6
 
-    with patch('backend.infrastructure.student_repository.StudentRepository.latest_prediction_rows_subquery') as mock_pred_subq, \
-            patch('backend.infrastructure.student_repository.StudentRepository.fetch_enrollments_map') as mock_enroll_map, \
-            patch('backend.infrastructure.student_repository.StudentRepository.fetch_graded_map') as mock_graded_map, \
-            patch('backend.infrastructure.student_repository.StudentRepository.fetch_exam_map') as mock_exam_map, \
-            patch('backend.infrastructure.student_repository.StudentRepository.sort_expr_for_students') as mock_sort_expr:
+    with (
+        patch('backend.infrastructure.student_repository.StudentRepository.latest_prediction_rows_subquery') as mock_pred_subq,
+        patch('backend.infrastructure.student_repository.StudentRepository.fetch_enrollments_map') as mock_enroll_map,
+        patch('backend.infrastructure.student_repository.StudentRepository.fetch_graded_map') as mock_graded_map,
+        patch('backend.infrastructure.student_repository.StudentRepository.fetch_exam_map') as mock_exam_map,
+        patch('backend.infrastructure.student_repository.StudentRepository.sort_expr_for_students') as mock_sort_expr,
+    ):
 
         mock_db = MagicMock(spec=Session)
         mock_pred_subq.return_value = MagicMock()
         mock_sort_expr.return_value = None
 
         # Empty result from DB
-        mock_db.query.return_value.outerjoin.return_value.filter.return_value.order_by.return_value.offset.return_value.limit.return_value.all.return_value = []
+        (
+            mock_db.query.return_value.outerjoin.return_value.filter.return_value
+            .order_by.return_value.offset.return_value.limit.return_value.all.return_value
+        ) = []
         mock_enroll_map.return_value = {}
         mock_graded_map.return_value = {}
         mock_exam_map.return_value = {}
@@ -177,18 +191,23 @@ def test_risk_max_filter_applied():
     """
     Test that risk_max filter is applied correctly.
     """
-    with patch('backend.infrastructure.student_repository.StudentRepository.latest_prediction_rows_subquery') as mock_pred_subq, \
-            patch('backend.infrastructure.student_repository.StudentRepository.fetch_enrollments_map') as mock_enroll_map, \
-            patch('backend.infrastructure.student_repository.StudentRepository.fetch_graded_map') as mock_graded_map, \
-            patch('backend.infrastructure.student_repository.StudentRepository.fetch_exam_map') as mock_exam_map, \
-            patch('backend.infrastructure.student_repository.StudentRepository.sort_expr_for_students') as mock_sort_expr:
+    with (
+        patch('backend.infrastructure.student_repository.StudentRepository.latest_prediction_rows_subquery') as mock_pred_subq,
+        patch('backend.infrastructure.student_repository.StudentRepository.fetch_enrollments_map') as mock_enroll_map,
+        patch('backend.infrastructure.student_repository.StudentRepository.fetch_graded_map') as mock_graded_map,
+        patch('backend.infrastructure.student_repository.StudentRepository.fetch_exam_map') as mock_exam_map,
+        patch('backend.infrastructure.student_repository.StudentRepository.sort_expr_for_students') as mock_sort_expr,
+    ):
 
         mock_db = MagicMock(spec=Session)
         mock_pred_subq.return_value = MagicMock()
         mock_sort_expr.return_value = None
 
         # Empty result
-        mock_db.query.return_value.outerjoin.return_value.filter.return_value.order_by.return_value.offset.return_value.limit.return_value.all.return_value = []
+        (
+            mock_db.query.return_value.outerjoin.return_value.filter.return_value
+            .order_by.return_value.offset.return_value.limit.return_value.all.return_value
+        ) = []
         mock_enroll_map.return_value = {}
         mock_graded_map.return_value = {}
         mock_exam_map.return_value = {}
@@ -204,25 +223,31 @@ def test_risk_max_filter_applied():
 
         assert isinstance(result, list)
         for student in result:
-            assert student.get("risk_score", 100) <= 40, \
+            assert student.get("risk_score", 100) <= 40, (
                 f"Student has risk_score {student.get('risk_score')} > 40"
+            )
 
 
 def test_combined_risk_min_and_max():
     """
     Test that both risk_min and risk_max can be applied together.
     """
-    with patch('backend.infrastructure.student_repository.StudentRepository.latest_prediction_rows_subquery') as mock_pred_subq, \
-            patch('backend.infrastructure.student_repository.StudentRepository.fetch_enrollments_map') as mock_enroll_map, \
-            patch('backend.infrastructure.student_repository.StudentRepository.fetch_graded_map') as mock_graded_map, \
-            patch('backend.infrastructure.student_repository.StudentRepository.fetch_exam_map') as mock_exam_map, \
-            patch('backend.infrastructure.student_repository.StudentRepository.sort_expr_for_students') as mock_sort_expr:
+    with (
+        patch('backend.infrastructure.student_repository.StudentRepository.latest_prediction_rows_subquery') as mock_pred_subq,
+        patch('backend.infrastructure.student_repository.StudentRepository.fetch_enrollments_map') as mock_enroll_map,
+        patch('backend.infrastructure.student_repository.StudentRepository.fetch_graded_map') as mock_graded_map,
+        patch('backend.infrastructure.student_repository.StudentRepository.fetch_exam_map') as mock_exam_map,
+        patch('backend.infrastructure.student_repository.StudentRepository.sort_expr_for_students') as mock_sort_expr,
+    ):
 
         mock_db = MagicMock(spec=Session)
         mock_pred_subq.return_value = MagicMock()
         mock_sort_expr.return_value = None
 
-        mock_db.query.return_value.outerjoin.return_value.filter.return_value.order_by.return_value.offset.return_value.limit.return_value.all.return_value = []
+        (
+            mock_db.query.return_value.outerjoin.return_value.filter.return_value
+            .order_by.return_value.offset.return_value.limit.return_value.all.return_value
+        ) = []
         mock_enroll_map.return_value = {}
         mock_graded_map.return_value = {}
         mock_exam_map.return_value = {}

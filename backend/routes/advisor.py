@@ -90,7 +90,10 @@ def get_faculty_summary(
         "student_id": student_id,
         "generated_at": datetime.now().isoformat(),
         "summary": {
-            "overview": f"Student is enrolled in {student.get('total_courses', 0)} courses with {student.get('content_completion_score', 0):.0f}% content completion.",
+            "overview": (
+                f"Student is enrolled in {student.get('total_courses', 0)} courses with "
+                f"{student.get('content_completion_score', 0):.0f}% content completion."
+            ),
             "engagement_level": student.get("trend", "unknown"),
             "key_concern": student.get("dominant_risk_factor", "None identified"),
             "talking_points": talking_points,

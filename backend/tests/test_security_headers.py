@@ -11,18 +11,14 @@ These tests ensure protection against:
 - Referrer leakage
 """
 
+import pytest
 from fastapi.testclient import TestClient
-
-from backend.main import app
-
-
-client = TestClient(app)
 
 
 class TestSecurityHeaders:
     """Tests for security headers on HTTP responses."""
 
-    def test_all_security_headers_present_on_root(self):
+    def test_all_security_headers_present_on_root(self, client):
         """
         Test that all 6 required security headers are present on 200 response.
 
@@ -30,8 +26,8 @@ class TestSecurityHeaders:
         1. Strict-Transport-Security (HSTS)
         2. X-Content-Type-Options
         3. X-Frame-Options
-        4. X-XSS-Protection
-        5. Content-Security-Policy
+        4. Content-Security-Policy (CSP)
+        5. X-XSS-Protection
         6. Referrer-Policy
         """
         response = client.get("/")
@@ -52,22 +48,22 @@ class TestSecurityHeaders:
         frame_options = response.headers.get("X-Frame-Options")
         assert frame_options == "DENY", "X-Frame-Options should be 'DENY'"
 
-        # 4. X-XSS-Protection (legacy XSS protection)
-        xss_protection = response.headers.get("X-XSS-Protection")
-        assert xss_protection == "1; mode=block", "X-XSS-Protection should be '1; mode=block'"
-
-        # 5. Content-Security-Policy
+        # 4. Content-Security-Policy
         csp = response.headers.get("Content-Security-Policy")
         assert csp is not None, "Missing Content-Security-Policy header"
         assert "default-src 'self'" in csp, "CSP should have default-src 'self'"
         assert "frame-ancestors 'none'" in csp, "CSP should prevent framing"
+
+        # 5. X-XSS-Protection
+        xss_protection = response.headers.get("X-XSS-Protection")
+        assert xss_protection == "1; mode=block", "X-XSS-Protection should be '1; mode=block'"
 
         # 6. Referrer-Policy
         referrer_policy = response.headers.get("Referrer-Policy")
         assert referrer_policy == "strict-origin-when-cross-origin", \
             "Referrer-Policy should be 'strict-origin-when-cross-origin'"
 
-    def test_security_headers_on_api_endpoint(self):
+    def test_security_headers_on_api_endpoint(self, client):
         """Verify headers are present on API endpoints."""
         response = client.get("/api/v1/students")
 
@@ -79,7 +75,7 @@ class TestSecurityHeaders:
         assert "Content-Security-Policy" in response.headers
         assert "Referrer-Policy" in response.headers
 
-    def test_hsts_header_format(self):
+    def test_hsts_header_format(self, client):
         """Verify HSTS header has correct format and values."""
         response = client.get("/")
         hsts = response.headers.get("Strict-Transport-Security")
@@ -90,13 +86,13 @@ class TestSecurityHeaders:
         # Should include subdomains
         assert "includeSubDomains" in hsts
 
-    def test_csp_includes_react_exceptions(self):
+    def test_csp_includes_react_exceptions(self, client):
         """
         Verify CSP allows necessary resources for React SPA.
 
-        React requires:
-        - 'unsafe-inline' for styles (CSS-in-JS, styled-components)
-        - data: and blob: URIs for images
+        React development requires:
+        - 'unsafe-eval' for dynamic code execution
+        - 'unsafe-inline' for inline styles
         """
         response = client.get("/")
         csp = response.headers.get("Content-Security-Policy")
@@ -106,7 +102,7 @@ class TestSecurityHeaders:
         assert "data:" in csp, "CSP should allow data URIs for images"
         assert "blob:" in csp, "CSP should allow blob URIs for images"
 
-    def test_no_caching_headers_present(self):
+    def test_no_caching_headers_present(self, client):
         """Verify cache-control headers are set to prevent sensitive data caching."""
         response = client.get("/")
 
@@ -114,7 +110,7 @@ class TestSecurityHeaders:
         assert cache_control is not None
         assert "no-store" in cache_control or "max-age=0" in cache_control
 
-    def test_headers_on_error_response(self):
+    def test_headers_on_error_response(self, client):
         """Verify security headers are present even on error responses."""
         # Hit a non-existent endpoint to trigger 404
         response = client.get("/nonexistent-endpoint")

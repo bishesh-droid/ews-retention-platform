@@ -378,7 +378,7 @@ class MLService:
         boundaries at the outer request/job layer.
         """
         try:
-            pred = Prediction(
+            pred = Prediction(  # type: ignore[arg-type]
                 student_id=student_id,
                 risk_score=risk_score / 100.0,          # stored as 0-1 probability
                 engagement_score=features.get("content_completion_score", 0) / 100.0,

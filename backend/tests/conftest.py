@@ -4,7 +4,7 @@ Pytest fixtures for backend tests.
 
 import os
 import pytest
-from unittest.mock import MagicMock, create_autospec
+from unittest.mock import MagicMock, create_autospec, patch
 from sqlalchemy.orm import Session
 
 
@@ -13,6 +13,26 @@ os.environ["TESTING"] = "true"
 os.environ["SECRET_KEY"] = "test-secret-key-not-for-production-x7f9k2m"
 
 # All tests use the in-memory DB automatically
+
+
+@pytest.fixture
+def client():
+    """
+    Returns a TestClient with proper app state initialization.
+    This ensures rate limiter and other state is set for integration tests.
+    """
+    from backend.main import app
+    from backend.core.rate_limiting import limiter
+    from fastapi.testclient import TestClient
+
+    # Initialize app state that would normally be set during lifespan startup
+    app.state.limiter = limiter
+
+    with TestClient(app) as test_client:
+        yield test_client
+
+    # Clean up dependency overrides after test
+    app.dependency_overrides.clear()
 
 
 @pytest.fixture

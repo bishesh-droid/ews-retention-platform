@@ -32,7 +32,10 @@ def get_recommendations_for_student(student_id: str, db: Session = Depends(get_d
             "type": "content",
             "priority": "high",
             "title": "Increase Content Engagement",
-            "description": "You have completed less than 30% of course content. Try to complete at least 2-3 modules per week.",
+            "description": (
+                "You have completed less than 30% of course content. "
+                "Try to complete at least 2-3 modules per week."
+            ),
         })
 
     # Quiz recommendations
@@ -41,7 +44,10 @@ def get_recommendations_for_student(student_id: str, db: Session = Depends(get_d
             "type": "academic",
             "priority": "high",
             "title": "Improve Quiz Performance",
-            "description": "Your quiz scores are below average. Review course materials before attempting quizzes.",
+            "description": (
+                "Your quiz scores are below average. "
+                "Review course materials before attempting quizzes."
+            ),
         })
 
     # Login recommendations
@@ -50,7 +56,10 @@ def get_recommendations_for_student(student_id: str, db: Session = Depends(get_d
             "type": "engagement",
             "priority": "medium",
             "title": "Log In More Frequently",
-            "description": "Regular platform access helps maintain learning momentum. Try logging in at least 3 times per week.",
+            "description": (
+                "Regular platform access helps maintain learning momentum. "
+                "Try logging in at least 3 times per week."
+            ),
         })
 
     # Discussion recommendations
@@ -68,7 +77,10 @@ def get_recommendations_for_student(student_id: str, db: Session = Depends(get_d
             "type": "attendance",
             "priority": "high",
             "title": "Attend All Exams",
-            "description": "Missing exams significantly impacts your academic standing. Ensure you attend all scheduled exams.",
+            "description": (
+                "Missing exams significantly impacts your academic standing. "
+                "Ensure you attend all scheduled exams."
+            ),
         })
 
     # If low risk, give positive feedback

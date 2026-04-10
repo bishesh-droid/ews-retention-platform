@@ -337,13 +337,25 @@ def export_students(
 
     if format == "csv":
         csv_content = ExportService.to_csv(data)
-        return Response(content=csv_content, media_type="text/csv", headers={"Content-Disposition": "attachment; filename=students.csv"})
+        return Response(
+            content=csv_content,
+            media_type="text/csv",
+            headers={"Content-Disposition": "attachment; filename=students.csv"},
+        )
     elif format == "excel":
         excel_bio = ExportService.to_excel(data)
-        return StreamingResponse(excel_bio, media_type="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet", headers={"Content-Disposition": "attachment; filename=students.xlsx"})
+        return StreamingResponse(
+            excel_bio,
+            media_type="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
+            headers={"Content-Disposition": "attachment; filename=students.xlsx"},
+        )
     elif format == "pdf":
         pdf_bio = ExportService.to_pdf(data, "Student List")
-        return StreamingResponse(pdf_bio, media_type="application/pdf", headers={"Content-Disposition": "attachment; filename=students.pdf"})
+        return StreamingResponse(
+            pdf_bio,
+            media_type="application/pdf",
+            headers={"Content-Disposition": "attachment; filename=students.pdf"},
+        )
 
 
 @router.get("/export/risk-summary")
@@ -361,7 +373,12 @@ def export_risk_summary(
         for p in predictions
     ]
 
-    ExportService.log_export(db, int(current_user.id), str(current_user.role), f"risk_summary_{format}")  # type: ignore[arg-type]
+    ExportService.log_export(
+        db,
+        int(current_user.id),  # type: ignore[arg-type]
+        str(current_user.role),
+        f"risk_summary_{format}",
+    )
 
     db.commit()
 

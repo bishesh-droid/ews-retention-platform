@@ -407,7 +407,9 @@ class StudentApplicationService:
         ghost_stats = {"never_logged_in": 0, "logged_in_never_started": 0, "total_ghosts": 0}
         students_with_enrollments = db.query(Student).all()
         for student in students_with_enrollments:
-            enrollment_dicts = StudentRepository.fetch_enrollments_map(db, [student.id]).get(student.id, [])  # type: ignore[arg-type, list-item]
+            enrollment_dicts = StudentRepository.fetch_enrollments_map(
+                db, [student.id]
+            ).get(student.id, [])  # type: ignore[arg-type, list-item]
             if enrollment_dicts:
                 from backend.services.feature_engineering import FeatureEngineer
                 total_logins = sum(e.get("num_logins", 0) or 0 for e in enrollment_dicts)
@@ -556,7 +558,15 @@ class StudentApplicationService:
             )
             return round(float(row or 0.0), 2)
 
-        return {"histogram": histogram, "percentiles": {"p25": kth_value(25), "p50": kth_value(50), "p75": kth_value(75), "p90": kth_value(90)}}
+        return {
+            "histogram": histogram,
+            "percentiles": {
+                "p25": kth_value(25),
+                "p50": kth_value(50),
+                "p75": kth_value(75),
+                "p90": kth_value(90),
+            },
+        }
 
     @staticmethod
     def get_analytics_data(db: Session) -> Dict:
@@ -594,7 +604,11 @@ class StudentApplicationService:
             }
             for name, count, avg_completed, total_time in course_stats
         ]
-        return {"department_summary": department_summary, "course_summary": course_summary, "total_analyzed": StudentRepository.student_count(db)}
+        return {
+            "department_summary": department_summary,
+            "course_summary": course_summary,
+            "total_analyzed": StudentRepository.student_count(db),
+        }
 
     @staticmethod
     def build_prediction_payload(student_metrics: Dict) -> Dict:

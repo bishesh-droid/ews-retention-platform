@@ -83,8 +83,8 @@ class StudentDataRetriever:
         context["risk_trend"] = risk_trend
         context["current_risk_score"] = risk_trend[-1] if risk_trend else None
         context["risk_trend_direction"] = (
-            "improving" if len(risk_trend) >= 2 and risk_trend[-1] < risk_trend[-2]
-            else "worsening" if len(risk_trend) >= 2 and risk_trend[-1] > risk_trend[-2]
+            "improving" if len(risk_trend) >= 2 and float(risk_trend[-1]) < float(risk_trend[-2])  # type: ignore[operator]
+            else "worsening" if len(risk_trend) >= 2 and float(risk_trend[-1]) > float(risk_trend[-2])  # type: ignore[operator]
             else "stable"
         )
         if risk_trend:
@@ -109,11 +109,11 @@ class StudentDataRetriever:
         if student.interventions:
             context["interventions"] = [
                 {
-                    "date": str(intervention.date),
-                    "user": intervention.user,
-                    "action": intervention.action
+                    "date": str(getattr(intervention, 'date', None)),
+                    "user": getattr(intervention, 'user', None),
+                    "action": getattr(intervention, 'action', None)
                 }
-                for intervention in student.interventions[-5:]  # Last 5 interventions
+                for intervention in list(student.interventions)[-5:]  # type: ignore[attr-defined]  # Last 5 interventions
             ]
             context["data_sources"].append("intervention_history")
 
@@ -257,8 +257,8 @@ class InstitutionalDataRetriever:
         }
 
         # Intervention coverage
-        total_interventions = sum(len(s.interventions) for s in students)
-        students_with_interventions = len([s for s in students if s.interventions])
+        total_interventions = sum(len(list(s.interventions)) if s.interventions else 0 for s in students)  # type: ignore[arg-type]
+        students_with_interventions = len([s for s in students if s.interventions])  # type: ignore[misc]
 
         context["intervention_metrics"] = {
             "total_interventions": total_interventions,

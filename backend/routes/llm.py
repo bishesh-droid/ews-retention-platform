@@ -158,7 +158,10 @@ def get_intervention_suggestions(
     data = {
         "student_id": request.student_id,
         "structured_recommendations": recommendations,
-        "llm_narrative": f"Based on the student's engagement data, the primary concern is {student.get('dominant_risk_factor', 'engagement')}.",
+        "llm_narrative": (
+            f"Based on the student's engagement data, the primary concern is "
+            f"{student.get('dominant_risk_factor', 'engagement')}."
+        ),
         "confidence": "medium",
         "sources": ["engagement_data"],
     }
@@ -335,8 +338,19 @@ def get_institutional_insights(
     stats = StudentService.get_overview_stats(db)
     data = {
         "systemic_issues": [
-            {"type": "low_engagement", "description": f"{stats['at_risk_students']} students at high risk", "severity": "high"} if stats['at_risk_students'] > 50 else {
-                "type": "healthy", "description": "Student engagement is within expected range", "severity": "low"}
+            (
+                {
+                    "type": "low_engagement",
+                    "description": f"{stats['at_risk_students']} students at high risk",
+                    "severity": "high",
+                }
+                if stats['at_risk_students'] > 50
+                else {
+                    "type": "healthy",
+                    "description": "Student engagement is within expected range",
+                    "severity": "low",
+                }
+            )
         ],
         "blind_spots": [],
         "total_insights": 1,
@@ -364,7 +378,10 @@ def generate_report_narrative(
 ):
     """Generate auto-narrative for reports."""
     data = {
-        "narrative": f"This {request.report_type} report provides an overview of student retention metrics based on current engagement data.",
+        "narrative": (
+            f"This {request.report_type} report provides an overview of student "
+            f"retention metrics based on current engagement data."
+        ),
         "confidence": "medium",
         "generated_at": datetime.now().isoformat(),
     }
