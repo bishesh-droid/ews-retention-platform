@@ -10,8 +10,4 @@ This package contains:
 - training/: Model training and evaluation
 """
 
-from backend.ml.models import ModelRegistry
-
-__all__ = [
-    "ModelRegistry",
-]
+__all__ = []

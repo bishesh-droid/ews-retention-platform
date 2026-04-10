@@ -47,7 +47,13 @@ SessionLocal = sessionmaker(
 # ============================================================================
 
 # Convert SQLite URL to async version (aiosqlite)
-ASYNC_DATABASE_URL = DATABASE_URL.replace("sqlite://", "sqlite+aiosqlite://")
+# Handle both file-based and in-memory SQLite databases
+if DATABASE_URL == "sqlite:///:memory:":
+    ASYNC_DATABASE_URL = "sqlite+aiosqlite:///:memory:"
+elif DATABASE_URL.startswith("sqlite:///"):
+    ASYNC_DATABASE_URL = DATABASE_URL.replace("sqlite://", "sqlite+aiosqlite://")
+else:
+    ASYNC_DATABASE_URL = DATABASE_URL
 
 # Create async engine
 async_engine = create_async_engine(

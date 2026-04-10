@@ -50,13 +50,13 @@ jobs:
         mypy backend/ --ignore-missing-imports --show-error-codes || true
 
     - name: Run pytest
-      env:
-        TESTING: "true"
-        ENVIRONMENT: "development"
-        DATABASE_URL: "sqlite:///:memory:"
-        SECRET_KEY: "test-secret-key-min-32-chars-for-testing-only"
       run: |
-        pytest backend/tests -v --tb=short --cov=backend --cov-report=xml --cov-report=term
+        export TESTING=true
+        export ENVIRONMENT=development
+        export DATABASE_URL="sqlite:///:memory:"
+        export SECRET_KEY="test-secret-key-min-32-chars-for-testing-only"
+        export PYTHONPATH="${PYTHONPATH}:."
+        python -m pytest backend/tests -v --tb=short --cov=backend --cov-report=xml --cov-report=term
 
     - name: Upload coverage to Codecov
       uses: codecov/codecov-action@v4
