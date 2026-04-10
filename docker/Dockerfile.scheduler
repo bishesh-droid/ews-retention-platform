@@ -35,6 +35,7 @@ COPY --from=builder /root/.local /home/appuser/.local
 # Copy application code
 COPY backend/ ./backend/
 COPY requirements.txt .
+COPY docker/scheduler_entrypoint.py ./scheduler_entrypoint.py
 
 # Create data directory for SQLite database
 RUN mkdir -p /app/backend/data && \
@@ -53,20 +54,4 @@ HEALTHCHECK --interval=60s --timeout=10s --start-period=5s --retries=3 \
     CMD pgrep -f "scheduler" || exit 1
 
 # Run scheduler service as standalone
-CMD ["python", "-c", """
-import asyncio
-import sys
-sys.path.insert(0, '/app')
-from backend.services.infrastructure.scheduler import SchedulerService
-
-async def main():
-    scheduler = SchedulerService()
-    await scheduler.start()
-    try:
-        while True:
-            await asyncio.sleep(3600)
-    except KeyboardInterrupt:
-        await scheduler.stop()
-
-asyncio.run(main())
-"""]
+CMD ["python", "scheduler_entrypoint.py"]
