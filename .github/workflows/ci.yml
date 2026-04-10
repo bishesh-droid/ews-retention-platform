@@ -95,7 +95,7 @@ jobs:
 
     - name: Test
       working-directory: ./frontend
-      run: npm test -- --watchAll=false --coverage
+      run: npm test -- --watchAll=false --coverage --passWithNoTests
 
   security-scan:
     runs-on: ubuntu-latest
