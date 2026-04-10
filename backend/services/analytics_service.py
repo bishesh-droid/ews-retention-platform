@@ -1,11 +1,9 @@
 from sqlalchemy.orm import Session
-from sqlalchemy import func
 from datetime import datetime, timedelta
-from typing import List, Dict, Any, Optional, Tuple
+from typing import Dict, Any, Optional, Tuple
 
 from backend.config import trimester_week_number, CURRENT_SEMESTER_NAME
 from backend.database import RiskSnapshot, Prediction
-from backend.schemas.student import Student
 
 
 _COHORT_CACHE: Dict[str, Tuple[datetime, Dict[str, Any]]] = {}
@@ -34,17 +32,17 @@ class AnalyticsService:
 
         if last_snapshot:
             # Velocity = change in risk score
-            velocity = risk_score - last_snapshot.risk_score
+            velocity = risk_score - float(last_snapshot.risk_score)  # type: ignore[arg-type]
             # Acceleration = change in velocity
-            acceleration = velocity - (last_snapshot.velocity or 0.0)
+            acceleration = velocity - float(last_snapshot.velocity or 0.0)  # type: ignore[arg-type]
 
         wn = week_number if week_number is not None else trimester_week_number()
         snapshot = RiskSnapshot(
             student_id=student_id,
-            risk_score=risk_score,
-            velocity=velocity,
-            acceleration=acceleration,
-            engagement_score=engagement_score,
+            risk_score=risk_score,  # type: ignore[arg-type]
+            velocity=velocity,  # type: ignore[arg-type]
+            acceleration=acceleration,  # type: ignore[arg-type]
+            engagement_score=engagement_score,  # type: ignore[arg-type]
             week_number=wn,
             semester_name=CURRENT_SEMESTER_NAME,
             timestamp=datetime.utcnow(),
@@ -71,9 +69,9 @@ class AnalyticsService:
 
         # Simple linear regression (slope) for the trend
         # x = time (days from start), y = risk_score
-        y_values = [s.risk_score for s in snapshots]
+        y_values = [float(s.risk_score or 0) for s in snapshots]  # type: ignore[arg-type]
         x_values = range(len(y_values))
-        
+
         if len(x_values) > 1:
             mean_x = sum(x_values) / len(x_values)
             mean_y = sum(y_values) / len(y_values)
@@ -84,7 +82,7 @@ class AnalyticsService:
             slope = 0
 
         # Anomaly detection: Sudden drop in engagement
-        engagement_scores = [s.engagement_score for s in snapshots]
+        engagement_scores = [float(s.engagement_score or 0) for s in snapshots]  # type: ignore[arg-type]
         is_anomaly = False
         if len(engagement_scores) >= 2:
             last_change = engagement_scores[-1] - engagement_scores[-2]
@@ -99,8 +97,8 @@ class AnalyticsService:
             "is_anomaly": is_anomaly,
             "snapshots": [
                 {
-                    "timestamp": s.timestamp.isoformat(),
-                    "date": s.timestamp.date().isoformat(),
+                    "timestamp": s.timestamp.isoformat() if s.timestamp else None,
+                    "date": s.timestamp.date().isoformat() if s.timestamp else None,
                     "risk_score": s.risk_score,
                     "velocity": s.velocity,
                     "acceleration": s.acceleration,
@@ -118,8 +116,8 @@ class AnalyticsService:
         latest_snapshots = db.query(RiskSnapshot).order_by(
             RiskSnapshot.student_id, RiskSnapshot.timestamp.desc()
         ).distinct(RiskSnapshot.student_id).all()
-        
-        sorted_snapshots = sorted(latest_snapshots, key=lambda x: x.velocity, reverse=True)
+
+        sorted_snapshots = sorted(latest_snapshots, key=lambda x: float(x.velocity or 0), reverse=True)  # type: ignore[arg-type]
         return sorted_snapshots[:limit]
 
     @staticmethod
@@ -129,7 +127,7 @@ class AnalyticsService:
         """
         # Apply filters to base query if provided (department, semester, etc.)
         # For simplicity, we'll implement core logic first
-        
+
         # 1. Top 10 At-Risk Students
         cache_key = "kpi_cards"
         now = datetime.utcnow()
@@ -142,14 +140,14 @@ class AnalyticsService:
                 return data
 
         top_at_risk = db.query(Prediction).order_by(Prediction.risk_score.desc()).limit(10).all()
-        
+
         # 2. Biggest Attendance Drop (Velocity in attendance)
         # We'd need historical attendance snapshots similarly to risk scores
-        
+
         # 3. Engagement Decline Alerts (Anomalies)
         anomalies_count = db.query(RiskSnapshot).filter(
             RiskSnapshot.timestamp >= datetime.utcnow() - timedelta(days=7),
-            RiskSnapshot.velocity > 0.2 # Arbitrary spike threshold
+            RiskSnapshot.velocity > 0.2  # Arbitrary spike threshold
         ).count()
 
         result = {
@@ -157,7 +155,7 @@ class AnalyticsService:
                 {"student_id": p.student_id, "risk_score": p.risk_score} for p in top_at_risk
             ],
             "engagement_alerts": anomalies_count,
-            "system_health": "stable" # Placeholder
+            "system_health": "stable"  # Placeholder
         }
 
         # Cache cohort summary for a short period to reduce DB load

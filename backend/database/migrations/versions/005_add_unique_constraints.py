@@ -13,7 +13,6 @@ These constraints prevent duplicate entries and enable proper upsert behavior.
 """
 
 from alembic import op
-import sqlalchemy as sa
 
 # revision identifiers
 revision = '005'
@@ -29,15 +28,15 @@ def upgrade():
         'intervention_logs',
         ['student_org_id', 'week_number', 'semester_name', 'intervention_type']
     )
-    
+
     # Add unique constraint on risk_snapshots
     op.create_unique_constraint(
         'uq_risk_snapshot_student_week',
         'risk_snapshots',
         ['student_id', 'week_number', 'semester_name']
     )
-    
-    # NOTE: When migrating to PostgreSQL, verify that cascade behavior 
+
+    # NOTE: When migrating to PostgreSQL, verify that cascade behavior
     # for InterventionLog deletion via Student cascade is properly configured.
     # The SQLite cascade may behave differently than PostgreSQL's.
 

@@ -17,10 +17,10 @@ _tasks: Dict[str, dict] = {}
 def create_task(label: str) -> str:
     """
     Create a new task entry with pending status.
-    
+
     Args:
         label: Human-readable task description
-        
+
     Returns:
         8-character task ID
     """
@@ -39,7 +39,7 @@ def create_task(label: str) -> str:
 def update_task(task_id: str, status: str, error: Optional[str] = None):
     """
     Update task status and timestamps.
-    
+
     Args:
         task_id: The task ID to update
         status: One of "pending", "running", "success", "failed"
@@ -47,14 +47,14 @@ def update_task(task_id: str, status: str, error: Optional[str] = None):
     """
     if task_id not in _tasks:
         return
-    
+
     _tasks[task_id]["status"] = status
-    
+
     if status == "running":
         _tasks[task_id]["started_at"] = datetime.utcnow().isoformat()
     elif status in ("success", "failed"):
         _tasks[task_id]["finished_at"] = datetime.utcnow().isoformat()
-    
+
     if error:
         _tasks[task_id]["error"] = error
 
@@ -62,10 +62,10 @@ def update_task(task_id: str, status: str, error: Optional[str] = None):
 def get_task(task_id: str) -> Optional[dict]:
     """
     Get task status by ID.
-    
+
     Args:
         task_id: The task ID to look up
-        
+
     Returns:
         Task dict or None if not found
     """
@@ -75,10 +75,10 @@ def get_task(task_id: str) -> Optional[dict]:
 def list_tasks(limit: int = 100) -> list:
     """
     List recent tasks (most recent first).
-    
+
     Args:
         limit: Maximum number of tasks to return
-        
+
     Returns:
         List of task dicts
     """

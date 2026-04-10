@@ -1,7 +1,8 @@
 from sqlalchemy import Column, Integer, String, Float, ForeignKey, DateTime, Index, UniqueConstraint
 from sqlalchemy.orm import relationship
 from datetime import datetime
-from ..connection import Base # Corrected import for Base
+from ..connection import Base  # Corrected import for Base
+
 
 class RiskSnapshot(Base):
     """Historical risk snapshots for trend & velocity analysis"""
@@ -31,6 +32,7 @@ class RiskSnapshot(Base):
 
     student = relationship("Student", back_populates="risk_history")
 
+
 class Goal(Base):
     """Student progress goals"""
     __tablename__ = "goals"
@@ -43,5 +45,5 @@ class Goal(Base):
     start_date = Column(DateTime, default=datetime.utcnow)
     end_date = Column(DateTime)
     status = Column(String, default="active")  # active, completed, failed
-    
+
     student = relationship("Student", back_populates="goals")

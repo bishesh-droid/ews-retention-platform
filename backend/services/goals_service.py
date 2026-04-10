@@ -1,9 +1,9 @@
 from sqlalchemy.orm import Session
-from datetime import datetime, timedelta
+from datetime import datetime
 from typing import List
 
 from backend.database import Goal, Enrollment
-from backend.schemas.student import Student
+
 
 class GoalsService:
     @staticmethod
@@ -40,23 +40,23 @@ class GoalsService:
 
         # Fetch recent enrollment metrics for aggregation
         enrollments = db.query(Enrollment).filter(Enrollment.student_id == student_id).all()
-        
+
         for goal in active_goals:
             # Update progress based on type
             if goal.type == "login":
-                goal.current_value = sum(e.num_logins for e in enrollments)
+                goal.current_value = float(sum(int(e.num_logins or 0) for e in enrollments))  # type: ignore[assignment, arg-type]
             elif goal.type == "assignment":
-                goal.current_value = sum(e.num_assignment_submissions for e in enrollments)
+                goal.current_value = float(sum(int(e.num_assignment_submissions or 0) for e in enrollments))  # type: ignore[assignment, arg-type]
             elif goal.type == "attendance":
                 # logic for attendance percentage...
                 pass
-            
+
             # Check if goal reached
             if goal.current_value >= goal.target_value:
-                goal.status = "completed"
+                goal.status = "completed"  # type: ignore[assignment]
             elif goal.end_date < datetime.utcnow():
-                goal.status = "failed"
-            
+                goal.status = "failed"  # type: ignore[assignment]
+
             db.add(goal)
         # Caller commits the transaction.
         db.flush()
@@ -69,4 +69,3 @@ class GoalsService:
         goals = db.query(Goal).filter(Goal.student_id == student_id).all()
         # Add a dynamic property logic in frontend or here
         return goals
-        

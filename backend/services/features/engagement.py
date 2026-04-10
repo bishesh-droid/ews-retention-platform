@@ -36,7 +36,7 @@ class EngagementFeatures:
 class EngagementFeatureExtractor:
     """
     Extracts engagement features from enrollment records.
-    
+
     Takes only enrollment data slice as input.
     """
 
@@ -47,7 +47,7 @@ class EngagementFeatureExtractor:
     def _to_non_negative(value: object) -> float:
         """Parse value as non-negative float."""
         try:
-            v = float(value or 0)
+            v = float(value or 0)  # type: ignore[arg-type]
         except (TypeError, ValueError):
             return 0.0
         if not math.isfinite(v):
@@ -82,16 +82,16 @@ class EngagementFeatureExtractor:
     def extract(self, enrollments: List[Dict], week_number: Optional[int] = None) -> EngagementFeatures:
         """
         Extract all engagement features from enrollment data.
-        
+
         Args:
             enrollments: List of enrollment dictionaries
             week_number: Current trimester week (affects W1/W2 calculation)
-            
+
         Returns:
             EngagementFeatures dataclass with calculated scores
         """
         content_completion = self._calculate_content_completion_score(enrollments)
-        
+
         # After week 2, use full-term completion to avoid misleading W1/W2-only
         if week_number is None or week_number <= 2:
             w1w2_completion = self._calculate_w1w2_completion_score(enrollments)
@@ -115,7 +115,7 @@ class EngagementFeatureExtractor:
     def _calculate_content_completion_score(self, enrollments: List[Dict]) -> Optional[float]:
         """Calculate content completion rate across mandatory courses only."""
         mandatory = [e for e in enrollments if not e.get("is_optional", False)]
-        
+
         total_completed = 0
         total_required = 0
 
@@ -139,12 +139,12 @@ class EngagementFeatureExtractor:
 
     def _calculate_w1w2_completion_score(self, enrollments: List[Dict]) -> float:
         """Calculate content completion rate for weeks 1 & 2 specifically."""
-        total_completed = 0
-        total_required = 0
+        total_completed: float = 0
+        total_required: float = 0
 
         for e in enrollments:
             required_w1w2 = self._to_non_negative(e.get('content_required_w1w2', 0))
-            
+
             # Prefer explicit W1/W2 completion field if available
             explicit = e.get("content_completed_w1w2")
             if explicit is not None:
@@ -152,7 +152,7 @@ class EngagementFeatureExtractor:
             else:
                 cumulative = self._to_non_negative(e.get("content_completed", 0))
                 completed = min(cumulative, required_w1w2)
-            
+
             total_completed += completed
             total_required += required_w1w2
 
@@ -230,8 +230,8 @@ class EngagementFeatureExtractor:
 
     def _get_progress_category(self, enrollments: List[Dict]) -> str:
         """Classify student into progress bucket based on W1&2 content."""
-        total_completed = 0
-        total_required_w1w2 = 0
+        total_completed: float = 0
+        total_required_w1w2: float = 0
 
         for e in enrollments:
             required = self._to_non_negative(e.get('content_required_w1w2', 0))

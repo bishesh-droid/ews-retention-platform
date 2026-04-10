@@ -9,6 +9,7 @@ from backend.config import REDIS_URL, CACHE_EXPIRE_SECONDS
 
 logger = logging.getLogger(__name__)
 
+
 class RedisCache:
     def __init__(self):
         try:
@@ -45,7 +46,9 @@ class RedisCache:
         except Exception as exc:
             logger.exception("[REDIS] SETEX failed for key=%s ttl=%s: %s", key, ttl, exc)
 
+
 cache = RedisCache()
+
 
 def _normalize_for_cache_key(value: Any) -> Any:
     """Convert runtime values into deterministic JSON-serializable key material."""
@@ -71,6 +74,7 @@ def _normalize_for_cache_key(value: Any) -> Any:
     # Keep key deterministic without depending on memory addresses.
     return str(value)
 
+
 def _build_cache_key(func, key_prefix: str, args: tuple, kwargs: dict) -> str:
     ignored_params = {"db", "request", "response", "background_tasks", "current_user"}
     try:
@@ -90,6 +94,7 @@ def _build_cache_key(func, key_prefix: str, args: tuple, kwargs: dict) -> str:
         json.dumps(key_payload, sort_keys=True, default=str).encode("utf-8")
     ).hexdigest()
     return f"{key_prefix}:{digest}"
+
 
 def cache_response(key_prefix: str, expire: int = CACHE_EXPIRE_SECONDS):
     """

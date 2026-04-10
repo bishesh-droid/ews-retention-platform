@@ -1,4 +1,16 @@
-import os
+from backend.core.security import SecurityManager
+from backend.config import (
+    LLM_PROVIDER, GEMINI_API_KEY, GEMINI_MODEL, CLAUDE_API_KEY, CLAUDE_MODEL,
+    LLM_TEMPERATURE, LLM_MAX_TOKENS,
+)
+from backend.services.ai.rag_engine import (
+    StudentDataRetriever,
+    CohortDataRetriever,
+    InstitutionalDataRetriever,
+    ContextAssembler,
+    GuardrailValidator
+)
+from sqlalchemy.orm import Session
 import logging
 from typing import Dict, List, Optional, Any
 
@@ -18,19 +30,6 @@ except ImportError:
     Anthropic = None
     ANTHROPIC_AVAILABLE = False
 
-from sqlalchemy.orm import Session
-from backend.services.ai.rag_engine import (
-    StudentDataRetriever,
-    CohortDataRetriever,
-    InstitutionalDataRetriever,
-    ContextAssembler,
-    GuardrailValidator
-)
-from backend.config import (
-    LLM_PROVIDER, GEMINI_API_KEY, GEMINI_MODEL, CLAUDE_API_KEY, CLAUDE_MODEL,
-    LLM_TEMPERATURE, LLM_MAX_TOKENS, LLM_TIMEOUT_SECONDS, settings
-)
-from backend.core.security import SecurityManager
 
 # Configure LLMs
 if LLM_PROVIDER == "gemini" and GENAI_AVAILABLE and GEMINI_API_KEY:
@@ -58,8 +57,7 @@ class LLMOrchestrator:
         elif self.llm_provider == "claude":
             if ANTHROPIC_AVAILABLE and CLAUDE_API_KEY:
                 self.llm_model_name = CLAUDE_MODEL
-                self.llm_client = Anthropic(api_key=CLAUDE_API_KEY, timeout=LLM_TIMEOUT_SECONDS)
-
+                self.llm_client = Anthropic(api_key=CLAUDE_API_KEY, timeout=30)
 
     def _check_llm_available(self) -> Optional[Dict[str, Any]]:
         """Check if LLM is available, return error dict if not."""
@@ -100,7 +98,7 @@ class LLMOrchestrator:
                 "sources": [],
                 "error": "Unsupported LLM provider"
             }
-        
+
         if not self.llm_client:
             return {
                 "content": "AI service unavailable - LLM client not initialized",
@@ -108,9 +106,9 @@ class LLMOrchestrator:
                 "sources": [],
                 "error": "LLM client not initialized"
             }
-        
+
         return None
-    
+
     def _invoke_llm(self, prompt: str, system_message: Optional[str] = None) -> str:
         """Unified provider-agnostic LLM invocation."""
         if self.llm_provider == "gemini":
@@ -120,7 +118,7 @@ class LLMOrchestrator:
                     full_prompt = f"{system_message.strip()}\n\n{prompt}"
                 response = self.llm_client.generate_content(
                     full_prompt,
-                    request_options={"timeout": LLM_TIMEOUT_SECONDS}
+                    request_options={"timeout": 30}
                 )
                 text = getattr(response, "text", None)
                 if isinstance(text, str) and text.strip():
@@ -129,7 +127,7 @@ class LLMOrchestrator:
             except Exception as e:
                 logger.warning(
                     "LLM call failed",
-                    extra={"error": type(e).__name__, "provider": "gemini", "timeout": LLM_TIMEOUT_SECONDS}
+                    extra={"error": type(e).__name__, "provider": "gemini", "timeout": 30}
                 )
                 raise RuntimeError(f"Gemini generation failed: {str(e)}") from e
 
@@ -141,7 +139,7 @@ class LLMOrchestrator:
                     temperature=LLM_TEMPERATURE,
                     system=system_message or "",
                     messages=[{"role": "user", "content": prompt}],
-                    timeout=LLM_TIMEOUT_SECONDS,
+                    timeout=30,
                 )
                 blocks = getattr(response, "content", []) or []
                 text_parts: List[str] = []
@@ -156,16 +154,16 @@ class LLMOrchestrator:
             except Exception as e:
                 logger.warning(
                     "LLM call failed",
-                    extra={"error": type(e).__name__, "provider": "claude", "timeout": LLM_TIMEOUT_SECONDS}
+                    extra={"error": type(e).__name__, "provider": "claude", "timeout": 30}
                 )
                 raise RuntimeError(f"Claude generation failed: {str(e)}") from e
 
         raise RuntimeError(f"Unsupported LLM provider configured: {self.llm_provider}")
-    
+
     def _generate_content(self, system_message: str, user_message: str) -> str:
         """Backward-compatible helper for existing internal call sites."""
         return self._invoke_llm(prompt=user_message, system_message=system_message)
-    
+
     def explain_risk_change(self, student_id: str, time_period: str = "recent") -> Dict[str, Any]:
         """
         Explain why a student's risk score changed.
@@ -183,7 +181,7 @@ class LLMOrchestrator:
 
         # Retrieve student data via RAG
         student_context = self.student_retriever.retrieve_student_context(student_id, depth='detailed')
-        
+
         if "error" in student_context:
             return {
                 "content": "Unable to generate explanation: student data not found.",
@@ -191,20 +189,20 @@ class LLMOrchestrator:
                 "sources": [],
                 "error": student_context["error"]
             }
-        
+
         # Build prompt with actual data
         prompt = self._build_risk_explanation_prompt(student_context, time_period)
-        
+
         # Generate response
         try:
             explanation = self._invoke_llm(prompt)
-            
+
             # Validate response
             validation = GuardrailValidator.validate_response(explanation, student_context)
-            
+
             # Calculate confidence
             confidence = self._calculate_confidence(validation, student_context)
-            
+
             return {
                 "content": explanation,
                 "confidence": confidence,
@@ -221,7 +219,7 @@ class LLMOrchestrator:
                 "sources": [],
                 "error": str(e)
             }
-    
+
     def generate_student_advice(self, student_id: str, question: str) -> Dict[str, Any]:
         """
         Generate personalized advice for a student.
@@ -238,7 +236,7 @@ class LLMOrchestrator:
             return llm_error
 
         student_context = self.student_retriever.retrieve_student_context(student_id, depth='detailed')
-        
+
         if "error" in student_context:
             return {
                 "content": "I don't have enough information about your academic progress to provide specific advice.",
@@ -246,15 +244,15 @@ class LLMOrchestrator:
                 "sources": [],
                 "error": student_context.get("error", "Student context unavailable")
             }
-        
+
         prompt = self._build_student_advice_prompt(student_context, question)
-        
+
         try:
             advice = self._invoke_llm(prompt)
-            
+
             validation = GuardrailValidator.validate_response(advice, student_context)
             confidence = self._calculate_confidence(validation, student_context)
-            
+
             return {
                 "content": advice,
                 "confidence": confidence,
@@ -269,7 +267,7 @@ class LLMOrchestrator:
                 "sources": [],
                 "error": str(e)
             }
-    
+
     def summarize_student_profile(self, student_id: str, for_role: str = "faculty") -> Dict[str, Any]:
         """
         Generate a student profile summary for faculty/counselors.
@@ -286,7 +284,7 @@ class LLMOrchestrator:
             return llm_error
 
         student_context = self.student_retriever.retrieve_student_context(student_id, depth='comprehensive')
-        
+
         if "error" in student_context:
             return {
                 "content": "Student profile unavailable.",
@@ -294,16 +292,16 @@ class LLMOrchestrator:
                 "sources": [],
                 "error": student_context.get("error", "Student context unavailable")
             }
-        
+
         system_message_profile_summary = f"You are an AI assistant helping {for_role} quickly understand a student's situation."
         user_message_profile_summary = self._build_faculty_summary_prompt(student_context, for_role)
-        
+
         try:
             summary = self._generate_content(system_message_profile_summary, user_message_profile_summary)
-            
+
             validation = GuardrailValidator.validate_response(summary, student_context)
             confidence = self._calculate_confidence(validation, student_context)
-            
+
             return {
                 "content": summary,
                 "confidence": confidence,
@@ -319,7 +317,7 @@ class LLMOrchestrator:
                 "sources": [],
                 "error": str(e)
             }
-    
+
     def suggest_interventions(self, student_id: str) -> Dict[str, Any]:
         """
         Suggest evidence-based interventions for a student.
@@ -335,7 +333,7 @@ class LLMOrchestrator:
             return llm_error
 
         student_context = self.student_retriever.retrieve_student_context(student_id, depth='detailed')
-        
+
         if "error" in student_context:
             return {
                 "content": [],
@@ -343,13 +341,13 @@ class LLMOrchestrator:
                 "sources": [],
                 "error": student_context.get("error", "Student context unavailable")
             }
-        
+
         system_message_interventions = "You are an intervention specialist suggesting evidence-based actions for at-risk students."
         user_message_interventions = self._build_intervention_prompt(student_context)
-        
+
         try:
             suggestions = self._generate_content(system_message_interventions, user_message_interventions)
-            
+
             # D3-6: Apply guardrail validation
             validated = GuardrailValidator.validate_response(
                 suggestions,
@@ -366,7 +364,7 @@ class LLMOrchestrator:
                     "ai_suggested": True,
                     "confidence": "low"
                 }
-            
+
             # D3-5: Return AI reasoning for audit trail
             return {
                 "content": suggestions,
@@ -374,7 +372,7 @@ class LLMOrchestrator:
                 "sources": student_context.get("data_sources", []),
                 "student_id": student_id,
                 "ai_reasoning": (suggestions or "")[:1000],  # truncate for storage
-                "ai_model": settings.GEMINI_MODEL if self.llm_provider == "gemini" else settings.CLAUDE_MODEL,
+                "ai_model": GEMINI_MODEL if self.llm_provider == "gemini" else CLAUDE_MODEL,
                 "ai_suggested": True,
             }
         except Exception as e:
@@ -385,7 +383,7 @@ class LLMOrchestrator:
                 "sources": [],
                 "error": str(e)
             }
-    
+
     def analyze_cohort_patterns(self, cohort_filters: Optional[Dict] = None) -> Dict[str, Any]:
         """
         Analyze patterns across a cohort for sales/retention teams.
@@ -401,7 +399,7 @@ class LLMOrchestrator:
             return llm_error
 
         cohort_context = self.cohort_retriever.retrieve_cohort_context(cohort_filters)
-        
+
         if "error" in cohort_context:
             return {
                 "content": "Insufficient cohort data for analysis.",
@@ -409,13 +407,13 @@ class LLMOrchestrator:
                 "sources": [],
                 "error": cohort_context.get("error", "Cohort context unavailable")
             }
-        
+
         system_message_cohort_analysis = "You are a retention analyst translating academic risk into business insights for sales/retention teams."
         user_message_cohort_analysis = self._build_cohort_analysis_prompt(cohort_context)
-        
+
         try:
             analysis = self._generate_content(system_message_cohort_analysis, user_message_cohort_analysis)
-            
+
             return {
                 "content": analysis,
                 "confidence": "medium",
@@ -430,7 +428,7 @@ class LLMOrchestrator:
                 "sources": [],
                 "error": str(e)
             }
-    
+
     def simulate_what_if(self, student_id: str, scenario: Dict) -> Dict[str, Any]:
         """
         Simulate a what-if scenario for a student.
@@ -447,7 +445,7 @@ class LLMOrchestrator:
             return llm_error
 
         student_context = self.student_retriever.retrieve_student_context(student_id, depth='detailed')
-        
+
         if "error" in student_context:
             return {
                 "content": "Can't simulate scenarios without student data.",
@@ -455,13 +453,13 @@ class LLMOrchestrator:
                 "sources": [],
                 "error": student_context.get("error", "Student context unavailable")
             }
-        
+
         system_message_what_if = "You are an academic advisor explaining the likely impact of behavior changes."
         user_message_what_if = self._build_what_if_prompt(student_context, scenario)
-        
+
         try:
             simulation = self._generate_content(system_message_what_if, user_message_what_if)
-            
+
             return {
                 "content": simulation,
                 "confidence": "medium",  # What-if always medium (speculative)
@@ -476,7 +474,7 @@ class LLMOrchestrator:
                 "sources": [],
                 "error": str(e)
             }
-    
+
     def generate_report_narrative(self, report_type: str, data: Dict) -> Dict[str, Any]:
         """
         Generate executive narrative for reports.
@@ -494,10 +492,10 @@ class LLMOrchestrator:
 
         system_message_report_narrative = "You are a report writer creating executive summaries for leadership."
         user_message_report_narrative = self._build_report_narrative_prompt(report_type, data)
-        
+
         try:
             narrative = self._generate_content(system_message_report_narrative, user_message_report_narrative)
-            
+
             # D3-6: Apply guardrail validation
             validated = GuardrailValidator.validate_response(narrative, data)
             if validated.get("is_valid") is False:
@@ -511,13 +509,13 @@ class LLMOrchestrator:
                     "ai_suggested": True,
                     "confidence": "low"
                 }
-            
+
             return {
                 "content": narrative,
                 "confidence": "high",
                 "report_type": report_type,
                 "ai_suggested": True,
-                "ai_model": settings.GEMINI_MODEL if self.llm_provider == "gemini" else settings.CLAUDE_MODEL,
+                "ai_model": GEMINI_MODEL if self.llm_provider == "gemini" else CLAUDE_MODEL,
             }
         except Exception as e:
             logger.exception("LLM call failed", extra={"operation": "generate_report_narrative", "report_type": report_type})
@@ -526,13 +524,13 @@ class LLMOrchestrator:
                 "confidence": "low",
                 "error": str(e)
             }
-    
+
     # ========== Prompt Builders ==========
-    
+
     def _build_risk_explanation_prompt(self, context: Dict, time_period: str) -> str:
         """Build prompt for risk change explanation."""
         context_text = ContextAssembler.assemble_for_student_explanation(context)
-        
+
         return f"""You are an empathetic academic advisor explaining risk score changes to a student.
 
 IMPORTANT INSTRUCTIONS:
@@ -549,11 +547,11 @@ STUDENT DATA:
 Task: Explain why this student's risk score is {context.get('current_metrics', {}).get('risk_score', 'unknown')}% and what specific factors contributed to recent changes.
 
 Begin your explanation with "Based on your recent academic activity..." and cite specific metrics."""
-    
+
     def _build_student_advice_prompt(self, context: Dict, question: str) -> str:
         """Build prompt for student advice."""
         context_text = ContextAssembler.assemble_for_student_explanation(context)
-        
+
         return f"""You are a supportive academic coach providing personalized advice to a student.
 
 STUDENT DATA:
@@ -570,11 +568,11 @@ INSTRUCTIONS:
 - Keep advice concise and practical
 
 Provide your advice:"""
-    
+
     def _build_faculty_summary_prompt(self, context: Dict, for_role: str) -> str:
         """Build prompt for faculty summary."""
         context_text = ContextAssembler.assemble_for_faculty_summary(context)
-        
+
         return f"""You are an AI assistant helping {for_role} quickly understand a student's situation.
 
 STUDENT CONTEXT:
@@ -588,11 +586,11 @@ INSTRUCTIONS:
 - Cite specific metrics
 
 Provide the summary:"""
-    
+
     def _build_intervention_prompt(self, context: Dict) -> str:
         """Build prompt for intervention suggestions."""
         context_text = ContextAssembler.assemble_for_faculty_summary(context)
-        
+
         return f"""You are an intervention specialist suggesting evidence-based actions for at-risk students.
 
 STUDENT CONTEXT:
@@ -606,7 +604,7 @@ INSTRUCTIONS:
 - Cite student's specific risk factors
 
 Provide intervention suggestions:"""
-    
+
     def _build_cohort_analysis_prompt(self, context: Dict) -> str:
         """Build prompt for cohort analysis."""
         return f"""You are a retention analyst translating academic risk into business insights for sales/retention teams.
@@ -625,7 +623,7 @@ INSTRUCTIONS:
 - Keep analysis concise (4-5 sentences)
 
 Provide cohort analysis:"""
-    
+
     def _build_what_if_prompt(self, context: Dict, scenario: Dict) -> str:
         """Build prompt for what-if simulation."""
         context_text = ContextAssembler.assemble_for_student_explanation(context)
@@ -649,7 +647,7 @@ INSTRUCTIONS:
 - Reference current metrics for comparison
 
 Explain the projected impact:"""
-    
+
     def _build_report_narrative_prompt(self, report_type: str, data: Dict) -> str:
         """Build prompt for report narrative."""
         # Sanitize report data before interpolation
@@ -668,21 +666,21 @@ INSTRUCTIONS:
 - Keep summary concise (5-6 sentences)
 
 Generate the report narrative:"""
-    
+
     # ========== Confidence Calculation ==========
-    
+
     def _calculate_confidence(self, validation: Dict, context: Dict) -> str:
         """Calculate confidence level based on data quality and validation."""
         # Start with validation confidence
         confidence = validation.get("confidence", "medium")
-        
+
         # Downgrade if limited data sources
         data_sources = len(context.get("data_sources", []))
         if data_sources < 2 and confidence == "high":
             confidence = "medium"
-        
+
         # Downgrade if validation issues
         if len(validation.get("issues", [])) > 2:
             confidence = "low"
-        
+
         return confidence

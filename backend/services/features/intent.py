@@ -9,7 +9,7 @@ Domain: Intent (Student Motivation & Engagement Pattern)
 """
 
 from dataclasses import dataclass
-from typing import Dict, Optional
+from typing import Optional
 
 
 @dataclass
@@ -21,7 +21,7 @@ class IntentFeatures:
 class IntentFeatureExtractor:
     """
     Extracts intent features by classifying overall engagement pattern.
-    
+
     Combines signals from academic, engagement, and consistency domains
     to classify the student's motivational state.
     """
@@ -38,7 +38,7 @@ class IntentFeatureExtractor:
     ) -> IntentFeatures:
         """
         Extract intent features by classifying engagement pattern.
-        
+
         Args:
             content_completion_score: Content completion percentage [0-100]
             login_consistency_score: Login frequency score [0-100]
@@ -47,7 +47,7 @@ class IntentFeatureExtractor:
             risk_score: Overall risk score [0-100]
             total_login_count: Raw login count
             total_time_seconds: Raw time spent in seconds
-            
+
         Returns:
             IntentFeatures dataclass with engagement pattern
         """
@@ -58,7 +58,7 @@ class IntentFeatureExtractor:
             graded_quiz_score=graded_quiz_score,
             risk_score=risk_score
         )
-        
+
         return IntentFeatures(engagement_pattern=pattern)
 
     def _classify_engagement_pattern(
@@ -71,13 +71,13 @@ class IntentFeatureExtractor:
     ) -> str:
         """
         Classify student into engagement pattern.
-        
+
         Distinguishes between:
         - disengaged: Not using platform (low login, low completion)
         - struggling: Trying but not succeeding (high login, low completion, poor quiz)
         - at_risk_normal: At risk but normal pattern
         - on_track: Healthy engagement
-        
+
         Returns:
             One of: "disengaged", "struggling", "at_risk_normal", "on_track"
         """

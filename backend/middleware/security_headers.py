@@ -21,7 +21,7 @@ from starlette.types import ASGIApp
 class SecurityHeadersMiddleware(BaseHTTPMiddleware):
     """
     Middleware that adds security headers to every HTTP response.
-    
+
     These headers protect against:
     - XSS attacks (X-XSS-Protection, CSP)
     - Clickjacking (X-Frame-Options)

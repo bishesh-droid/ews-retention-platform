@@ -14,7 +14,7 @@ Thresholds are configurable via environment variables (see backend/config.py):
 
 import logging
 import numpy as np
-from typing import Dict, Any, List
+from typing import Dict, Any
 from backend.config import (
     INTERVENTION_THRESHOLDS,
     INTERVENTION_COOLDOWN_DAYS,
@@ -227,12 +227,12 @@ def should_trigger_intervention(
 ) -> bool:
     """
     Determine if an intervention should be triggered based on risk score and history
-    
+
     Args:
         current_risk_score: Current risk score (0–100)
         previous_risk_score: Previous risk score, if available
         days_since_last_intervention: Days since last intervention
-        
+
     Returns:
         Boolean indicating whether to trigger intervention
     """
@@ -252,11 +252,11 @@ def should_trigger_intervention(
 def get_message_template(template_name: str, student_name: str = "Student") -> str:
     """
     Get message template for intervention
-    
+
     Args:
         template_name: Name of the template
         student_name: Student's name for personalization
-        
+
     Returns:
         Message content
     """
@@ -273,7 +273,7 @@ Keep up the great work!
 Best regards,
 Your Learning Support Team
         """.strip(),
-        
+
         "mentor_outreach_email": f"""
 Dear {student_name},
 
@@ -288,7 +288,7 @@ We're committed to your success!
 Best regards,
 Academic Support Team
         """.strip(),
-        
+
         "urgent_intervention_package": f"""
 Dear {student_name},
 
@@ -306,7 +306,7 @@ We're here to help you succeed!
 Student Success Team
         """.strip()
     }
-    
+
     return templates.get(template_name, "")
 
 

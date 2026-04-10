@@ -11,7 +11,7 @@ from pydantic import BaseModel, field_validator, ConfigDict
 class BaseResponse(BaseModel):
     """
     Base response model with automatic datetime serialization.
-    
+
     All response models should inherit from this class to ensure
     consistent ISO 8601 datetime formatting with timezone info.
     """

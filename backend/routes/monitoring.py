@@ -4,7 +4,8 @@ Monitoring routes
 Lightweight operational endpoints for health and prediction statistics.
 """
 
-from datetime import datetime, timedelta, timezone
+from datetime import datetime, timezone
+from typing import Any, Dict
 from fastapi import APIRouter, Depends, HTTPException, status
 from fastapi.responses import JSONResponse
 from sqlalchemy import text
@@ -22,13 +23,13 @@ router = APIRouter(prefix="/monitoring", tags=["monitoring"])
 
 @router.get("/health")
 async def health_check(db: Session = Depends(get_db)):
-    health = {"status": "healthy", "timestamp": datetime.now(timezone.utc).isoformat()}
+    health: Dict[str, Any] = {"status": "healthy", "timestamp": datetime.now(timezone.utc).isoformat()}
 
     # Check DB connectivity
     try:
         db.execute(text("SELECT 1"))
         health["database"] = "connected"
-    except Exception as e:
+    except Exception:
         health["database"] = "error"
         health["status"] = "unhealthy"
 
@@ -42,9 +43,9 @@ async def health_check(db: Session = Depends(get_db)):
         health["last_ingestion"] = "never"
         health["ingestion_status"] = "warning"
     else:
-        age_hours = (datetime.now(timezone.utc) - latest_run.run_at.replace(tzinfo=timezone.utc)).total_seconds() / 3600
+        age_hours = (datetime.now(timezone.utc) - latest_run.run_at.replace(tzinfo=timezone.utc)).total_seconds() / 3600  # type: ignore[union-attr]
         health["last_ingestion_hours_ago"] = round(age_hours, 1)
-        health["last_ingestion_status"] = latest_run.status
+        health["last_ingestion_status"] = latest_run.status or ""
         if latest_run.status != "success" or age_hours > 48:
             health["ingestion_status"] = "stale"
             health["status"] = "degraded"  # not unhealthy — server is up, just data is old

@@ -1,6 +1,5 @@
-from fastapi import APIRouter, Depends, HTTPException, status
+from fastapi import APIRouter, Depends, HTTPException
 from sqlalchemy.orm import Session
-from typing import List
 from datetime import datetime
 
 from backend.database import User
@@ -8,6 +7,7 @@ from backend.api import deps
 from backend.services.goals_service import GoalsService
 
 router = APIRouter()
+
 
 @router.get("/{student_id}")
 def get_student_goals(
@@ -20,8 +20,9 @@ def get_student_goals(
     """
     if current_user.role == "Student" and current_user.email != student_id:
         raise HTTPException(status_code=403, detail="Not authorized to view other students' goals")
-    
+
     return GoalsService.get_student_goals(db, student_id)
+
 
 @router.post("/")
 def create_goal(
@@ -39,6 +40,7 @@ def create_goal(
     goal = GoalsService.create_goal(db, student_id, goal_type, title, target_value, end_date)
     db.commit()
     return goal
+
 
 @router.post("/{student_id}/sync")
 def sync_goal_progress(

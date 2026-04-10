@@ -5,7 +5,7 @@ Database model for student-course enrollment with engagement metrics.
 Each row represents one student enrolled in one course.
 """
 
-from sqlalchemy import Column, String, Integer, Float, Boolean, ForeignKey, DateTime, Index, UniqueConstraint
+from sqlalchemy import Column, String, Integer, Boolean, ForeignKey, DateTime, Index, UniqueConstraint
 from sqlalchemy.orm import relationship
 from backend.database.connection import Base
 

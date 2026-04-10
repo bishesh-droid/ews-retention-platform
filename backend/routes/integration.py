@@ -12,16 +12,14 @@ import time
 
 from fastapi import APIRouter, Depends, HTTPException, Header, Query, Request
 from sqlalchemy.orm import Session
-from typing import Optional, List
+from typing import Optional
 from datetime import datetime
 
 from backend.api.deps import get_db
 from backend.services.student_service import StudentService
-from backend.services.feature_engineering import FeatureEngineer
-from backend.services.risk_scoring import RiskScorer
-from backend.database import Student, Enrollment
+from backend.database import Student
 from backend.config import INTEGRATION_API_KEY_HASH
-from backend.core.signing import verify_signed_request, constant_time_compare
+from backend.core.signing import constant_time_compare
 from backend.utils.api import success_response
 
 router = APIRouter()
@@ -69,9 +67,9 @@ async def verify_integration_key(
 def _build_risk_profile(db: Session, student: Student) -> dict:
     """Build a complete risk profile dict conforming to the integration contract."""
     # Get student metrics from StudentService
-    student_data = StudentService.get_student_by_id(db, student.id)
+    student_data = StudentService.get_student_by_id(db, student.id)  # type: ignore[arg-type]
     if not student_data:
-        return None
+        return {}  # type: ignore[return-value]
 
     risk_score = student_data.get("risk_score", 0)
     risk_category = student_data.get("risk_category", "unknown")

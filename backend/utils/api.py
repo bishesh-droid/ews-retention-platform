@@ -102,4 +102,3 @@ def error_response(message: str, details: Optional[Dict[str, Any]] = None) -> Di
         "data": details or {},
         "meta": _build_meta(),
     }
-

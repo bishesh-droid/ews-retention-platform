@@ -22,7 +22,7 @@ async def security_and_logging_middleware(request: Request, call_next):
     Rate limiting is handled by the slowapi limiter attached to the app.
     This middleware focuses on logging request/response metrics.
     """
-    client_ip = request.client.host
+    client_ip = request.client.host if request.client else "unknown"
 
     # Log Request
     sys_logger.info(f"Incoming request: {request.method} {request.url.path} from {client_ip}")

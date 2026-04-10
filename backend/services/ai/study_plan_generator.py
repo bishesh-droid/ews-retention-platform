@@ -13,7 +13,7 @@ The AI does NOT calculate risk - it consumes EWS data to generate:
 
 import logging
 from typing import Dict, Any, List, Optional
-from datetime import datetime, timedelta
+from datetime import datetime
 import json
 
 from backend.services.ai.advisor_context import build_advisor_context

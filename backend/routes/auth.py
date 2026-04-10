@@ -16,7 +16,6 @@ from backend.schemas.auth import (
     UserUpdate,
     AdminUserUpdate,
 )
-from backend.utils.api import success_response, error_response
 from backend.config import ACCESS_TOKEN_EXPIRE_MINUTES, ENVIRONMENT, RATE_LIMIT_LOGIN
 import logging
 
@@ -41,7 +40,7 @@ async def login(
     OAuth2 token login — returns a Bearer JWT and sets httpOnly refresh token cookie.
     """
     user = db.query(User).filter(User.username == form_data.username).first()
-    if not user or not auth.verify_password(form_data.password, user.hashed_password):
+    if not user or not auth.verify_password(form_data.password, user.hashed_password):  # type: ignore[arg-type]
         raise HTTPException(
             status_code=status.HTTP_401_UNAUTHORIZED,
             detail="Incorrect username or password",

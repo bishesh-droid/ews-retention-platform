@@ -1,7 +1,8 @@
 import re
 import bleach
 from fastapi import HTTPException, status
-from typing import List, Callable, Dict, Any, Optional
+from typing import List, Dict, Any, Optional
+
 
 class SecurityManager:
     """Centralized security and validation middleware functions."""
@@ -349,5 +350,6 @@ class SecurityManager:
             raise HTTPException(status_code=400, detail="Skip must be >= 0")
         if limit <= 0 or limit > 1000:
             raise HTTPException(status_code=400, detail="Limit must be between 1 and 1000")
+
 
 security_manager = SecurityManager()

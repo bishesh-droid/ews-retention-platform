@@ -2,7 +2,6 @@ from fastapi import APIRouter, Depends, Query
 from sqlalchemy.orm import Session
 from typing import List, Dict, Any
 
-from backend.database import Student
 from backend.api import deps
 from backend.services.student_service import StudentService
 

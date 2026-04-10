@@ -3,15 +3,14 @@ Feature API Endpoints
 Provides access to engineered features for students.
 """
 
-from fastapi import APIRouter, Depends, HTTPException, Query
+from fastapi import APIRouter, Depends, HTTPException
 from sqlalchemy.orm import Session
-from typing import Optional
+from typing import Any, Dict, Optional
 
 from backend.api.deps import get_db, get_current_user, require_resource_ownership
 from backend.services.student_service import StudentService
 from backend.database import Student, User
 from backend.utils.api import success_response
-from fastapi import Depends
 
 router = APIRouter(
     responses={404: {"description": "Not found"}},
@@ -23,7 +22,7 @@ router = APIRouter(
 def get_student_features(
     student_id: str,
     db: Session = Depends(get_db),
-    current_user = Depends(require_resource_ownership("student_id")),
+    current_user=Depends(require_resource_ownership("student_id")),
 ):
     """
     Get computed engagement features for a student.
@@ -104,7 +103,7 @@ def compute_features(
         return success_response(data, message="Features computed")
     else:
         total = db.query(Student).count()
-        data = {
+        data: Dict[str, Any] = {
             "status": "completed",
             "computed": total,
             "failed": 0,

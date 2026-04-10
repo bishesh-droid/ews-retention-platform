@@ -5,22 +5,20 @@ Run with: python -m backend.ml.training.evaluate
 This script compares risk scores stored in RiskSnapshot against final_outcome
 labels in Enrollment to measure how well the rule-based scorer predicts dropouts.
 """
+from backend.database.models.goals_and_risks import RiskSnapshot
+from backend.database.models.enrollment import Enrollment
+from backend.database.connection import SessionLocal
 import argparse
 import sys
 from contextlib import contextmanager
-from typing import Dict, List, Any, Optional
+from typing import Dict, Any
 
 import pandas as pd
-from sklearn.metrics import classification_report, roc_auc_score, confusion_matrix
+from sklearn.metrics import roc_auc_score, confusion_matrix
 
 # Add project root to path for imports
 import os
 sys.path.insert(0, os.path.join(os.path.dirname(__file__), "..", "..", ".."))
-
-from backend.database.connection import SessionLocal
-from backend.database.models.enrollment import Enrollment
-from backend.database.models.goals_and_risks import RiskSnapshot
-from backend.database.models.student import Student
 
 
 @contextmanager
@@ -40,7 +38,7 @@ def get_session():
 def load_labeled_data(session) -> pd.DataFrame:
     """
     Join students + enrollments with final_outcome + latest RiskSnapshot.
-    
+
     Returns DataFrame with columns:
     - org_id: student identifier
     - risk_score: latest risk score (0-100 scale)
@@ -48,48 +46,25 @@ def load_labeled_data(session) -> pd.DataFrame:
     - program: BS or MSc
     - old_new: old or new student
     - semester: semester name
-    
+
     Filters to only rows where final_outcome is not None.
     """
-    # Query: Get latest RiskSnapshot per student joined with Enrollment that has final_outcome
-    query = """
-    SELECT 
-        s.org_defined_id as org_id,
-        s.parent_department_name as program_dept,
-        s.old_new_student as old_new,
-        rs.risk_score,
-        e.final_outcome,
-        e.outcome_source,
-        c.semester_name as semester,
-        rs.timestamp as risk_timestamp
-    FROM risk_snapshots rs
-    JOIN (
-        SELECT student_id, MAX(timestamp) as max_ts
-        FROM risk_snapshots
-        GROUP BY student_id
-    ) latest ON rs.student_id = latest.student_id AND rs.timestamp = latest.max_ts
-    JOIN enrollments e ON rs.student_id = e.student_id
-    JOIN students s ON rs.student_id = s.id
-    JOIN courses c ON e.course_id = c.id
-    WHERE e.final_outcome IS NOT NULL
-    GROUP BY rs.student_id
-    """
-    
+
     # Use SQLAlchemy ORM approach for better compatibility
     results = []
-    
+
     # Get all enrollments with final outcomes
     enrollments_with_outcomes = (
         session.query(Enrollment)
         .filter(Enrollment.final_outcome.isnot(None))
         .all()
     )
-    
+
     for enrollment in enrollments_with_outcomes:
         student = enrollment.student
         if not student:
             continue
-        
+
         # Get latest RiskSnapshot for this student
         latest_snapshot = (
             session.query(RiskSnapshot)
@@ -97,19 +72,19 @@ def load_labeled_data(session) -> pd.DataFrame:
             .order_by(RiskSnapshot.timestamp.desc())
             .first()
         )
-        
+
         if not latest_snapshot:
             continue
-        
+
         # Normalize risk score to 0-100
         risk_val = latest_snapshot.risk_score or 0
         if risk_val <= 1.0:
             risk_val *= 100.0
-        
+
         # Determine program (BS/MSc from department name)
         dept = (student.parent_department_name or "").lower()
         program = "MSc" if "msc" in dept else "BS"
-        
+
         results.append({
             "org_id": student.org_defined_id or student.id,
             "risk_score": risk_val,
@@ -120,7 +95,7 @@ def load_labeled_data(session) -> pd.DataFrame:
             "semester": enrollment.course.semester_name if enrollment.course else None,
             "risk_timestamp": latest_snapshot.timestamp,
         })
-    
+
     df = pd.DataFrame(results)
     return df
 
@@ -128,22 +103,22 @@ def load_labeled_data(session) -> pd.DataFrame:
 def run_evaluation(df: pd.DataFrame, threshold: float = 60.0) -> Dict[str, Any]:
     """
     Evaluate the rule-based risk scorer against actual outcomes.
-    
+
     Args:
         df: DataFrame with risk_score and final_outcome columns
         threshold: Risk score threshold for "at risk" classification
-        
+
     Returns:
         Dictionary with evaluation metrics
     """
     df = df.copy()
-    
+
     # Create binary predictions based on threshold
     df["predicted_at_risk"] = df["risk_score"] >= threshold
-    
+
     # Create binary ground truth: dropped or deferred = at risk
     df["actual_at_risk"] = df["final_outcome"].isin(["dropped", "deferred"])
-    
+
     metrics = {
         "threshold": threshold,
         "total_students": len(df),
@@ -152,11 +127,11 @@ def run_evaluation(df: pd.DataFrame, threshold: float = 60.0) -> Dict[str, Any]:
         "predicted_at_risk": int(df["predicted_at_risk"].sum()),
         "predicted_at_risk_pct": round(df["predicted_at_risk"].mean() * 100, 1),
     }
-    
+
     # Calculate classification metrics
     y_true = df["actual_at_risk"].astype(int).values
     y_pred = df["predicted_at_risk"].astype(int).values
-    
+
     # Confusion matrix
     tn, fp, fn, tp = confusion_matrix(y_true, y_pred).ravel()
     metrics["confusion_matrix"] = {
@@ -165,29 +140,29 @@ def run_evaluation(df: pd.DataFrame, threshold: float = 60.0) -> Dict[str, Any]:
         "false_negatives": int(fn),
         "true_positives": int(tp),
     }
-    
+
     # Calculate metrics manually for precision
     precision = tp / (tp + fp) if (tp + fp) > 0 else 0
     recall = tp / (tp + fn) if (tp + fn) > 0 else 0
     specificity = tn / (tn + fp) if (tn + fp) > 0 else 0
     f1 = 2 * precision * recall / (precision + recall) if (precision + recall) > 0 else 0
-    
+
     metrics["precision"] = round(precision, 3)
     metrics["recall"] = round(recall, 3)
     metrics["specificity"] = round(specificity, 3)
     metrics["f1_score"] = round(f1, 3)
-    
+
     # ROC-AUC if possible (need both classes)
     try:
         auc = roc_auc_score(df["actual_at_risk"], df["risk_score"])
         metrics["roc_auc"] = round(auc, 3)
     except ValueError:
         metrics["roc_auc"] = None
-    
+
     # Outcome breakdown
     outcome_counts = df["final_outcome"].value_counts().to_dict()
     metrics["outcome_breakdown"] = {k: int(v) for k, v in outcome_counts.items()}
-    
+
     return metrics
 
 
@@ -199,39 +174,39 @@ def print_evaluation_report(metrics: Dict[str, Any], df: pd.DataFrame, threshold
     print(f"Total students evaluated: {metrics['total_students']}")
     print(f"Actual at-risk: {metrics['actual_at_risk']} ({metrics['actual_at_risk_pct']}%)")
     print(f"Predicted at-risk: {metrics['predicted_at_risk']} ({metrics['predicted_at_risk_pct']}%)")
-    
-    print(f"\n--- Classification Metrics ---")
+
+    print("\n--- Classification Metrics ---")
     print(f"Precision: {metrics['precision']:.3f} (of those flagged, how many were truly at-risk)")
     print(f"Recall:    {metrics['recall']:.3f} (of all at-risk, how many did we catch)")
     print(f"Specificity: {metrics['specificity']:.3f} (of not at-risk, how many did we correctly ignore)")
     print(f"F1 Score:  {metrics['f1_score']:.3f}")
-    
+
     if metrics.get("roc_auc"):
         print(f"ROC-AUC:   {metrics['roc_auc']:.3f}")
     else:
         print("ROC-AUC:   could not compute (need both classes represented)")
-    
-    print(f"\n--- Confusion Matrix ---")
+
+    print("\n--- Confusion Matrix ---")
     cm = metrics["confusion_matrix"]
-    print(f"                 Predicted")
-    print(f"                 Not Risk    Risk")
-    print(f"Actual Not Risk    {cm['true_negatives']:4d}      {cm['false_positives']:4d}   (specificity: {metrics['specificity']:.3f})")
+    print("                 Predicted")
+    print("                 Not Risk    Risk")
+    print(
+        f"Actual Not Risk    {cm['true_negatives']:4d}      {cm['false_positives']:4d}   (specificity: {metrics['specificity']:.3f})")
     print(f"Actual At Risk     {cm['false_negatives']:4d}      {cm['true_positives']:4d}   (recall: {metrics['recall']:.3f})")
-    
-    print(f"\n--- Outcome Breakdown ---")
+
+    print("\n--- Outcome Breakdown ---")
     for outcome, count in metrics["outcome_breakdown"].items():
         pct = count / metrics['total_students'] * 100
         print(f"  {outcome:12s}: {count:4d} ({pct:5.1f}%)")
-    
+
     # By program breakdown
-    print(f"\n--- Breakdown by Program ---")
+    print("\n--- Breakdown by Program ---")
     for program in df["program"].unique():
         sub = df[df["program"] == program]
         sub_actual = sub["actual_at_risk"].sum()
         sub_pred = sub["predicted_at_risk"].sum()
-        sub_precision = sub_pred / len(sub) if len(sub) > 0 else 0
         print(f"{program}: {len(sub)} students, {sub_actual} at-risk, {sub_pred} predicted")
-    
+
     print(f"\n{'='*60}")
 
 
@@ -255,42 +230,41 @@ def main():
         action="store_true",
         help="Run evaluation at multiple thresholds (50, 60, 70, 80)",
     )
-    
+
     args = parser.parse_args()
-    
+
     with get_session() as session:
         df = load_labeled_data(session)
-        
+
         if len(df) == 0:
             print("No labeled outcomes found. Run data ingestion first to populate final_outcome fields.")
             print("The infer_outcomes_from_exam_data() function must be called during ingestion.")
             sys.exit(1)
-        
+
         if args.compare_thresholds:
             thresholds = [50.0, 60.0, 70.0, 80.0]
             print(f"\n{'='*60}")
             print(f"  Comparing thresholds: {thresholds}")
             print(f"{'='*60}")
-            
+
             for thresh in thresholds:
                 metrics = run_evaluation(df, threshold=thresh)
                 print(f"\nThreshold {thresh:4.1f}: Precision={metrics['precision']:.3f}, "
                       f"Recall={metrics['recall']:.3f}, F1={metrics['f1_score']:.3f}")
         else:
             metrics = run_evaluation(df, threshold=args.threshold)
-            
+
             if args.json:
                 import json
                 print(json.dumps(metrics, indent=2))
             else:
                 print_evaluation_report(metrics, df, args.threshold)
-                
+
                 # Show command for other thresholds
-                print(f"\nTo test other thresholds, run:")
-                print(f"  python -m backend.ml.training.evaluate --threshold 50")
-                print(f"  python -m backend.ml.training.evaluate --compare-thresholds")
+                print("\nTo test other thresholds, run:")
+                print("  python -m backend.ml.training.evaluate --threshold 50")
+                print("  python -m backend.ml.training.evaluate --compare-thresholds")
 
 
 if __name__ == "__main__":
     main()
-

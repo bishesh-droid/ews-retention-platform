@@ -49,33 +49,43 @@ def _rule_based_score(features: Dict[str, Any]) -> float:
     Compute a 0-1 rule-based risk score from canonical features.
     Uses the SAME feature keys as the ML model to ensure consistency.
     """
-    att    = _safe_float(features.get("attendance_rate"), 50.0)
-    quiz   = _safe_float(features.get("avg_quiz_score"),  50.0)
+    att = _safe_float(features.get("attendance_rate"), 50.0)
+    quiz = _safe_float(features.get("avg_quiz_score"),  50.0)
     assign = _safe_float(features.get("assignment_avg"),  50.0)
     logins = _safe_float(features.get("num_logins"),      10.0)
-    freq   = _safe_float(features.get("engagement_frequency"), 0.5)
-    decay  = _safe_float(features.get("engagement_decay"),  1.0)
+    freq = _safe_float(features.get("engagement_frequency"), 0.5)
+    decay = _safe_float(features.get("engagement_decay"),  1.0)
 
     score = 0.0
 
     # Attendance signals (weight: 35%)
-    if att < 40:       score += 0.35
-    elif att < 60:     score += 0.20
-    elif att < 75:     score += 0.10
+    if att < 40:
+        score += 0.35
+    elif att < 60:
+        score += 0.20
+    elif att < 75:
+        score += 0.10
 
     # Academic performance signals (weight: 35%)
     quiz_assign_avg = (quiz + assign) / 2
-    if quiz_assign_avg < 35:  score += 0.35
-    elif quiz_assign_avg < 50: score += 0.20
-    elif quiz_assign_avg < 65: score += 0.10
+    if quiz_assign_avg < 35:
+        score += 0.35
+    elif quiz_assign_avg < 50:
+        score += 0.20
+    elif quiz_assign_avg < 65:
+        score += 0.10
 
     # Engagement signals (weight: 20%)
-    if logins < 5:     score += 0.20
-    elif logins < 15:  score += 0.10
+    if logins < 5:
+        score += 0.20
+    elif logins < 15:
+        score += 0.10
 
     # Trend signals (weight: 10%)
-    if freq < 0.3:     score += 0.07
-    if decay < 0.5:    score += 0.03
+    if freq < 0.3:
+        score += 0.07
+    if decay < 0.5:
+        score += 0.03
 
     return round(min(1.0, score), 4)
 
@@ -115,7 +125,7 @@ def get_unified_risk(
 
     # Case 1: ML result available and not a fallback
     if ml_result and not ml_result.get("fallback_used", False):
-        ml_prob  = float(ml_result.get("dropout_probability", rule_score))
+        ml_prob = float(ml_result.get("dropout_probability", rule_score))
         ml_label = ml_result.get("risk_label", rule_label)
 
         # Check for contradiction
@@ -167,8 +177,10 @@ def get_unified_risk(
 
 
 def _score_to_label(score: float) -> str:
-    if score >= 0.65:   return "HIGH"
-    elif score >= 0.40: return "MEDIUM"
+    if score >= 0.65:
+        return "HIGH"
+    elif score >= 0.40:
+        return "MEDIUM"
     return "LOW"
 
 

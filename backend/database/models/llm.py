@@ -14,7 +14,7 @@ class LLMQuery(Base):
     Enables analysis of LLM usage patterns and response quality.
     """
     __tablename__ = "llm_queries"
-    
+
     id = Column(Integer, primary_key=True, index=True)
     user_id = Column(String)
     user_role = Column(String)  # 'student', 'faculty', 'admin', 'sales', 'marketing'
@@ -32,7 +32,7 @@ class LLMInsight(Base):
     These are proactive insights the system surfaces for administrators.
     """
     __tablename__ = "llm_insights"
-    
+
     id = Column(Integer, primary_key=True, index=True)
     insight_type = Column(String)  # 'systemic_issue', 'pattern', 'blind_spot', 'opportunity'
     title = Column(String)
@@ -50,7 +50,7 @@ class AIExplanation(Base):
     and help them understand their risk scores and recommendations.
     """
     __tablename__ = "ai_explanations"
-    
+
     id = Column(Integer, primary_key=True, index=True)
     student_id = Column(String)
     explanation_type = Column(String)  # 'risk_change', 'advice', 'what_if', 'progress'
@@ -66,7 +66,7 @@ class PatternDiscovery(Base):
     These represent systemic issues that require administrative attention.
     """
     __tablename__ = "pattern_discoveries"
-    
+
     id = Column(Integer, primary_key=True, index=True)
     pattern_type = Column(String)  # 'systemic_issue', 'cross_semester', 'demographic_disparity', 'blind_spot'
     title = Column(String)  # Short title for the pattern

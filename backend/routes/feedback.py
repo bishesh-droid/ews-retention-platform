@@ -11,7 +11,6 @@ from pydantic import BaseModel
 
 from backend.api.deps import get_db, get_current_user, require_role
 from backend.database import StudentResponse, Intervention, Student
-from fastapi import Depends
 from backend.database.models.user import User
 
 FEEDBACK_ROLES = ["admin", "faculty", "retention_team"]
@@ -49,11 +48,11 @@ def record_student_response(
         student_id=response.student_id,
         intervention_id=response.intervention_id,
         responded=response.responded,
-        response_time_hours=response.response_time_hours,
+        response_time_hours=response.response_time_hours,  # type: ignore[arg-type]
         behavioral_change_detected=response.behavioral_change_detected,
-        engagement_change_7days=response.engagement_change_7days,
-        attendance_change_7days=response.attendance_change_7days,
-        grade_change_next_assignment=response.grade_change_next_assignment,
+        engagement_change_7days=response.engagement_change_7days,  # type: ignore[arg-type]
+        attendance_change_7days=response.attendance_change_7days,  # type: ignore[arg-type]
+        grade_change_next_assignment=response.grade_change_next_assignment,  # type: ignore[arg-type]
         retained=response.retained,
         recorded_at=datetime.utcnow()
     )

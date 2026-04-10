@@ -6,7 +6,6 @@ Uses real logic functions — only DB and external calls are mocked.
 """
 
 import pytest
-from datetime import datetime
 
 # Import the real functions under test (NOT mocked)
 from backend.services.core.decision_engine import (
@@ -29,8 +28,8 @@ from backend.services.core.decision_engine import (
     (59,  "mentor_outreach",    "medium"),
     (60,  "mentor_outreach",    "high"),   # escalated mentor, NOT urgent
     (79,  "mentor_outreach",    "high"),   # still NOT urgent
-    (80,  "urgent_intervention","critical"),
-    (100, "urgent_intervention","critical"),
+    (80,  "urgent_intervention", "critical"),
+    (100, "urgent_intervention", "critical"),
 ])
 def test_intervention_threshold_ladder(score, expected_type, expected_priority):
     """
@@ -105,7 +104,7 @@ def test_decision_engine_rejects_over_100():
 def test_student_with_risk_65_gets_mentor_not_urgent():
     """
     Smoke test that the full service layer correctly routes risk_score=65.
-    
+
     Risk score 65 should produce mentor_outreach (high priority), NOT urgent.
     This catches if fix B-4 (the missing elif) is not wired through the service layer.
     """
@@ -115,7 +114,7 @@ def test_student_with_risk_65_gets_mentor_not_urgent():
         engagement_pattern="at_risk_normal",
         features={},
     )
-    
+
     assert result["type"] != "urgent_intervention", \
         "risk_score=65 must NOT produce urgent_intervention — fix B-4 may not be wired correctly"
     assert "mentor" in result["type"].lower() or result["type"] in ["academic_support", "mentor_outreach"], \
@@ -131,7 +130,7 @@ def test_engagement_pattern_struggling_gets_academic_support():
         engagement_pattern="struggling",
         features={},
     )
-    
+
     assert result["type"] == "academic_support", \
         f"Struggling students should get academic_support, got {result['type']}"
 
@@ -145,7 +144,7 @@ def test_ghost_student_gets_activation_outreach():
         engagement_pattern="on_track",
         features={"requires_activation_outreach": True, "ghost_info": {"ghost_type": "never_logged_in"}},
     )
-    
+
     assert result["type"] == "activation_outreach", \
         f"Ghost students should get activation_outreach, got {result['type']}"
     assert result.get("priority") == "critical", \
@@ -160,7 +159,7 @@ def test_spike_threshold_uses_0_to_100_scale():
     """
     Test that spike detection correctly uses 0-100 scale (not 0-1).
     Validates fix M-4 is wired through.
-    
+
     A delta of 0.15 should NOT trigger — it's noise on a 0–100 scale.
     A delta of 15 SHOULD trigger even within cooldown.
     """
@@ -170,7 +169,7 @@ def test_spike_threshold_uses_0_to_100_scale():
         previous_risk_score=50.0,
         days_since_last_intervention=3
     ), "Delta of 0.15 should NOT trigger intervention (below threshold)"
-    
+
     # Large delta (15) SHOULD trigger even within cooldown
     assert should_trigger_intervention(
         current_risk_score=65.0,
@@ -211,12 +210,11 @@ def test_nan_inf_rejection():
     """
     Test that NaN and Inf values are rejected.
     """
-    import math
-    
+
     # NaN should be handled (current implementation uses 50.0 as default)
     result = get_intervention_recommendation(float('nan'))
     assert result["type"] is not None  # Should return some valid recommendation
-    
+
     # Inf should raise assertion error
     with pytest.raises(AssertionError):
         get_intervention_recommendation(float('inf'))
@@ -229,9 +227,9 @@ def test_boundary_scores():
     # Exactly at thresholds
     result_30 = get_intervention_recommendation(30.0)
     assert result_30["type"] == "gentle_reminder"
-    
+
     result_40 = get_intervention_recommendation(40.0)
     assert result_40["type"] == "mentor_outreach"
-    
+
     result_80 = get_intervention_recommendation(80.0)
     assert result_80["type"] == "urgent_intervention"

@@ -18,9 +18,8 @@ If a new model needs to reference a student, the FK column MUST be named
 "student_org_id" and point to students.org_defined_id.
 """
 
-from datetime import datetime
-from sqlalchemy import Column, String, Integer, Boolean, DateTime, Index
-from sqlalchemy.orm import relationship, foreign
+from sqlalchemy import Column, String, Boolean, DateTime, Index
+from sqlalchemy.orm import relationship
 from backend.database.connection import Base
 
 

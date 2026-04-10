@@ -10,4 +10,4 @@ This package contains:
 - training/: Model training and evaluation
 """
 
-__all__ = []
+__all__: list[str] = []

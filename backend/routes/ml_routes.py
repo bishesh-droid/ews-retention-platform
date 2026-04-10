@@ -21,7 +21,7 @@ from datetime import datetime, timedelta
 from fastapi import APIRouter, Depends, HTTPException
 from pydantic import BaseModel
 from sqlalchemy.orm import Session
-from sqlalchemy import desc, func, and_, case
+from sqlalchemy import func, and_, case
 
 from backend.api.deps import get_current_user, get_db_async, require_role
 from backend.application.student.student_application_service import StudentApplicationService

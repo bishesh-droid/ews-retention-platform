@@ -6,7 +6,7 @@ Provides FERPA-compliant audit trail access for administrators.
 All endpoints require admin role for access.
 """
 
-from typing import List, Optional
+from typing import Optional
 from datetime import datetime, date
 
 from fastapi import APIRouter, Depends, HTTPException, Query
@@ -14,7 +14,7 @@ from sqlalchemy.orm import Session
 from sqlalchemy import desc, func
 from sqlalchemy.exc import SQLAlchemyError
 
-from backend.api.deps import get_db, get_current_user, require_role
+from backend.api.deps import get_db, require_role
 from backend.database.models.user import User
 from backend.database.models.audit import AuditLog
 from backend.core.logger import sys_logger
@@ -40,7 +40,7 @@ def get_audit_logs(
 ):
     """
     Get paginated audit logs for FERPA compliance review.
-    
+
     This endpoint returns a list of all data access events, including:
     - Who accessed the data (user_id, user_role)
     - What action was performed (READ/WRITE/DELETE)
@@ -48,7 +48,7 @@ def get_audit_logs(
     - When it occurred (timestamp)
     - From where (ip_address)
     - Request trace ID (request_id)
-    
+
     Access: Admin only (for FERPA compliance monitoring)
     """
     try:
@@ -122,13 +122,13 @@ def get_audit_summary(
 ):
     """
     Get a summary of audit activity for compliance reporting.
-    
+
     Returns aggregated statistics:
     - Total access events
     - Breakdown by action type (READ/WRITE/DELETE)
     - Breakdown by resource type
     - Top users by access count
-    
+
     Access: Admin only
     """
     try:
@@ -201,10 +201,10 @@ def get_student_audit_trail(
 ):
     """
     Get audit trail for a specific student.
-    
+
     Returns all access events related to this student, useful for
     FERPA compliance investigations.
-    
+
     Access: Admin only
     """
     try:

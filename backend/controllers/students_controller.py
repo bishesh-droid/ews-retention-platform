@@ -117,25 +117,25 @@ def act_on_intervention(
 ):
     """
     Mark an intervention as acted upon by the advisor.
-    
+
     Body: {"notes": str (optional)}
     Sets acted_on=True, acted_on_at=now, acted_on_by=current_user.username
     """
     log = db.query(InterventionLog).filter(InterventionLog.id == log_id).first()
     if not log:
         raise HTTPException(status_code=404, detail="Intervention log not found")
-    
+
     log.acted_on = True
     log.acted_on_at = datetime.utcnow()
     log.acted_on_by = getattr(current_user, "username", "unknown")
     log.reviewed = True
-    
+
     notes = body.get("notes")
     if notes:
         log.notes = notes
-    
+
     db.commit()
-    
+
     return {
         "id": log.id,
         "student_org_id": log.student_org_id,
@@ -157,26 +157,26 @@ def dismiss_intervention(
 ):
     """
     Dismiss an intervention recommendation.
-    
+
     Body: {"reason": str}
     Sets acted_on=False, reviewed=True, dismissed_reason=reason
     """
     log = db.query(InterventionLog).filter(InterventionLog.id == log_id).first()
     if not log:
         raise HTTPException(status_code=404, detail="Intervention log not found")
-    
+
     reason = body.get("reason")
     if not reason:
         raise HTTPException(status_code=400, detail="reason is required")
-    
+
     log.acted_on = False
     log.acted_on_at = datetime.utcnow()
     log.acted_on_by = getattr(current_user, "username", "unknown")
     log.reviewed = True
     log.dismissed_reason = reason
-    
+
     db.commit()
-    
+
     return {
         "id": log.id,
         "student_org_id": log.student_org_id,
@@ -207,7 +207,7 @@ def get_pending_interventions(
     is_superuser = getattr(_user, "is_superuser", False)
 
     # Scope query to department for faculty users
-    query = db.query(InterventionLog).filter(InterventionLog.reviewed == False)
+    query = db.query(InterventionLog).filter(InterventionLog.reviewed.is_(False))
 
     if role == "faculty" and not is_superuser:
         dept = getattr(_user, "department", None)
@@ -218,31 +218,31 @@ def get_pending_interventions(
                 .join(Student, Student.org_defined_id == InterventionLog.student_org_id)
                 .filter(Student.parent_department_name == dept)
             )
-    
+
     if semester:
         query = query.filter(InterventionLog.semester_name == semester)
     if week:
         query = query.filter(InterventionLog.week_number == week)
     if type:
         query = query.filter(InterventionLog.intervention_type == type)
-    
+
     # Join with Student to get name and support program filter
     query = query.join(Student, InterventionLog.student_org_id == Student.org_defined_id)
-    
+
     if program:
         query = query.filter(Student.parent_department_name.ilike(f"%{program}%"))
-    
+
     logs = query.order_by(desc(InterventionLog.risk_score_at_recommendation)).all()
-    
+
     # Batch lookup students to avoid N+1 and missing relationship issues
     student_org_ids = [log.student_org_id for log in logs]
     student_map = {
         s.org_defined_id: s
         for s in db.query(Student)
-            .filter(Student.org_defined_id.in_(student_org_ids))
-            .all()
+        .filter(Student.org_defined_id.in_(student_org_ids))
+        .all()
     } if student_org_ids else {}
-    
+
     return [
         {
             "log_id": log.id,
@@ -543,9 +543,9 @@ def get_cohort_risk_trends(
     return {
         "labels": labels,
         "series": {
-            "overall": [avg(buckets[l]["overall"]) for l in labels],
-            "high": [avg(buckets[l]["high"]) for l in labels],
-            "critical": [avg(buckets[l]["critical"]) for l in labels],
+            "overall": [avg(buckets[lbl]["overall"]) for lbl in labels],
+            "high": [avg(buckets[lbl]["high"]) for lbl in labels],
+            "critical": [avg(buckets[lbl]["critical"]) for lbl in labels],
         },
         "points": len(snaps),
     }
@@ -575,7 +575,7 @@ def get_cohort_engagement_trends(
         buckets.setdefault(key, []).append(eng)
 
     labels = sorted(buckets.keys())
-    values = [round(sum(buckets[l]) / len(buckets[l]), 2) for l in labels] if labels else []
+    values = [round(sum(buckets[lbl]) / len(buckets[lbl]), 2) for lbl in labels] if labels else []
     return {"labels": labels, "values": values, "points": len(snaps)}
 
 
@@ -611,7 +611,7 @@ def get_cohort_performance_trends(
         buckets.setdefault(key, []).append(val)
 
     labels = sorted(buckets.keys())
-    values = [round(sum(buckets[l]) / len(buckets[l]), 3) for l in labels] if labels else []
+    values = [round(sum(buckets[lbl]) / len(buckets[lbl]), 3) for lbl in labels] if labels else []
     return {"labels": labels, "values": values, "points": len(preds)}
 
 

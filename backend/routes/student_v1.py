@@ -1,13 +1,12 @@
 from fastapi import APIRouter, Depends
-from typing import List
 from sqlalchemy.orm import Session
 
 from backend.database import Student, Goal, RiskSnapshot
 from backend.api import deps
-from backend.schemas.student import Student as StudentSchema
 from backend.utils.api import success_response
 
 router = APIRouter()
+
 
 @router.get("/me")
 def get_my_profile(
@@ -19,6 +18,7 @@ def get_my_profile(
     """
     student = db.query(Student).filter(Student.id == current_user.email).first()
     return success_response(student, message="Student profile")
+
 
 @router.get("/goals")
 def get_my_goals(
@@ -34,6 +34,7 @@ def get_my_goals(
         message="Student goals",
         meta={"pagination": {"total": len(goals)}},
     )
+
 
 @router.get("/risk-history")
 def get_my_risk_history(

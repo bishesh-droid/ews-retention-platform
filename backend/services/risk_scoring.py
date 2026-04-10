@@ -59,7 +59,7 @@ class RiskScorer:
         if raw_value is None:
             return None
         try:
-            v = float(raw_value)
+            v = float(raw_value)  # type: ignore[arg-type]
         except (TypeError, ValueError):
             return None
         if not isfinite(v):
@@ -74,7 +74,7 @@ class RiskScorer:
         if raw_value is None:
             return None
         try:
-            score = float(raw_value)
+            score = float(raw_value)  # type: ignore[arg-type]
         except (TypeError, ValueError):
             return None
         if not isfinite(score):
@@ -246,7 +246,7 @@ class RiskScorer:
 
         if not risk_contributions:
             return "Insufficient Data"
-        return max(risk_contributions, key=risk_contributions.get)
+        return max(risk_contributions, key=lambda k: risk_contributions[k])
 
     @staticmethod
     def get_risk_breakdown(features: Dict) -> Dict:

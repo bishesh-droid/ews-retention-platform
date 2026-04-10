@@ -4,7 +4,7 @@ Course Model
 Database model for course offerings from Engagement_Analysis.xlsx.
 """
 
-from sqlalchemy import Column, String, Integer, Float
+from sqlalchemy import Column, String, Integer
 from sqlalchemy.orm import relationship
 from backend.database.connection import Base
 

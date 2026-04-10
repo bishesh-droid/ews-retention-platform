@@ -4,16 +4,17 @@ EWS Retention Platform API
 Application entry point.
 """
 
+from fastapi.exceptions import RequestValidationError
+from starlette.exceptions import HTTPException as StarletteHTTPException
 import asyncio
 import time
-import traceback
 import socket
 import os
 from urllib.parse import urlparse
 
 from contextlib import asynccontextmanager
 
-from fastapi import FastAPI, Request, HTTPException, status
+from fastapi import FastAPI, Request, status
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.responses import JSONResponse
 from sqlalchemy import text
@@ -35,7 +36,7 @@ from backend.middleware.request_id import RequestIDMiddleware
 from backend.middleware.security_headers import SecurityHeadersMiddleware
 from backend.services.infrastructure.scheduler import scheduler_service
 from backend.services.ml_service import ml_service
-from backend.utils.api import AppError, error_response, success_response
+from backend.utils.api import AppError, success_response
 
 
 # ---------------------------------------------------------------------------
@@ -144,10 +145,10 @@ async def lifespan(app: FastAPI):
 
     # Initialize rate limiter with selected backend.
     try:
-        limiter.storage_uri = limiter_storage_uri
-        limiter.default_limits = [RATE_LIMIT_DEFAULT]
+        limiter._storage_uri = limiter_storage_uri  # type: ignore[attr-defined]
+        limiter._default_limits = [RATE_LIMIT_DEFAULT]  # type: ignore[attr-defined, list-item]
         app.state.limiter = limiter
-        app.add_exception_handler(RateLimitExceeded, rate_limit_exceeded_handler)
+        app.add_exception_handler(RateLimitExceeded, rate_limit_exceeded_handler)  # type: ignore[arg-type]
         sys_logger.info(f"Rate limiter initialized with backend: {limiter_storage_uri}")
     except Exception as e:
         sys_logger.error(f"Failed to initialize rate limiter: {e}")
@@ -262,14 +263,14 @@ app.middleware("http")(request_validation_middleware)
 # Centralised exception handlers (using standardized errors)
 # ---------------------------------------------------------------------------
 
-from starlette.exceptions import HTTPException as StarletteHTTPException
-from fastapi.exceptions import RequestValidationError
 
-app.add_exception_handler(StarletteHTTPException, http_exception_handler)
-app.add_exception_handler(RequestValidationError, validation_exception_handler)
+app.add_exception_handler(StarletteHTTPException, http_exception_handler)  # type: ignore[arg-type]
+app.add_exception_handler(RequestValidationError, validation_exception_handler)  # type: ignore[arg-type]
 app.add_exception_handler(Exception, unhandled_exception_handler)
 
 # Keep AppError handler for custom application errors
+
+
 @app.exception_handler(AppError)
 async def app_error_handler(request: Request, exc: AppError):
     from backend.core.errors import error_response as std_error_response
@@ -279,7 +280,7 @@ async def app_error_handler(request: Request, exc: AppError):
     )
     return JSONResponse(
         status_code=exc.status_code,
-        content=std_error_response(exc.status_code, exc.message, exc.details, request_id),
+        content=std_error_response(exc.status_code, exc.message, str(exc.details) if exc.details else None, request_id),  # type: ignore[arg-type]
     )
 
 

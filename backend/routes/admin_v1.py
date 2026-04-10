@@ -13,8 +13,7 @@ from backend.config import INTERVENTION_THRESHOLDS
 from backend.database.models.goals_and_risks import RiskSnapshot
 from backend.database.models.intervention_log import InterventionLog
 from backend.database.models.enrollment import Enrollment
-from backend.database.models.graded_component import GradedComponent
-from backend.database.models.academic import ExamRecord
+from backend.database.models.academic import GradedComponent, ExamRecord
 from backend.database.models.prediction import Prediction
 
 router = APIRouter()
@@ -185,21 +184,20 @@ def get_intervention_effectiveness(
 ):
     """
     Get intervention effectiveness summary (Admin only).
-    
+
     Returns metrics on recommendation review rates, acted-on rates, and outcomes.
     """
     from backend.database.models.intervention_log import InterventionLog
-    from sqlalchemy import func
 
     query = db.query(InterventionLog)
-    
+
     if semester:
         query = query.filter(InterventionLog.semester_name == semester)
     if week_from:
         query = query.filter(InterventionLog.week_number >= week_from)
     if week_to:
         query = query.filter(InterventionLog.week_number <= week_to)
-    
+
     # Join with Student for program filtering
     if program is not None:
         # Validate and sanitize program filter (SEC-8)
@@ -210,9 +208,9 @@ def get_intervention_effectiveness(
         # not injected into the SQL string. Length check prevents log flooding and ReDoS.
         query = query.join(Student, InterventionLog.student_org_id == Student.org_defined_id)
         query = query.filter(Student.parent_department_name.ilike(f"%{program_clean}%"))
-    
+
     all_logs = query.all()
-    
+
     if not all_logs:
         return {
             "total_recommendations": 0,
@@ -228,24 +226,24 @@ def get_intervention_effectiveness(
             "by_intervention_type": {},
             "by_engagement_pattern": {},
         }
-    
+
     total = len(all_logs)
     reviewed = sum(1 for log in all_logs if log.reviewed)
     acted_on = sum(1 for log in all_logs if log.acted_on is True)
     dismissed = sum(1 for log in all_logs if log.acted_on is False)
     pending = sum(1 for log in all_logs if log.acted_on is None)
-    
+
     outcomes = {"improved": 0, "unchanged": 0, "worsened": 0, "pending": 0}
     total_delta = 0.0
     acted_with_outcome = 0
-    
+
     for log in all_logs:
         if log.outcome:
             outcomes[log.outcome] = outcomes.get(log.outcome, 0) + 1
         if log.acted_on and log.outcome_delta is not None:
             total_delta += log.outcome_delta
             acted_with_outcome += 1
-    
+
     # By intervention type
     type_stats = {}
     for log in all_logs:
@@ -257,7 +255,7 @@ def get_intervention_effectiveness(
             type_stats[itype]["acted"] += 1
         if log.outcome == "improved":
             type_stats[itype]["improved"] += 1
-    
+
     by_type = {}
     for itype, stats in type_stats.items():
         by_type[itype] = {
@@ -265,7 +263,7 @@ def get_intervention_effectiveness(
             "acted_rate": round(stats["acted"] / stats["count"], 3) if stats["count"] > 0 else 0,
             "improvement_rate": round(stats["improved"] / stats["acted"], 3) if stats["acted"] > 0 else 0,
         }
-    
+
     # By engagement pattern
     pattern_stats = {}
     for log in all_logs:
@@ -275,7 +273,7 @@ def get_intervention_effectiveness(
         pattern_stats[pattern]["count"] += 1
         if log.outcome == "improved":
             pattern_stats[pattern]["improved"] += 1
-    
+
     by_pattern = {}
     for pattern, stats in pattern_stats.items():
         acted_count = sum(1 for log in all_logs if log.engagement_pattern == pattern and log.acted_on)
@@ -283,10 +281,10 @@ def get_intervention_effectiveness(
             "count": stats["count"],
             "improvement_rate": round(stats["improved"] / acted_count, 3) if acted_count > 0 else 0,
         }
-    
+
     improved_among_acted = outcomes["improved"] if acted_on > 0 else 0
     avg_delta = total_delta / acted_with_outcome if acted_with_outcome > 0 else 0
-    
+
     return {
         "total_recommendations": total,
         "reviewed": reviewed,
@@ -400,7 +398,7 @@ async def get_thresholds(
 ):
     """
     Get current risk threshold configuration.
-    
+
     Returns the active threshold values so the frontend can stay synced
     without requiring code changes when thresholds are adjusted.
     """
@@ -421,33 +419,33 @@ def evaluate_scorer(
 ):
     """
     Evaluate rule-based risk scorer against labeled T1 outcomes (Admin only).
-    
+
     Returns evaluation metrics comparing risk scores to actual outcomes
     (dropped/deferred vs completed/active).
-    
+
     Parameters:
     - threshold: Risk score threshold for "at risk" classification (default 60.0)
     - compare_thresholds: If True, evaluate at multiple thresholds (50, 60, 70, 80)
-    
+
     The evaluation requires final_outcome fields to be populated via data ingestion.
     """
     import sys
     import os
-    
+
     # Add project root to path for imports
     sys.path.insert(0, os.path.join(os.path.dirname(__file__), "..", ".."))
-    
+
     from backend.ml.training.evaluate import load_labeled_data, run_evaluation
-    
+
     df = load_labeled_data(db)
-    
+
     if len(df) == 0:
         return {
             "error": "No labeled outcomes found",
             "message": "Run data ingestion first to populate final_outcome fields via infer_outcomes_from_exam_data()",
             "evaluated_students": 0,
         }
-    
+
     if compare_thresholds:
         thresholds = [50.0, 60.0, 70.0, 80.0]
         results = []
@@ -460,7 +458,7 @@ def evaluate_scorer(
                 "f1_score": metrics["f1_score"],
                 "specificity": metrics["specificity"],
             })
-        
+
         return {
             "evaluated_students": len(df),
             "outcome_breakdown": metrics.get("outcome_breakdown", {}),
@@ -469,7 +467,7 @@ def evaluate_scorer(
         }
     else:
         metrics = run_evaluation(df, threshold=threshold)
-        
+
         return {
             "threshold": threshold,
             "evaluated_students": metrics["total_students"],
@@ -492,7 +490,7 @@ def evaluate_scorer(
 @router.delete("/students/{org_id}/erase", status_code=204,
                dependencies=[Depends(require_role(["admin"]))])
 async def erase_student(org_id: str, db: Session = Depends(deps.get_db),
-                         _user: User = Depends(get_current_user)):
+                        _user: User = Depends(get_current_user)):
     """
     GDPR Art. 17 right to erasure. Hard deletes all data for this student.
     Irreversible. Requires admin role. Logged to audit trail.
@@ -554,7 +552,7 @@ async def export_student_data(org_id: str, db: Session = Depends(deps.get_db)):
                            "outcome": i.outcome, "recommended_at": i.recommended_at.isoformat() if i.recommended_at else None}
                           for i in interventions],
         "predictions": [{"risk_score": p.risk_score, "retention_likelihood": p.retention_likelihood,
-                          "created_at": p.created_at.isoformat() if p.created_at else None} for p in predictions],
+                         "created_at": p.created_at.isoformat() if p.created_at else None} for p in predictions],
         "graded_components": [{"course": g.course_name, "component": g.component_name,
                                "score": g.score, "missed": g.missed} for g in graded],
         "exam_records": [{"course": e.course_code, "present": e.present,

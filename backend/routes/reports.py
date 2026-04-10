@@ -5,7 +5,6 @@ from typing import Any, Dict, List, Optional
 from pydantic import BaseModel
 from pathlib import Path
 from datetime import datetime
-import mimetypes
 import uuid
 
 from backend.database import User, Prediction, Student
@@ -132,7 +131,7 @@ def list_generated_reports(
 
     rows: List[Dict[str, Any]] = []
     for a in q.all():
-        d = a.details or {}
+        d: Dict[str, Any] = a.details or {}
         rows.append(
             {
                 "id": a.id,
@@ -242,8 +241,8 @@ def generate_report(
 
     audit = AuditService.log_action(
         db,
-        user_id=current_user.id,
-        user_role=current_user.role,
+        user_id=current_user.id,  # type: ignore[arg-type]
+        user_role=current_user.role,  # type: ignore[arg-type]
         action_type="report_generated",
         affected_student_id=None,
         details={
@@ -289,7 +288,7 @@ def download_generated_report(
     if not audit:
         return Response(status_code=404, content="Not found")
 
-    d = audit.details or {}
+    d: Dict[str, Any] = audit.details or {}
     file_path = d.get("file_path")
     file_name = d.get("file_name") or "report.bin"
     fmt = d.get("format") or ""
@@ -331,20 +330,21 @@ def export_students(
         {"id": s.id, "name": f"{s.first_name} {s.last_name}", "department": s.parent_department_name}
         for s in students
     ]
-    
-    ExportService.log_export(db, current_user.id, current_user.role, f"students_{format}")
+
+    ExportService.log_export(db, int(current_user.id), str(current_user.role), f"students_{format}")  # type: ignore[arg-type]
 
     db.commit()
-    
+
     if format == "csv":
-        content = ExportService.to_csv(data)
-        return Response(content=content, media_type="text/csv", headers={"Content-Disposition": "attachment; filename=students.csv"})
+        csv_content = ExportService.to_csv(data)
+        return Response(content=csv_content, media_type="text/csv", headers={"Content-Disposition": "attachment; filename=students.csv"})
     elif format == "excel":
-        content = ExportService.to_excel(data)
-        return StreamingResponse(content, media_type="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet", headers={"Content-Disposition": "attachment; filename=students.xlsx"})
+        excel_bio = ExportService.to_excel(data)
+        return StreamingResponse(excel_bio, media_type="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet", headers={"Content-Disposition": "attachment; filename=students.xlsx"})
     elif format == "pdf":
-        content = ExportService.to_pdf(data, "Student List")
-        return Response(content=content, media_type="application/pdf", headers={"Content-Disposition": "attachment; filename=students.pdf"})
+        pdf_bio = ExportService.to_pdf(data, "Student List")
+        return StreamingResponse(pdf_bio, media_type="application/pdf", headers={"Content-Disposition": "attachment; filename=students.pdf"})
+
 
 @router.get("/export/risk-summary")
 def export_risk_summary(
@@ -356,14 +356,14 @@ def export_risk_summary(
     Export high-level risk summary.
     """
     predictions = db.query(Prediction).all()
-    data = [
+    [
         {"student_id": p.student_id, "risk_score": p.risk_score, "likelihood": p.retention_likelihood}
         for p in predictions
     ]
-    
-    ExportService.log_export(db, current_user.id, current_user.role, f"risk_summary_{format}")
+
+    ExportService.log_export(db, int(current_user.id), str(current_user.role), f"risk_summary_{format}")  # type: ignore[arg-type]
 
     db.commit()
-    
+
     # ... logic similar to above ...
     return {"message": "Export initiated"}

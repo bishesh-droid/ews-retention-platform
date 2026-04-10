@@ -29,7 +29,7 @@ class ConsistencyFeatures:
 class ConsistencyFeatureExtractor:
     """
     Extracts behavioral consistency features from enrollment records.
-    
+
     Analyzes login patterns, progress consistency, and ghost student detection.
     """
 
@@ -48,7 +48,7 @@ class ConsistencyFeatureExtractor:
     def _to_non_negative(value: object) -> float:
         """Parse value as non-negative float."""
         try:
-            v = float(value or 0)
+            v = float(value or 0)  # type: ignore[arg-type]
         except (TypeError, ValueError):
             return 0.0
         import math
@@ -59,16 +59,16 @@ class ConsistencyFeatureExtractor:
     def extract(self, enrollments: List[Dict], total_login_count: int) -> ConsistencyFeatures:
         """
         Extract all consistency features from enrollment data.
-        
+
         Args:
             enrollments: List of enrollment dictionaries
             total_login_count: Total logins across all courses for the student
-            
+
         Returns:
             ConsistencyFeatures dataclass with calculated features
         """
         ghost_info = self._detect_ghost_student(enrollments, total_login_count)
-        
+
         return ConsistencyFeatures(
             engagement_trend=self._get_engagement_trend(enrollments),
             is_ghost=ghost_info["is_ghost"],
@@ -81,7 +81,7 @@ class ConsistencyFeatureExtractor:
     def _get_engagement_trend(self, enrollments: List[Dict]) -> str:
         """
         Determine engagement trend by comparing login recency.
-        
+
         Returns:
             "active" - substantial recent activity (last 2 weeks)
             "declining" - has activity but mostly not recent
@@ -105,8 +105,8 @@ class ConsistencyFeatureExtractor:
                 e.get("last_scorm_visit_date"),
                 e.get("last_scorm_completion_date"),
             ]
-            parsed = [self._parse_timestamp(ts) for ts in activity_timestamps if ts]
-            parsed = [p for p in parsed if p is not None]
+            parsed_raw = [self._parse_timestamp(ts) for ts in activity_timestamps if ts]
+            parsed: List[datetime] = [p for p in parsed_raw if p is not None]
             if not parsed:
                 continue
             any_activity += 1
@@ -134,15 +134,15 @@ class ConsistencyFeatureExtractor:
     def _detect_ghost_student(self, enrollments: List[Dict], student_login_count: int) -> Dict:
         """
         Detect "ghost" students with zero meaningful engagement.
-        
+
         Ghost types:
         - never_logged_in: Zero logins to the LMS
         - logged_in_never_started: Has logged in but never accessed content
-        
+
         Args:
             enrollments: List of enrollment dictionaries
             student_login_count: Total number of logins across all courses
-            
+
         Returns:
             Dictionary with ghost detection results
         """

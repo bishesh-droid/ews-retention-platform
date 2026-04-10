@@ -5,7 +5,6 @@ from typing import Optional
 
 try:
     from google import genai
-    from google.genai import types
     GENAI_AVAILABLE = True
 except ImportError:
     genai = None
@@ -34,6 +33,7 @@ async_anthropic_client: Optional[AsyncAnthropic] = None
 
 if LLM_PROVIDER == "claude" and ANTHROPIC_AVAILABLE and CLAUDE_API_KEY:
     async_anthropic_client = AsyncAnthropic(api_key=CLAUDE_API_KEY)
+
 
 async def _load_prompt_template(prompt_name: str, use_hardened: bool = True) -> str:
     """
@@ -174,6 +174,8 @@ async def get_ai_advice(
 
     except Exception as e:
         return f"Error: Could not get AI advice - {e}"
+
+
 async def main_test():
     """Async test function for the AI advisor."""
     from backend.database.connection import AsyncSessionLocal

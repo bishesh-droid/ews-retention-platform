@@ -24,7 +24,6 @@ class PatternDiscoveryBase(BaseModel):
 
 class PatternDiscoveryCreate(PatternDiscoveryBase):
     """Schema for creating a pattern discovery."""
-    pass
 
 
 class PatternDiscovery(PatternDiscoveryBase):
@@ -33,7 +32,7 @@ class PatternDiscovery(PatternDiscoveryBase):
     discovered_at: date
     acknowledged: int
     acted_upon: int
-    
+
     model_config = ConfigDict(from_attributes=True)
 
 

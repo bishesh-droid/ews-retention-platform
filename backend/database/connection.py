@@ -13,7 +13,6 @@ from sqlalchemy.ext.asyncio import create_async_engine, AsyncSession, async_sess
 from typing import AsyncGenerator, Generator
 from sqlalchemy.orm import Session, declarative_base, sessionmaker
 from backend.config import DATABASE_URL
-import asyncio
 
 
 def _set_sqlite_pragmas(dbapi_connection, connection_record):
@@ -82,6 +81,7 @@ AsyncSessionLocal = async_sessionmaker(
 
 # Create declarative base for models
 Base = declarative_base()
+
 
 def get_db() -> Generator[Session, None, None]:
     """Canonical sync DB dependency for FastAPI sync endpoints."""

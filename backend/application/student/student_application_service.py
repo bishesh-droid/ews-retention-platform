@@ -16,7 +16,6 @@ from backend.database import Course, Enrollment, Student
 from backend.domain.student import build_intervention_recommendation
 from backend.infrastructure.student_repository import StudentRepository
 from backend.database.models.intervention_log import InterventionLog
-from datetime import datetime
 from backend.services.feature_engineering import FeatureEngineer
 from backend.services.calendar_scorer import get_current_week
 from backend.services.risk_scoring import RiskScorer
@@ -116,7 +115,8 @@ class StudentApplicationService:
             "trend": features["engagement_trend"],
             "total_courses": features["total_courses"],
             "per_course_breakdown": features["per_course_breakdown"],
-            "exam_attendance_score": features.get("exam_attendance_rate"),  # BREAKING_CHANGE: renamed from attendance_score in v1.1
+            # BREAKING_CHANGE: renamed from attendance_score in v1.1
+            "exam_attendance_score": features.get("exam_attendance_rate"),
             "attendance_score": features.get("exam_attendance_rate"),  # DEPRECATED — remove in v1.2
             "academic_score": features["content_completion_score"],
             "behavioral_score": features["discussion_engagement_score"],
@@ -185,7 +185,7 @@ class StudentApplicationService:
     ) -> Dict[str, Any]:
         """
         Get paginated students with computed risk metrics.
-        
+
         Returns dict with:
         - students: List[Dict] — the student records
         - total: int — total count for pagination (accounts for risk filters)
@@ -219,7 +219,6 @@ class StudentApplicationService:
 
         # D5-2: Use pre-computed feature store for list view (fast path)
         from backend.database.models.event import EngineeredFeatures
-        import json
 
         feat_map = {
             f.student_id: {
@@ -243,16 +242,16 @@ class StudentApplicationService:
                 "avg_response_time_hours": f.avg_response_time_hours,
             }
             for f in db.query(EngineeredFeatures)
-                .filter(EngineeredFeatures.student_id.in_(student_ids))
-                .all()
+            .filter(EngineeredFeatures.student_id.in_(student_ids))
+            .all()
         }
 
         # Fallback: fetch enrollment/graded/exam data for students not in feature store
         missing_ids = [sid for sid in student_ids if sid not in feat_map]
         if missing_ids:
-            enrollment_map = StudentRepository.fetch_enrollments_map(db, missing_ids)
-            graded_map = StudentRepository.fetch_graded_map(db, missing_ids)
-            exam_map = StudentRepository.fetch_exam_map(db, missing_ids)
+            enrollment_map = StudentRepository.fetch_enrollments_map(db, missing_ids)  # type: ignore[arg-type]
+            graded_map = StudentRepository.fetch_graded_map(db, missing_ids)  # type: ignore[arg-type]
+            exam_map = StudentRepository.fetch_exam_map(db, missing_ids)  # type: ignore[arg-type]
         else:
             enrollment_map, graded_map, exam_map = {}, {}, {}
 
@@ -264,20 +263,20 @@ class StudentApplicationService:
             current_week = get_current_week(settings.TRIMESTER_START_DATE)
 
             # Read from feature store if available, else compute live
-            features = feat_map.get(student.id)
+            features = feat_map.get(student.id)  # type: ignore[arg-type]
             if features is None:
                 # Fall back to live computation for students not yet in feature store
                 features = StudentApplicationService._calculate_features(
-                    enrollment_map.get(student.id, []),
-                    graded_map.get(student.id, []),
-                    exam_map.get(student.id, []),
+                    enrollment_map.get(student.id, []),  # type: ignore[arg-type]
+                    graded_map.get(student.id, []),  # type: ignore[arg-type]
+                    exam_map.get(student.id, []),  # type: ignore[arg-type]
                     is_new_student=is_new,
                     week_number=wn,
                 )
 
             risk_fields = StudentApplicationService._derive_risk_fields(
                 features,
-                graded_dicts=graded_map.get(student.id, []),
+                graded_dicts=graded_map.get(student.id, []),  # type: ignore[arg-type]
                 program=program,
                 current_week=current_week,
                 pred_row=pred_row,
@@ -312,14 +311,14 @@ class StudentApplicationService:
         ]
         if sort_by in computed_fields:
             result.sort(key=lambda x: x.get(sort_by, 0) or 0, reverse=reverse)
-        
+
         # D5-1: Fix pagination total when risk filter is applied
         # Risk filtering is post-computation — derive count from filtered results
         if risk_min is not None or risk_max is not None:
             total = len(result)
         else:
             total = len(result)  # For DB-filtered case, this matches the query count
-        
+
         return {
             "students": result,
             "total": total,
@@ -334,11 +333,11 @@ class StudentApplicationService:
     ) -> int:
         """
         Get count of students matching filters.
-        
+
         Note: Risk filtering is NOT applied at the DB level because the Prediction
         table may be empty or stale. To filter by risk, use get_all_students()
         and count the results (risk filter is applied post-computation there).
-        
+
         This function returns the total count for pagination purposes when
         risk filters are not active.
         """
@@ -408,7 +407,7 @@ class StudentApplicationService:
         ghost_stats = {"never_logged_in": 0, "logged_in_never_started": 0, "total_ghosts": 0}
         students_with_enrollments = db.query(Student).all()
         for student in students_with_enrollments:
-            enrollment_dicts = StudentRepository.fetch_enrollments_map(db, [student.id]).get(student.id, [])
+            enrollment_dicts = StudentRepository.fetch_enrollments_map(db, [student.id]).get(student.id, [])  # type: ignore[arg-type, list-item]
             if enrollment_dicts:
                 from backend.services.feature_engineering import FeatureEngineer
                 total_logins = sum(e.get("num_logins", 0) or 0 for e in enrollment_dicts)
@@ -441,7 +440,6 @@ class StudentApplicationService:
         Returns:
             Dict with counts for each engagement pattern category
         """
-        from backend.database.models.prediction import Prediction
 
         pred_subq = StudentRepository.latest_prediction_rows_subquery(db)
         base = db.query(Student).outerjoin(pred_subq, pred_subq.c.student_id == Student.id)
@@ -459,9 +457,9 @@ class StudentApplicationService:
             return {"disengaged": 0, "struggling": 0, "at_risk_normal": 0, "on_track": 0}
 
         student_ids = [s.id for s in students]
-        enrollment_map = StudentRepository.fetch_enrollments_map(db, student_ids)
-        graded_map = StudentRepository.fetch_graded_map(db, student_ids)
-        exam_map = StudentRepository.fetch_exam_map(db, student_ids)
+        enrollment_map = StudentRepository.fetch_enrollments_map(db, student_ids)  # type: ignore[arg-type]
+        graded_map = StudentRepository.fetch_graded_map(db, student_ids)  # type: ignore[arg-type]
+        exam_map = StudentRepository.fetch_exam_map(db, student_ids)  # type: ignore[arg-type]
 
         patterns = {"disengaged": 0, "struggling": 0, "at_risk_normal": 0, "on_track": 0}
 
@@ -469,9 +467,9 @@ class StudentApplicationService:
             is_new = (student.old_new_student or "").lower() == "new"
             wn = trimester_week_number()
             features = StudentApplicationService._calculate_features(
-                enrollment_map.get(student.id, []),
-                graded_map.get(student.id, []),
-                exam_map.get(student.id, []),
+                enrollment_map.get(student.id, []),  # type: ignore[arg-type]
+                graded_map.get(student.id, []),  # type: ignore[arg-type]
+                exam_map.get(student.id, []),  # type: ignore[arg-type]
                 is_new_student=is_new,
                 week_number=wn,
             )
@@ -492,8 +490,10 @@ class StudentApplicationService:
             return None
         e = Enrollment
         total_enrolled = db.query(func.count(e.id)).filter(e.course_id == course_id).scalar() or 0
-        sum_completed = db.query(func.coalesce(func.sum(e.content_completed), 0)).filter(e.course_id == course_id).scalar() or 0
-        sum_time = db.query(func.coalesce(func.sum(e.total_time_spent_seconds), 0)).filter(e.course_id == course_id).scalar() or 0
+        sum_completed = db.query(func.coalesce(func.sum(e.content_completed), 0)
+                                 ).filter(e.course_id == course_id).scalar() or 0
+        sum_time = db.query(func.coalesce(func.sum(e.total_time_spent_seconds), 0)
+                            ).filter(e.course_id == course_id).scalar() or 0
         zero_progress = (
             db.query(func.count(e.id))
             .filter(e.course_id == course_id)
@@ -579,7 +579,8 @@ class StudentApplicationService:
             for dept, count, avg in dept_rows
         ]
         course_stats = (
-            db.query(Course.name, func.count(Enrollment.id), func.avg(Enrollment.content_completed), func.sum(Enrollment.total_time_spent_seconds))
+            db.query(Course.name, func.count(Enrollment.id), func.avg(
+                Enrollment.content_completed), func.sum(Enrollment.total_time_spent_seconds))
             .join(Enrollment, Course.id == Enrollment.course_id, isouter=True)
             .group_by(Course.name)
             .all()
@@ -633,19 +634,19 @@ class StudentApplicationService:
     ) -> Optional[InterventionLog]:
         """
         Log an intervention recommendation if one doesn't already exist for this student-week.
-        
+
         Only logs for intervention types that are not "none" (skips suppressed interventions).
         """
         from backend.database.models.intervention_log import InterventionLog
         from backend.config import trimester_week_number
-        
+
         intervention_type = intervention.get("type")
         if not intervention_type or intervention_type == "none":
             return None  # Skip suppressed interventions
-        
+
         if week_number is None:
             week_number = trimester_week_number()
-        
+
         log_data = {
             "student_org_id": student_org_id,
             "intervention_type": intervention_type,
@@ -680,35 +681,35 @@ class StudentApplicationService:
     ) -> Dict:
         """
         Build intervention recommendation and log it to InterventionLog.
-        
+
         Args:
             db: Database session
             student: Student object with org_defined_id
             risk_score: Current risk score
             features: Feature dictionary with engagement_pattern
-            
+
         Returns:
             Intervention recommendation dictionary
         """
         from backend.services.core.decision_engine import get_intervention_recommendation
-        
+
         engagement_pattern = features.get("engagement_pattern")
         intervention = get_intervention_recommendation(
             risk_score,
             engagement_pattern=engagement_pattern,
             features=features,
         )
-        
+
         # Log the intervention (if not suppressed)
         if student.org_defined_id:
             semester = getattr(student, "semester_name", None) or ""
             StudentApplicationService._log_intervention_if_new(
                 db=db,
-                student_org_id=student.org_defined_id,
+                student_org_id=str(student.org_defined_id),
                 intervention=intervention,
                 risk_score=risk_score,
-                week_number=features.get("week_number"),
+                week_number=int(features.get("week_number") or 0),
                 semester=semester,
             )
-        
+
         return intervention

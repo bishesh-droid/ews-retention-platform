@@ -71,7 +71,7 @@ def _serialize_channels(channels: Optional[List[str]]) -> Optional[str]:
 
 
 def _to_dict(i: Intervention) -> Dict[str, Any]:
-    s = i.student
+    s: Optional[Student] = i.student  # type: ignore[assignment]
     return {
         "id": i.id,
         "student_id": i.student_id,
@@ -158,7 +158,7 @@ def create_intervention(
             action=body.action,
             status=body.status or "Pending",
             assigned_faculty=body.assigned_faculty,
-            risk_score_at_trigger=body.risk_score_at_trigger,
+            risk_score_at_trigger=body.risk_score_at_trigger,  # type: ignore[arg-type]
             threshold_category=body.threshold_category,
             channels=_serialize_channels(body.channels),
             assigned_team=body.assigned_team,
@@ -192,7 +192,7 @@ def update_intervention(
     if body.assigned_team is not None:
         row.assigned_team = body.assigned_team
     if body.effectiveness_score is not None:
-        row.effectiveness_score = body.effectiveness_score
+        row.effectiveness_score = body.effectiveness_score  # type: ignore[assignment]
     if body.ai_reasoning is not None:
         row.ai_reasoning = body.ai_reasoning
 
@@ -201,4 +201,3 @@ def update_intervention(
     db.refresh(row)
 
     return success_response(_to_dict(row), message="Intervention updated")
-

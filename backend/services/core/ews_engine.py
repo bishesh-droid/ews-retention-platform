@@ -20,7 +20,6 @@ from backend.services.calendar_scorer import get_current_week
 from backend.services.risk_scoring import RiskScorer
 from backend.services.core.decision_engine import (
     get_intervention_recommendation,
-    should_trigger_intervention,
     calculate_intervention_priority,
 )
 

@@ -16,7 +16,7 @@ class PredictionBase(BaseModel):
     risk_score: float = Field(ge=0.0, le=100.0, description="Risk score (0-100)")
     engagement_score: float = Field(ge=0.0, le=100.0, description="Engagement score (0-100)")
     retention_likelihood: str
-    attendance: float = ATTENDANCE_FIELD
+    attendance: Optional[float] = ATTENDANCE_FIELD
     assignments: float = Field(ge=0.0, le=100.0, description="Assignment completion (0-100)")
     grades: float = Field(ge=0.0, le=100.0, description="Grade percentage (0-100)")
 
@@ -37,7 +37,6 @@ class PredictionBase(BaseModel):
 
 class PredictionCreate(PredictionBase):
     """Schema for creating a prediction."""
-    pass
 
 
 class Prediction(PredictionBase):
@@ -45,5 +44,5 @@ class Prediction(PredictionBase):
     id: int
     student_id: str
     prediction_timestamp: Optional[datetime] = None
-    
+
     model_config = ConfigDict(from_attributes=True)

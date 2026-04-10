@@ -9,7 +9,6 @@ from sqlalchemy.orm import Session
 from backend.api.deps import get_db, get_current_user
 from backend.services.student_service import StudentService
 from backend.utils.api import success_response
-from fastapi import Depends
 
 router = APIRouter(
     responses={404: {"description": "Not found"}},

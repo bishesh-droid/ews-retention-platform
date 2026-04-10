@@ -12,7 +12,6 @@ import json
 
 from backend.api.deps import get_db, get_current_user, require_resource_ownership
 from backend.database import RawEvent
-from fastapi import Depends
 
 router = APIRouter(
     responses={404: {"description": "Not found"}},
@@ -80,7 +79,7 @@ def get_student_events(
     event_source: str = None,
     limit: int = 100,
     db: Session = Depends(get_db),
-    current_user = Depends(require_resource_ownership("student_id")),
+    current_user=Depends(require_resource_ownership("student_id")),
 ):
     """
     Get raw events for a student, optionally filtered by source.

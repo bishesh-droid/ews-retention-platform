@@ -3,14 +3,13 @@ Decision API Endpoints
 Provides intervention recommendations based on risk scores.
 """
 
-from fastapi import APIRouter, Depends, HTTPException, Query
+from fastapi import APIRouter, Depends, HTTPException
 from sqlalchemy.orm import Session
 from datetime import date
 
 from backend.api.deps import get_db, get_current_user
 from backend.services.student_service import StudentService
-from backend.database import Student, Intervention
-from fastapi import Depends
+from backend.database import Intervention
 
 router = APIRouter(
     responses={404: {"description": "Not found"}},

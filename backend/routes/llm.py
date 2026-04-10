@@ -4,7 +4,7 @@ Provides mock responses for LLM-powered features.
 Real LLM integration can be added later.
 """
 
-from fastapi import APIRouter, Depends, Query, Request
+from fastapi import APIRouter, Depends, Query
 from sqlalchemy.orm import Session
 from typing import Optional, Dict, Any
 from pydantic import BaseModel
@@ -64,8 +64,8 @@ def explain_risk_change(
     data = {
         "student_id": request.student_id,
         "content": f"The primary factor affecting your risk score ({risk:.0f}/100) is {factor}. "
-                   f"Your content completion is at {student.get('content_completion_score', 0):.0f}% "
-                   f"and quiz performance is at {student.get('graded_quiz_score', 0):.0f}%.",
+        f"Your content completion is at {student.get('content_completion_score', 0):.0f}% "
+        f"and quiz performance is at {student.get('graded_quiz_score', 0):.0f}%.",
         "confidence": "high" if risk > 70 or risk < 30 else "medium",
         "sources": ["enrollment_data", "graded_components", "exam_records"],
     }
@@ -118,9 +118,9 @@ def get_faculty_summary(
     data = {
         "student_id": request.student_id,
         "content": f"Student {student.get('first_name', '')} {student.get('last_name', '')} "
-                   f"is enrolled in {student.get('total_courses', 0)} courses. "
-                   f"Content completion: {student.get('content_completion_score', 0):.0f}%. "
-                   f"Primary area of concern: {student.get('dominant_risk_factor', 'N/A')}.",
+        f"is enrolled in {student.get('total_courses', 0)} courses. "
+        f"Content completion: {student.get('content_completion_score', 0):.0f}%. "
+        f"Primary area of concern: {student.get('dominant_risk_factor', 'N/A')}.",
         "confidence": "high",
         "sources": ["enrollment_data", "graded_components"],
     }
@@ -148,7 +148,8 @@ def get_intervention_suggestions(
     risk = student["risk_score"]
     recommendations = []
     if risk >= 70:
-        recommendations.append({"type": "mentor_meeting", "priority": "high", "description": "Schedule immediate mentor meeting"})
+        recommendations.append({"type": "mentor_meeting", "priority": "high",
+                               "description": "Schedule immediate mentor meeting"})
         recommendations.append({"type": "study_plan", "priority": "high", "description": "Create structured study plan"})
     elif risk >= 40:
         recommendations.append({"type": "check_in", "priority": "medium", "description": "Weekly check-in email"})
@@ -173,7 +174,8 @@ def get_priority_queue(
     """Get a priority queue of students needing intervention."""
     students = StudentService.get_all_students(db, 0, limit, "risk_score", "desc", risk_min=40.0)
     queue = [
-        {"student_id": s["id"], "risk_score": s["risk_score"], "priority": "critical" if s["risk_score"] >= 80 else "high" if s["risk_score"] >= 60 else "medium", "dominant_factor": s.get("dominant_risk_factor", "")}
+        {"student_id": s["id"], "risk_score": s["risk_score"], "priority": "critical" if s["risk_score"] >=
+            80 else "high" if s["risk_score"] >= 60 else "medium", "dominant_factor": s.get("dominant_risk_factor", "")}
         for s in students
     ]
     data = {
@@ -203,7 +205,8 @@ def find_similar_students(
 
     risk = student["risk_score"]
     all_students = StudentService.get_all_students(db, 0, 2000, risk_min=max(0, risk - 10), risk_max=min(100, risk + 10))
-    similar = [{"student_id": s["id"], "risk_score": s["risk_score"], "similarity": round(1 - abs(s["risk_score"] - risk) / 100, 2)} for s in all_students if s["id"] != student_id][:limit]
+    similar = [{"student_id": s["id"], "risk_score": s["risk_score"], "similarity": round(
+        1 - abs(s["risk_score"] - risk) / 100, 2)} for s in all_students if s["id"] != student_id][:limit]
 
     data = {"student_id": student_id, "similar_students": similar, "count": len(similar)}
     return success_response(
@@ -264,8 +267,8 @@ def get_weekly_brief(
     data = {
         "student_id": student_id,
         "brief": f"This week, your content completion stands at {student.get('content_completion_score', 0):.0f}%. "
-                 f"You're enrolled in {student.get('total_courses', 0)} courses. "
-                 f"Focus on improving your {student.get('dominant_risk_factor', 'engagement')} this week.",
+        f"You're enrolled in {student.get('total_courses', 0)} courses. "
+        f"Focus on improving your {student.get('dominant_risk_factor', 'engagement')} this week.",
         "confidence": "medium",
         "sources": ["enrollment_data"],
     }
@@ -332,7 +335,8 @@ def get_institutional_insights(
     stats = StudentService.get_overview_stats(db)
     data = {
         "systemic_issues": [
-            {"type": "low_engagement", "description": f"{stats['at_risk_students']} students at high risk", "severity": "high"} if stats['at_risk_students'] > 50 else {"type": "healthy", "description": "Student engagement is within expected range", "severity": "low"}
+            {"type": "low_engagement", "description": f"{stats['at_risk_students']} students at high risk", "severity": "high"} if stats['at_risk_students'] > 50 else {
+                "type": "healthy", "description": "Student engagement is within expected range", "severity": "low"}
         ],
         "blind_spots": [],
         "total_insights": 1,

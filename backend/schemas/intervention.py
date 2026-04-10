@@ -44,7 +44,7 @@ class Intervention(InterventionBase):
     ai_suggested: Optional[int] = 0
     ai_reasoning: Optional[str] = None
     effectiveness_score: Optional[float] = None
-    
+
     model_config = ConfigDict(from_attributes=True)
 
 
@@ -55,12 +55,11 @@ class RecommendationBase(BaseModel):
 
 class RecommendationCreate(RecommendationBase):
     """Schema for creating a recommendation."""
-    pass
 
 
 class Recommendation(RecommendationBase):
     """Full recommendation schema."""
     id: int
     student_id: str
-    
+
     model_config = ConfigDict(from_attributes=True)

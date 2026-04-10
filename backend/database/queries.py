@@ -5,17 +5,16 @@ Common database query helpers and utilities.
 """
 
 from sqlalchemy.orm import Session
-from typing import Optional
 
 
 def get_student_by_id(db: Session, student_id: str):
     """
     Retrieve a student by ID.
-    
+
     Args:
         db: Database session
         student_id: Student identifier
-        
+
     Returns:
         Student model instance or None if not found
     """
@@ -26,11 +25,11 @@ def get_student_by_id(db: Session, student_id: str):
 def get_students_by_ids(db: Session, student_ids: list[str]):
     """
     Retrieve multiple students by IDs.
-    
+
     Args:
         db: Database session
         student_ids: List of student identifiers
-        
+
     Returns:
         List of Student model instances
     """
@@ -41,12 +40,12 @@ def get_students_by_ids(db: Session, student_ids: list[str]):
 def get_all_students(db: Session, skip: int = 0, limit: int = 100):
     """
     Get all students with pagination.
-    
+
     Args:
         db: Database session
         skip: Number of records to skip
         limit: Max number of records to return
-        
+
     Returns:
         List of Student model instances
     """

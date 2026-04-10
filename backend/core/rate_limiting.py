@@ -1,10 +1,8 @@
 from slowapi import Limiter
 from slowapi.util import get_remote_address
 from slowapi.errors import RateLimitExceeded
-from slowapi.wrappers import LimitGroup
 from fastapi import Request, Depends, HTTPException, status
 from fastapi.responses import JSONResponse
-from functools import wraps
 
 from backend.api.deps import get_current_user
 from backend.database.models.user import User
@@ -54,14 +52,15 @@ def get_llm_limiter_key(request: Request) -> str:
 
 async def llm_rate_limit_exceeded_handler(request: Request, exc: RateLimitExceeded):
     """Custom 429 handler for LLM rate limits with Retry-After header."""
+    retry_after = getattr(exc, "retry_after", 60)
     return JSONResponse(
         status_code=status.HTTP_429_TOO_MANY_REQUESTS,
         content={
             "detail": "LLM rate limit exceeded. Please wait before retrying.",
-            "retry_after": exc.retry_after,
+            "retry_after": retry_after,
             "limit_type": "llm_per_user",
         },
-        headers={"Retry-After": str(exc.retry_after)},
+        headers={"Retry-After": str(retry_after)},
     )
 
 
@@ -99,32 +98,33 @@ def require_llm_rate_limit():
         storage = limiter._storage
 
         # Check minute limit (5/min)
-        minute_count = storage.incr(minute_key, 60)  # 60 second window
-        if minute_count > 5:
+        minute_count = storage.incr(minute_key, 60)  # type: ignore[union-attr]
+        if int(minute_count) > 5:
             raise HTTPException(
                 status_code=status.HTTP_429_TOO_MANY_REQUESTS,
                 detail="Rate limit exceeded: 5 requests per minute. Please wait.",
-                headers={"Retry-After": str(storage.get_expiry(minute_key))},
+                headers={"Retry-After": str(storage.get_expiry(minute_key))},  # type: ignore[union-attr]
             )
 
         # Check hour limit (20/hour)
-        hour_count = storage.incr(hour_key, 3600)  # 3600 second window
-        if hour_count > 20:
+        hour_count = storage.incr(hour_key, 3600)  # type: ignore[union-attr]
+        if int(hour_count) > 20:
             raise HTTPException(
                 status_code=status.HTTP_429_TOO_MANY_REQUESTS,
                 detail="Rate limit exceeded: 20 requests per hour. Please wait.",
-                headers={"Retry-After": str(storage.get_expiry(hour_key))},
+                headers={"Retry-After": str(storage.get_expiry(hour_key))},  # type: ignore[union-attr]
             )
 
     return check_rate_limit
 
 
 async def rate_limit_exceeded_handler(request: Request, exc: RateLimitExceeded):
+    retry_after = getattr(exc, "retry_after", 60)
     return JSONResponse(
         status_code=429,
         content={
             "detail": "Rate limit exceeded. Please wait before retrying.",
-            "retry_after": exc.retry_after,
+            "retry_after": retry_after,
         },
-        headers={"Retry-After": str(exc.retry_after)},
+        headers={"Retry-After": str(retry_after)},
     )

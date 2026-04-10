@@ -5,7 +5,7 @@ Tests for the EWS Integration API endpoints.
 """
 
 import pytest
-from unittest.mock import patch, MagicMock
+from unittest.mock import MagicMock
 from fastapi.testclient import TestClient
 
 

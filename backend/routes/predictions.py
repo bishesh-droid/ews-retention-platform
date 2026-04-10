@@ -9,9 +9,7 @@ from sqlalchemy.orm import Session
 
 from backend.api.deps import get_db, get_current_user, require_resource_ownership
 from backend.services.student_service import StudentService
-from backend.database import Student, User
 from backend.utils.api import success_response
-from fastapi import Depends
 
 router = APIRouter(
     responses={404: {"description": "Not found"}},
@@ -51,7 +49,7 @@ def get_student_prediction(
     student_id: str,
     include_decisions: bool = Query(True),
     db: Session = Depends(get_db),
-    current_user = Depends(require_resource_ownership("student_id")),
+    current_user=Depends(require_resource_ownership("student_id")),
 ):
     """
     Get prediction for a specific student.

@@ -13,7 +13,7 @@ This module ensures the AI advisor has access to:
 
 import logging
 from typing import Dict, Any, Optional, List
-from datetime import datetime, timedelta
+from datetime import datetime
 
 logger = logging.getLogger(__name__)
 
@@ -168,7 +168,8 @@ def build_academic_summary(student_data: Dict[str, Any]) -> Dict[str, Any]:
 
     # Calculate trends
     gpa_trend = calculate_trend([g['gpa'] for g in gpa_history[-3:]] if len(gpa_history) >= 3 else [])
-    attendance_trend = calculate_trend([a['attendance_rate'] for a in attendance_history[-3:]] if len(attendance_history) >= 3 else [])
+    attendance_trend = calculate_trend([a['attendance_rate']
+                                       for a in attendance_history[-3:]] if len(attendance_history) >= 3 else [])
 
     # Get current values
     current_gpa = gpa_history[-1]['gpa'] if gpa_history else None

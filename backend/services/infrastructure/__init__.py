@@ -4,4 +4,4 @@ Infrastructure Services Package
 Infrastructure and support services including audit logging, scheduling, and recommendations.
 """
 
-__all__ = []
+__all__: list[str] = []

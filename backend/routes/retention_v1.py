@@ -1,12 +1,12 @@
 from fastapi import APIRouter, Depends
 from sqlalchemy.orm import Session
-from typing import List
 
 from backend.database import Student, Prediction
 from backend.api import deps
 from backend.utils.api import success_response
 
 router = APIRouter()
+
 
 @router.get("/risk-summary")
 def get_retention_risk_summary(
@@ -19,9 +19,10 @@ def get_retention_risk_summary(
     high_risk_count = db.query(Prediction).filter(Prediction.risk_score >= 0.7).count()
     data = {
         "high_risk_students": high_risk_count,
-        "total_active_students": db.query(Student).filter(Student.is_active == True).count(),
+        "total_active_students": db.query(Student).filter(Student.is_active.is_(True)).count(),
     }
     return success_response(data, message="Retention risk summary")
+
 
 @router.get("/at-risk-students")
 def get_at_risk_students(

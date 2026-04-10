@@ -19,7 +19,7 @@ os.environ["SECRET_KEY"] = "test-secret-key-not-for-production-x7f9k2m"
 def mock_db_session():
     """
     Returns a mocked SQLAlchemy Session for testing.
-    
+
     Usage:
         def test_something(mock_db_session):
             # Configure mock as needed
@@ -36,7 +36,7 @@ def mock_student():
     Returns a mock Student object with common attributes.
     """
     from backend.database.models.student import Student
-    
+
     student = MagicMock(spec=Student)
     student.id = "test_student_001"
     student.org_defined_id = "2025EB110001"

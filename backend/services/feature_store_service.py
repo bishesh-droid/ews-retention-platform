@@ -1,10 +1,8 @@
 from sqlalchemy.orm import Session
-from sqlalchemy import func
 from datetime import datetime
-from typing import List
 
 from backend.database import EngineeredFeatures, Enrollment, Student, GradedComponent
-from backend.services.analytics_service import AnalyticsService
+
 
 class FeatureStoreService:
     @staticmethod
@@ -14,7 +12,7 @@ class FeatureStoreService:
         """
         students = db.query(Student).all()
         for student in students:
-            FeatureStoreService.compute_student_features(db, student.id)
+            FeatureStoreService.compute_student_features(db, str(student.id))
         # Persist pending changes to the DB transaction; caller commits.
         db.flush()
 
@@ -25,18 +23,18 @@ class FeatureStoreService:
         """
         enrollments = db.query(Enrollment).filter(Enrollment.student_id == student_id).all()
         graded = db.query(GradedComponent).filter(GradedComponent.student_id == student_id).all()
-        
+
         # Calculate derived metrics
         attendance_rate = 0.0
         if enrollments:
             # Simple average across enrollments
-            attendance_rate = sum(e.num_logins for e in enrollments) / len(enrollments) # simplified
-        
+            attendance_rate = sum(int(e.num_logins or 0) for e in enrollments) / len(enrollments)  # type: ignore[arg-type]
+
         grade_trend = 0.0
         if graded:
             # logic for grade trend...
             pass
-            
+
         # Update or create features record
         features = db.query(EngineeredFeatures).filter(
             EngineeredFeatures.student_id == student_id,
@@ -50,9 +48,9 @@ class FeatureStoreService:
             )
             db.add(features)
 
-        features.attendance_rate = attendance_rate
-        features.grade_trend = grade_trend
-        features.login_frequency = sum(e.num_logins for e in enrollments)
+        features.attendance_rate = attendance_rate  # type: ignore[assignment]
+        features.grade_trend = grade_trend  # type: ignore[assignment]
+        features.login_frequency = sum(int(e.num_logins or 0) for e in enrollments)  # type: ignore[assignment, arg-type]
         # Add more features...
-        
+
         return features

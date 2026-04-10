@@ -9,7 +9,7 @@ import threading
 import time
 import zipfile
 from dataclasses import dataclass, field
-from datetime import datetime, timedelta, UTC
+from datetime import datetime, timedelta
 from pathlib import Path
 
 import openpyxl
@@ -36,6 +36,8 @@ from backend.database.models.goals_and_risks import RiskSnapshot
 logger = logging.getLogger(__name__)
 
 # Redis distributed lock for cross-process ingestion synchronization
+
+
 def _get_redis_lock():
     from backend.config import REDIS_URL
     r = redis_lib.from_url(REDIS_URL)
@@ -200,7 +202,7 @@ async def ingest_all_data(db: Session, triggered_by: str = "startup", uploaded_f
                     try:
                         httpx.post(alert_webhook, json={
                             "text": f"EWS ingestion FAILED at {datetime.utcnow().isoformat()}. "
-                                    f"{len(stats.errors)} errors. Check logs for run_id={run.id}"
+                            f"{len(stats.errors)} errors. Check logs for run_id={run.id}"
                         }, timeout=5)
                     except Exception:
                         pass  # Alert failure must not crash ingestion
@@ -228,13 +230,13 @@ async def _run_ingestion(db: Session, stats: IngestionStats):
         await _ingest_quiz_assignment_exam(db, files, owner_thread_id, stats)
         await _update_enrollments_from_latest(db, files, owner_thread_id, stats)
         db.flush()
-        
+
         # Infer enrollment outcomes from exam data for T1 cohort
         infer_outcomes_from_exam_data(db)
-        
+
         # Backfill intervention outcomes after all risk scores updated
         backfill_intervention_outcomes(db)
-        
+
         # Soft delete: deactivate students not in latest export (CROSS-1)
         # Get semester name from first course or use default
         semester_name = "current"
@@ -242,7 +244,7 @@ async def _run_ingestion(db: Session, stats: IngestionStats):
             from pathlib import Path
             semester_name = Path(files["engagement"]).stem
         await _deactivate_missing_students(db, stats.seen_org_ids, semester_name)
-        
+
         logger.info("Data ingestion complete.")
     except Exception:
         db.rollback()
@@ -260,8 +262,8 @@ def backfill_intervention_outcomes(session: Session):
     """
     cutoff = datetime.utcnow() - timedelta(days=7)
     pending_logs = session.query(InterventionLog).filter(
-        InterventionLog.acted_on == True,
-        InterventionLog.follow_up_risk_score == None,
+        InterventionLog.acted_on.is_(True),
+        InterventionLog.follow_up_risk_score.is_(None),
         InterventionLog.recommended_at <= cutoff,
     ).all()
 
@@ -418,7 +420,7 @@ async def _ingest_engagement_data(db: Session, files: dict, owner_thread_id: int
             student.org_defined_id = org_id
             student.first_name = first_name
             student.last_name = "" if last_name == "." else last_name
-            
+
             # D2-3: Only update old_new_student on first creation or semester change
             if student.old_new_student is None:
                 student.old_new_student = old_new  # first ingest — set from spreadsheet
@@ -426,17 +428,17 @@ async def _ingest_engagement_data(db: Session, files: dict, owner_thread_id: int
                 # Student is returning from a previous semester — promote to "old"
                 student.old_new_student = "old"
             # Otherwise: keep existing value — don't let stale spreadsheet data overwrite
-            
+
             student.is_active = is_active
             student.parent_department_name = dept_name
             student.parent_department_code = dept_code
             # Track current semester for change detection on next ingest
             student.semester_code = semester_code
-            
+
             # Track org_id for soft delete detection (CROSS-1)
             if org_id:
                 stats.seen_org_ids.add(org_id)
-            
+
             # D2-6: Auto-rescind stale ghost alerts if student has logged in
             login_count = _cell_int(vals, header.get("num logins")) or 0
             if login_count > 0:
@@ -495,7 +497,8 @@ async def _ingest_engagement_data(db: Session, files: dict, owner_thread_id: int
             logger.warning("No valid engagement rows", extra={"file": path.name})
         else:
             stats.files_processed.append({"name": path.name, "rows": valid_rows})
-            logger.info("Engagement data processed", extra={"file": path.name, "valid_rows": valid_rows, "students_created": stats.students_created, "students_updated": stats.students_updated})
+            logger.info("Engagement data processed", extra={
+                        "file": path.name, "valid_rows": valid_rows, "students_created": stats.students_created, "students_updated": stats.students_updated})
 
         _merge_course_content_sheet(db, wb)
         db.flush()
@@ -1224,27 +1227,27 @@ def _snapshot_sources(files: dict) -> list:
 
 
 def _merge_enrollment_fields(enrollment: Enrollment, vals: list, fields: dict):
-    for field, col in fields.items():
+    for fname, col in fields.items():
         if col >= len(vals):
             continue
         raw = vals[col]
-        if field in COUNTER_FIELDS:
+        if fname in COUNTER_FIELDS:
             new_val = _safe_int(raw)
-            if new_val is not None and new_val > (getattr(enrollment, field) or 0):
-                setattr(enrollment, field, new_val)
-        elif field in DATE_FIELDS:
-            existing = getattr(enrollment, field, None)
+            if new_val is not None and new_val > (getattr(enrollment, fname) or 0):
+                setattr(enrollment, fname, new_val)
+        elif fname in DATE_FIELDS:
+            existing = getattr(enrollment, fname, None)
             new_val = str(raw) if raw is not None else None
             if new_val is None:
                 pass
             elif existing is None:
-                setattr(enrollment, field, new_val)
+                setattr(enrollment, fname, new_val)
             elif new_val > existing:
-                setattr(enrollment, field, new_val)
+                setattr(enrollment, fname, new_val)
         else:
             if raw is None:
                 continue
-            setattr(enrollment, field, str(raw))
+            setattr(enrollment, fname, str(raw))
 
 
 def _ensure_student(db: Session, student_id: str, org_id: str, name: str, program: str, stats: IngestionStats = None):
@@ -1252,7 +1255,7 @@ def _ensure_student(db: Session, student_id: str, org_id: str, name: str, progra
     if not student:
         student = Student(id=student_id)
         db.add(student)
-    
+
     # Track org_id for soft delete detection (CROSS-1)
     if stats and org_id:
         stats.seen_org_ids.add(org_id)
@@ -1300,17 +1303,17 @@ def _assert_session_thread(owner_thread_id: int):
 async def _deactivate_missing_students(session, seen_org_ids: set, semester_name: str):
     """
     Mark students not in the latest export as inactive (soft delete).
-    
+
     Args:
         session: SQLAlchemy session
         seen_org_ids: Set of org_defined_ids seen in current ingestion
         semester_name: Current semester for context logging
     """
     from backend.database.models.student import Student
-    
-    active_students = session.query(Student).filter(Student.is_active == True).all()
+
+    active_students = session.query(Student).filter(Student.is_active.is_(True)).all()
     deactivated_count = 0
-    
+
     for student in active_students:
         if student.org_defined_id and student.org_defined_id not in seen_org_ids:
             student.is_active = False
@@ -1324,8 +1327,8 @@ async def _deactivate_missing_students(session, seen_org_ids: set, semester_name
                     "id_hash": hashlib.sha256((student.id or "").encode()).hexdigest()[:10],
                     "reason": "not_in_latest_export",
                 }
-        )
-    
+            )
+
     if deactivated_count:
         logger.info(f"Deactivated {deactivated_count} students not in latest export for {semester_name}")
         session.commit()
@@ -1335,22 +1338,22 @@ def _rescind_stale_ghost_alerts(db, org_id: str, current_login_count: int):
     """Auto-dismiss ghost alerts if student has logged in since the alert was raised."""
     if current_login_count <= 0 or not org_id:
         return
-    
+
     stale_logs = (
         db.query(InterventionLog)
         .filter(
             InterventionLog.student_org_id == org_id,
             InterventionLog.intervention_type == "activation_outreach",
-            InterventionLog.reviewed == False,
+            InterventionLog.reviewed.is_(False),
         )
         .all()
     )
-    
+
     for log in stale_logs:
         log.reviewed = True
         log.acted_on = False
         log.dismissed_reason = "student_became_active_auto"
-    
+
     if stale_logs:
         logger.info(
             "Auto-dismissed stale ghost alerts",
@@ -1396,46 +1399,46 @@ def _parse_max_score(header_text: str) -> float:
 def infer_outcomes_from_exam_data(db: Session) -> int:
     """
     Infer final_outcome for T1 cohort from ExamRecord data.
-    
+
     Rules:
     - If any exam has present=False AND defaulter_reason in ("dropout_intent", "unknown_high_risk"): dropped
     - If any exam has present=False AND defaulter_reason="deferred": deferred
     - If all exams have present=True AND marks_obtained/marks_total >= 0.40: completed
     - If all exams have present=True AND marks_obtained/marks_total < 0.40: active (still enrolled, didn't pass)
     - Otherwise: leave as None (unknown)
-    
+
     Returns:
         Number of enrollments updated with inferred outcomes
     """
     from datetime import datetime
-    
+
     # Get all students with exam records
     exam_records = db.query(ExamRecord).all()
-    
+
     # Group exam records by student
-    student_exams = {}
+    student_exams: dict = {}
     for exam in exam_records:
         if exam.student_id not in student_exams:
             student_exams[exam.student_id] = []
         student_exams[exam.student_id].append(exam)
-    
+
     # Get enrollments for these students
     student_ids = list(student_exams.keys())
     enrollments = db.query(Enrollment).filter(Enrollment.student_id.in_(student_ids)).all()
-    
+
     updated_count = 0
     now = datetime.utcnow()
-    
+
     for enrollment in enrollments:
         exams = student_exams.get(enrollment.student_id, [])
         if not exams:
             continue
-        
+
         outcome = None
         source = None
-        
+
         # Check for defaulters (absent with reason)
-        absent_exams = [e for e in exams if e.present == False]
+        absent_exams = [e for e in exams if not e.present]
         for exam in absent_exams:
             reason = exam.defaulter_reason
             if reason in ("dropout_intent", "unknown_high_risk"):
@@ -1446,15 +1449,15 @@ def infer_outcomes_from_exam_data(db: Session) -> int:
                 outcome = "deferred"
                 source = "exam_data"
                 break
-        
+
         # If no defaulter outcome determined, check passed exams
         if outcome is None:
-            present_exams = [e for e in exams if e.present == True]
+            present_exams = [e for e in exams if e.present]
             if present_exams:
                 # Calculate overall pass rate across all present exams
                 total_obtained = sum(e.marks_obtained or 0 for e in present_exams)
                 total_marks = sum(e.marks_total or 0 for e in present_exams)
-                
+
                 if total_marks > 0:
                     pass_rate = total_obtained / total_marks
                     if pass_rate >= 0.40:
@@ -1464,14 +1467,14 @@ def infer_outcomes_from_exam_data(db: Session) -> int:
                         # Still enrolled but didn't pass
                         outcome = "active"
                         source = "exam_data"
-        
+
         # Update enrollment if we determined an outcome
         if outcome:
             enrollment.final_outcome = outcome
             enrollment.outcome_source = source
             enrollment.outcome_updated_at = now
             updated_count += 1
-    
+
     db.commit()
     logger.info(f"Inferred outcomes for {updated_count} enrollments from exam data")
     return updated_count

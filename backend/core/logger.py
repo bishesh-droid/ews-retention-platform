@@ -113,6 +113,7 @@ class JSONFormatter(logging.Formatter):
             log_data["exc_info"] = self.formatException(record.exc_info)
         return json.dumps(log_data)
 
+
 def setup_logger(name: str) -> logging.Logger:
     """Sets up a structured JSON logger with PII masking for FERPA compliance."""
     logger = logging.getLogger(name)
@@ -141,6 +142,6 @@ def setup_logger(name: str) -> logging.Logger:
 
     return logger
 
+
 # Create a default system logger
 sys_logger = setup_logger("ews_platform")
-

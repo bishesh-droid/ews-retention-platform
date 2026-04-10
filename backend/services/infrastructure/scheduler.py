@@ -22,7 +22,6 @@ from backend.database.models.prediction import Prediction
 from backend.database.models.student import Student
 from backend.database.models.event import EngineeredFeatures
 from sqlalchemy.dialects.sqlite import insert as sqlite_insert
-import json
 import shutil
 from pathlib import Path
 import backend.config as settings
@@ -83,7 +82,7 @@ def generate_daily_predictions() -> None:
             .join(Course, Enrollment.course_id == Course.id, isouter=True)
             .all()
         )
-        enrollment_map = {}
+        enrollment_map: dict = {}
         for enrollment, course_name in all_enrollments:
             enrollment_map.setdefault(enrollment.student_id, []).append(
                 {
@@ -103,7 +102,7 @@ def generate_daily_predictions() -> None:
                 }
             )
 
-        graded_map = {}
+        graded_map: dict = {}
         for graded_component in db.query(GradedComponent).all():
             graded_map.setdefault(graded_component.student_id, []).append(
                 {
@@ -117,7 +116,7 @@ def generate_daily_predictions() -> None:
                 }
             )
 
-        exam_map = {}
+        exam_map: dict = {}
         for exam in db.query(ExamRecord).all():
             exam_map.setdefault(exam.student_id, []).append(
                 {
@@ -137,7 +136,7 @@ def generate_daily_predictions() -> None:
         while True:
             batch = (
                 db.query(Student)
-                .filter(Student.is_active == True, Student.id > last_id)
+                .filter(Student.is_active.is_(True), Student.id > last_id)
                 .order_by(Student.id)
                 .limit(BATCH_SIZE)
                 .all()
@@ -217,7 +216,6 @@ def generate_daily_predictions() -> None:
                     created_snapshots += 1
 
                     # D5-2: Write features to EngineeredFeatures store for fast list queries
-                    features_json = json.dumps(features)
                     feat_record = db.query(EngineeredFeatures).filter(
                         EngineeredFeatures.student_id == student.id,
                         EngineeredFeatures.computation_date == datetime.utcnow().date()

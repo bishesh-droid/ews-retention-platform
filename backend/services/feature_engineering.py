@@ -32,14 +32,6 @@ import warnings
 # Import the new modular structure for delegation
 from backend.services.features import (
     FeatureEngineer as _NewFeatureEngineer,
-    AcademicFeatureExtractor,
-    EngagementFeatureExtractor,
-    ConsistencyFeatureExtractor,
-    IntentFeatureExtractor,
-    AcademicFeatures,
-    EngagementFeatures,
-    ConsistencyFeatures,
-    IntentFeatures,
 )
 
 # Emit deprecation warning when this module is imported
@@ -73,7 +65,7 @@ class FeatureEngineer:
     def _to_non_negative(value: object) -> float:
         """Pure helper: parse value as non-negative float."""
         try:
-            v = float(value or 0)
+            v = float(value or 0)  # type: ignore[arg-type]
         except (TypeError, ValueError):
             return 0.0
         if not math.isfinite(v):
@@ -183,8 +175,8 @@ class FeatureEngineer:
         Returns:
             Score [0-100] for W1&2 content progress
         """
-        total_completed = 0
-        total_required = 0
+        total_completed: float = 0
+        total_required: float = 0
 
         for e in enrollments:
             required_w1w2 = FeatureEngineer._to_non_negative(e.get('content_required_w1w2', 0))
@@ -322,8 +314,8 @@ class FeatureEngineer:
         Returns:
             "0%", "0-10%", or ">10%"
         """
-        total_completed = 0
-        total_required_w1w2 = 0
+        total_completed: float = 0
+        total_required_w1w2: float = 0
 
         for e in enrollments:
             required = FeatureEngineer._to_non_negative(e.get('content_required_w1w2', 0))
@@ -368,8 +360,8 @@ class FeatureEngineer:
                 e.get("last_scorm_visit_date"),
                 e.get("last_scorm_completion_date"),
             ]
-            parsed = [FeatureEngineer._parse_timestamp(ts) for ts in activity_timestamps if ts]
-            parsed = [p for p in parsed if p is not None]
+            parsed_raw = [FeatureEngineer._parse_timestamp(ts) for ts in activity_timestamps if ts]
+            parsed: List[datetime] = [p for p in parsed_raw if p is not None]
             if not parsed:
                 continue
             any_activity += 1
@@ -563,6 +555,7 @@ class FeatureEngineer:
         content_completion_score = FeatureEngineer.calculate_content_completion_score(
             enrollments, registry_lookup=registry_lookup
         )
+        w1w2_completion_score: Optional[float]
         if week_number is None or week_number <= 2:
             w1w2_completion_score = FeatureEngineer.calculate_w1w2_completion_score(enrollments)
         else:
@@ -570,7 +563,7 @@ class FeatureEngineer:
             # explicit content_completed_w1w2 in ingestion — align with full-term completion.
             w1w2_completion_score = content_completion_score
 
-        features = {
+        features: Dict[str, Any] = {
             "content_completion_score": content_completion_score,
             "w1w2_completion_score": w1w2_completion_score,
             "quiz_engagement_score": FeatureEngineer.calculate_quiz_engagement_score(enrollments),
@@ -788,32 +781,11 @@ class FeatureEngineer:
     ) -> Dict:
         """
         Backward-compatible public interface - delegates to new FeatureEngineer.
-        
+
         This ensures existing route handlers continue to work without changes.
         """
         engineer = _NewFeatureEngineer()
         return engineer.get_features(student_id, db, is_new_student, week_number)
-
-    @staticmethod
-    def calculate_all_features(
-        enrollments: List[Dict],
-        graded_components: List[Dict] = None,
-        exam_records: List[Dict] = None,
-        is_new_student: bool = False,
-        week_number: Optional[int] = None,
-        registry_lookup=None,
-    ) -> Dict:
-        """
-        Backward-compatible static method - delegates to new modular extractors.
-        """
-        return _NewFeatureEngineer.calculate_all_features(
-            enrollments=enrollments,
-            graded_components=graded_components,
-            exam_records=exam_records,
-            is_new_student=is_new_student,
-            week_number=week_number,
-            registry_lookup=registry_lookup,
-        )
 
 
 # Maintain backward compatibility for direct imports

@@ -4,6 +4,7 @@ from typing import Any, Dict, Optional
 
 from backend.database import AuditLog
 
+
 class AuditService:
     @staticmethod
     def log_action(

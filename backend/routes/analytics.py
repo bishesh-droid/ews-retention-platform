@@ -1,12 +1,12 @@
 from fastapi import APIRouter, Depends, Query
 from sqlalchemy.orm import Session
-from typing import List, Dict, Any
 
 from backend.api import deps
 from backend.services.analytics_service import AnalyticsService
 from backend.utils.api import success_response
 
 router = APIRouter()
+
 
 @router.get("/risk/trend/{student_id}")
 def get_student_risk_trend(
@@ -20,6 +20,7 @@ def get_student_risk_trend(
     """
     data = AnalyticsService.get_risk_trends(db, student_id, days)
     return success_response(data, message="Student risk trend")
+
 
 @router.get("/analytics/top-risk-velocity")
 def get_top_risk_velocity(
@@ -37,6 +38,7 @@ def get_top_risk_velocity(
         meta={"pagination": {"limit": limit}},
     )
 
+
 @router.get("/analytics/kpis")
 def get_kpi_cards(
     db: Session = Depends(deps.get_db),
@@ -47,6 +49,7 @@ def get_kpi_cards(
     """
     data = AnalyticsService.get_kpi_cards(db)
     return success_response(data, message="KPI cards")
+
 
 @router.get("/analytics/drill-down")
 def get_drill_down(

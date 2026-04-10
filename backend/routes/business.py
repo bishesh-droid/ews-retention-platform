@@ -8,8 +8,8 @@ Endpoints for business intelligence and executive reporting:
 - Retention funnel data
 """
 
-from fastapi import APIRouter, HTTPException, Query, Depends
-from typing import Optional, List, Dict, Any
+from fastapi import APIRouter, Query, Depends
+from typing import List, Dict, Any
 from pydantic import BaseModel
 from datetime import datetime
 from sqlalchemy.orm import Session
@@ -18,8 +18,6 @@ from backend.api.deps import get_db, get_current_user
 from backend.services.student_service import StudentService
 from backend.config import (
     AVERAGE_STUDENT_LTV,
-    TUITION_PER_SEMESTER,
-    INTERVENTION_COST_PER_STUDENT,
     TARGET_RETENTION_RATE,
     INTERVENTION_THRESHOLDS
 )
@@ -210,7 +208,8 @@ def get_revenue_at_risk(db: Session = Depends(get_db)):
         revenue_at_risk=round(total_revenue_at_risk, 2),
         high_risk_revenue=round(high_risk_revenue, 2),
         critical_risk_revenue=round(critical_risk_revenue, 2),
-        percentage_at_risk=round((total_revenue_at_risk / total_enrolled_revenue) * 100, 2) if total_enrolled_revenue > 0 else 0,
+        percentage_at_risk=round((total_revenue_at_risk / total_enrolled_revenue)
+                                 * 100, 2) if total_enrolled_revenue > 0 else 0,
         average_student_ltv=AVERAGE_STUDENT_LTV,
         risk_breakdown=breakdown_list,
         calculated_at=datetime.now().isoformat()
@@ -279,7 +278,7 @@ def get_retention_funnel(
     recovered = int(interventions * 0.35)
     dropped = int(high_risk * 0.25)
 
-    stages = [
+    stages: List[Dict[str, Any]] = [
         {"name": "Total Enrolled", "count": total_enrolled, "color": "#3B82F6"},
         {"name": "At-Risk Identified", "count": at_risk, "color": "#F59E0B"},
         {"name": "Intervention Triggered", "count": interventions, "color": "#8B5CF6"},

@@ -12,7 +12,6 @@ Run with: TESTING=true pytest backend/tests/test_critical_paths.py -v
 """
 
 import pytest
-from typing import Dict, Any, Optional
 
 # Import functions under test
 from backend.services.core.data_ingestion import _safe_int, _safe_float, ABSENT_SENTINELS
@@ -21,7 +20,6 @@ from backend.services.core.decision_engine import (
     should_trigger_intervention,
     get_intervention_recommendation,
     RISK_SPIKE_THRESHOLD,
-    INTERVENTION_COOLDOWN_DAYS,
 )
 
 
@@ -90,7 +88,7 @@ class TestAbsentSentinels:
         # Simulate the logic: is_absent = score_val is None or str(score_val).strip() in ABSENT_SENTINELS
         is_absent = sentinel is None or str(sentinel).strip() in ABSENT_SENTINELS
         score = None if is_absent else _safe_float(sentinel)
-        
+
         assert is_absent is True
         assert score is None
 
@@ -105,7 +103,7 @@ class TestAbsentSentinels:
         score_val = "8.5"
         is_absent = score_val is None or str(score_val).strip() in ABSENT_SENTINELS
         score = None if is_absent else _safe_float(score_val)
-        
+
         assert is_absent is False
         assert score == pytest.approx(8.5)
 
@@ -114,7 +112,7 @@ class TestAbsentSentinels:
         score_val = "0"
         is_absent = score_val is None or str(score_val).strip() in ABSENT_SENTINELS
         score = None if is_absent else _safe_float(score_val)
-        
+
         assert is_absent is False
         assert score == pytest.approx(0.0)
 
@@ -122,7 +120,7 @@ class TestAbsentSentinels:
         """Test that None values are treated as absent."""
         score_val = None
         is_absent = score_val is None or str(score_val).strip() in ABSENT_SENTINELS
-        
+
         assert is_absent is True
 
 
@@ -301,7 +299,7 @@ class TestGhostStudentDetection:
 class TestRiskSpikeThreshold:
     """
     Test risk spike threshold boundaries for intervention triggering.
-    
+
     RISK_SPIKE_THRESHOLD (default 15.0) allows bypassing the cooldown
     if risk increases significantly.
     """
@@ -407,11 +405,11 @@ class TestDecisionEngineEdgeCases:
     def test_invalid_risk_score_handling(self):
         """Decision engine should handle NaN/Inf risk scores gracefully."""
         import numpy as np
-        
+
         # These should not raise exceptions
         result = get_intervention_recommendation(np.nan, features={})
         assert "type" in result
-        
+
         result = get_intervention_recommendation(np.inf, features={})
         assert "type" in result
 

@@ -1,6 +1,7 @@
 from sqlalchemy import Column, Integer, String, Float, ForeignKey, Boolean
 from sqlalchemy.orm import relationship
-from ..connection import Base # Assuming Base is defined here or in a common file
+from ..connection import Base  # Assuming Base is defined here or in a common file
+
 
 class GradedComponent(Base):
     __tablename__ = "graded_components"
@@ -14,6 +15,7 @@ class GradedComponent(Base):
     max_score = Column(Float)
     missed = Column(Boolean, default=False)
     student = relationship("Student", back_populates="graded_components")
+
 
 class ExamRecord(Base):
     __tablename__ = "exam_records"

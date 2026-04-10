@@ -11,7 +11,7 @@ try:
         calculate_student_risk,
         batch_predict,
         get_signal_summary,
-        ingest_data,
+        ingest_all_data,
     )
 except ImportError:
     # Fallback for tests
@@ -22,5 +22,5 @@ __all__ = [
     "calculate_student_risk",
     "batch_predict",
     "get_signal_summary",
-    "ingest_data",
+    "ingest_all_data",
 ]

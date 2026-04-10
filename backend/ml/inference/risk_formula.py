@@ -22,7 +22,7 @@ The actual ML model predictions should be used for decision-making.
 This formula helps explain WHY a student has a certain risk level.
 """
 
-from typing import Dict, List
+from typing import Any, Dict, List
 
 from backend.config import FEATURE_WEIGHTS
 
@@ -135,7 +135,7 @@ def get_risk_contribution_breakdown(signals: Dict[str, float]) -> List[Dict]:
         "responsiveness_signal_score": "responsiveness",
     }
 
-    breakdown = []
+    breakdown: List[Dict[str, Any]] = []
     total_contribution = 0.0
 
     for signal_key, weight_key in signal_mapping.items():

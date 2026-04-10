@@ -11,10 +11,9 @@ from typing import Optional, Dict, Any
 from pydantic import BaseModel
 from datetime import datetime
 
-from backend.api.deps import get_db, get_current_user, require_role
+from backend.api.deps import get_db, require_role
 from backend.database.models.user import User
 from backend.services.student_service import StudentService
-from fastapi import Depends
 from sqlalchemy.orm import Session
 
 router = APIRouter(prefix="/advisor", tags=["AI Academic Advisor"])

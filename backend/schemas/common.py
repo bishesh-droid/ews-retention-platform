@@ -4,7 +4,7 @@ Common Schemas
 Shared base models and common response schemas.
 """
 
-from pydantic import BaseModel, ConfigDict, Field
+from pydantic import BaseModel, Field
 from typing import Dict, Any, List, Optional
 
 

@@ -16,6 +16,19 @@ Outputs:
     - backend/ml/outputs/threshold_calibration.png: Precision-Recall curve
 """
 
+from backend.services.risk_scoring import RiskScorer
+from backend.services.feature_engineering import FeatureEngineer
+from backend.database.models.goals_and_risks import RiskSnapshot
+from backend.database.models.academic import ExamRecord
+from backend.database.models.enrollment import Enrollment
+from backend.database.models.student import Student
+from backend.database.connection import SessionLocal
+from sklearn.metrics import precision_score, recall_score, f1_score, confusion_matrix
+import matplotlib.pyplot as plt
+import matplotlib
+from sqlalchemy.orm import Session
+from sqlalchemy import or_
+import pandas as pd
 import os
 import sys
 from pathlib import Path
@@ -24,28 +37,13 @@ from pathlib import Path
 project_root = Path(__file__).parent.parent.parent.parent
 sys.path.insert(0, str(project_root))
 
-import pandas as pd
-import numpy as np
-from sqlalchemy import or_
-from sqlalchemy.orm import Session
-from typing import Optional
 
 # Matplotlib setup (non-interactive backend for scripts)
-import matplotlib
 matplotlib.use("Agg")
-import matplotlib.pyplot as plt
 
 # Import sklearn metrics
-from sklearn.metrics import precision_score, recall_score, f1_score, confusion_matrix
 
 # Database imports
-from backend.database.connection import SessionLocal
-from backend.database.models.student import Student
-from backend.database.models.enrollment import Enrollment
-from backend.database.models.academic import ExamRecord
-from backend.database.models.goals_and_risks import RiskSnapshot
-from backend.services.feature_engineering import FeatureEngineer
-from backend.services.risk_scoring import RiskScorer
 
 
 def load_t1_outcomes(db_session: Session) -> pd.DataFrame:
@@ -177,7 +175,7 @@ def load_t1_risk_features(db_session: Session) -> pd.DataFrame:
     )
 
     # Group enrollments by student_id
-    enrollments_by_student = {}
+    enrollments_by_student: dict = {}
     for e in enrollments:
         if e.student_id not in enrollments_by_student:
             enrollments_by_student[e.student_id] = []
@@ -498,7 +496,7 @@ if __name__ == "__main__":
         print("\n" + "=" * 80)
         print("CONFIG UPDATE SUGGESTION")
         print("=" * 80)
-        print(f"Suggested config update:")
+        print("Suggested config update:")
         print(f"  THRESHOLD_NO_ACTION={t1}")
         print(f"  THRESHOLD_GENTLE={t2}")
         print(f"  THRESHOLD_MENTOR={t3}")

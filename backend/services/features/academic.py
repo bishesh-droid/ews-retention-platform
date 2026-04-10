@@ -28,7 +28,7 @@ class AcademicFeatures:
 class AcademicFeatureExtractor:
     """
     Extracts academic performance features from graded components and exams.
-    
+
     Takes only relevant data slices:
     - graded_components: List of quiz/assignment grade records
     - exam_records: List of exam attendance and marks records
@@ -38,7 +38,7 @@ class AcademicFeatureExtractor:
     def _to_non_negative(value: object) -> float:
         """Parse value as non-negative float."""
         try:
-            v = float(value or 0)
+            v = float(value or 0)  # type: ignore[arg-type]
         except (TypeError, ValueError):
             return 0.0
         if not math.isfinite(v):
@@ -48,11 +48,11 @@ class AcademicFeatureExtractor:
     def extract(self, graded_components: List[Dict], exam_records: List[Dict]) -> AcademicFeatures:
         """
         Extract all academic features from graded components and exam records.
-        
+
         Args:
             graded_components: List of graded quiz/assignment records
             exam_records: List of exam records with marks and attendance
-            
+
         Returns:
             AcademicFeatures dataclass with calculated scores
         """
@@ -68,7 +68,7 @@ class AcademicFeatureExtractor:
         """Calculate average graded quiz score as percentage."""
         if not graded_components:
             return None
-            
+
         quizzes = [g for g in graded_components if g.get('component_type') == 'quiz']
         if not quizzes:
             return None
@@ -92,7 +92,7 @@ class AcademicFeatureExtractor:
         """Calculate average graded assignment score as percentage."""
         if not graded_components:
             return None
-            
+
         assignments = [g for g in graded_components if g.get('component_type') == 'assignment']
         if not assignments:
             return None
@@ -143,7 +143,7 @@ class AcademicFeatureExtractor:
     def _calculate_academic_flags(self, exam_records: List[Dict]) -> Dict[str, bool]:
         """
         Extract high-signal academic flags from exam records.
-        
+
         Flags:
         - ufm_flagged: Unfair Means detected
         - deferred: Student deferred to next trimester

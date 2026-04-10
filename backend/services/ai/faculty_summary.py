@@ -119,7 +119,6 @@ class FacultySummaryGenerator:
     ) -> str:
         """Build the prompt for faculty summary generation."""
         academic = context.get('academic_history', {})
-        risk = context.get('risk_assessment', {})
         interventions = context.get('intervention_history', {})
 
         prompt = f"""
@@ -171,13 +170,13 @@ Keep the tone professional, supportive, and focused on helping the student succe
         # Build structured summary
         summary = {
             "student_snapshot": self._extract_section(response, "STUDENT_SNAPSHOT") or
-                self._generate_snapshot(academic),
+            self._generate_snapshot(academic),
             "engagement_patterns": self._extract_section(response, "ENGAGEMENT_PATTERNS") or
-                self._generate_engagement_patterns(academic),
+            self._generate_engagement_patterns(academic),
             "academic_trends": self._extract_section(response, "ACADEMIC_TRENDS") or
-                academic.get('gpa_trend_description', 'Stable'),
+            academic.get('gpa_trend_description', 'Stable'),
             "recommended_support": self._extract_list(response, "RECOMMENDED_SUPPORT") or
-                self._get_default_support(context),
+            self._get_default_support(context),
             "key_observations": self._extract_observations(context)
         }
 
@@ -195,7 +194,7 @@ Keep the tone professional, supportive, and focused on helping the student succe
                 # Find the next section or end
                 end = len(response)
                 for marker in ["STUDENT_SNAPSHOT", "ENGAGEMENT_PATTERNS", "ACADEMIC_TRENDS",
-                              "RECOMMENDED_SUPPORT", "TALKING_POINTS"]:
+                               "RECOMMENDED_SUPPORT", "TALKING_POINTS"]:
                     if marker in response[start:] and marker != section:
                         end = min(end, start + response[start:].index(marker))
 
@@ -346,7 +345,7 @@ Keep the tone professional, supportive, and focused on helping the student succe
         }
 
         if include_talking_points:
-            summary["summary"]["talking_points"] = self._get_default_talking_points(context)
+            summary["summary"]["talking_points"] = self._get_default_talking_points(context)  # type: ignore[index]
 
         return summary
 

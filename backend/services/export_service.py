@@ -2,9 +2,10 @@ import pandas as pd
 from typing import List, Dict, Any
 from io import BytesIO
 from fpdf import FPDF
-from backend.database import Student, AuditLog
+from backend.database import AuditLog
 from sqlalchemy.orm import Session
 from datetime import datetime
+
 
 class ExportService:
     @staticmethod
@@ -26,13 +27,15 @@ class ExportService:
         pdf = FPDF()
         pdf.add_page()
         pdf.set_font("Arial", size=12)
-        pdf.cell(200, 10, txt=title, ln=1, align='C')
-        
+        pdf.cell(200, 10, text=title, align='C')
+        pdf.ln()
+
         for row in data:
             pdf.ln(10)
             for key, value in row.items():
-                pdf.cell(100, 10, txt=f"{key}: {value}", ln=1)
-        
+                pdf.cell(100, 10, text=f"{key}: {value}")
+                pdf.ln()
+
         output = BytesIO()
         pdf.output(output)
         output.seek(0)

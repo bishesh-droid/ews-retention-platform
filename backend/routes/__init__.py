@@ -47,7 +47,8 @@ api_router.include_router(analytics.router, prefix="/analytics", tags=["analytic
 api_router.include_router(goals.router, prefix="/goals", tags=["goals"])
 api_router.include_router(reports.router, prefix="/reports", tags=["reports"])
 api_router.include_router(students.router, prefix="/students", tags=["students"])
-api_router.include_router(predictions.router, prefix="/predictions", tags=["predictions"])  # Legacy — not called by frontend (CROSS-5)
+api_router.include_router(predictions.router, prefix="/predictions",
+                          tags=["predictions"])  # Legacy — not called by frontend (CROSS-5)
 api_router.include_router(ml_routes.router, prefix="/ml", tags=["Machine Learning"])
 api_router.include_router(llm.router, prefix="/llm", tags=["llm"])
 api_router.include_router(events.router, prefix="/events", tags=["events"])  # Unused — remove in cleanup sprint (CROSS-5)

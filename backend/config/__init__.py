@@ -38,12 +38,13 @@ CORS_ORIGINS: list = os.getenv(
 TESTING: bool = os.getenv("TESTING", "false").lower() == "true"
 
 # Force in-memory SQLite when TESTING=true, regardless of DATABASE_URL
+DATABASE_URL: str
 if TESTING:
-    DATABASE_URL: str = "sqlite+aiosqlite:///:memory:"
+    DATABASE_URL = "sqlite+aiosqlite:///:memory:"
     logger = logging.getLogger(__name__)
     logger.info("TESTING=true: using in-memory SQLite database")
 else:
-    DATABASE_URL: str = os.getenv(
+    DATABASE_URL = os.getenv(
         "DATABASE_URL",
         f"sqlite:///{DATA_DIR / 'sql_app.db'}"
     )
@@ -77,6 +78,7 @@ def validate_ml_config():
             f"FEATURE_WEIGHTS values sum to {total:.4f} — must equal 1.0. "
             f"Current weights: {FEATURE_WEIGHTS}"
         )
+
 
 ALGORITHM: str = os.getenv("ALGORITHM", "HS256")
 ACCESS_TOKEN_EXPIRE_MINUTES: int = int(os.getenv("ACCESS_TOKEN_EXPIRE_MINUTES", "60"))

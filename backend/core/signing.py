@@ -3,7 +3,6 @@ Request signing utilities for integration API authentication.
 Uses HMAC-SHA256 with timestamp-based replay protection.
 """
 
-import hashlib
 import hmac
 import time
 

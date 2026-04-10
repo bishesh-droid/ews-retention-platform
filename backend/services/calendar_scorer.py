@@ -248,11 +248,11 @@ def calculate_calendar_adjusted_risk(
                 current_week,
                 submitted_by_course.get(str(cname), []),
             ) if exp is not None else []
-        
+
         # Skip courses where expected_pct is None — no calendar data, don't distort risk
         if exp is None:
             continue
-        
+
         overdue_all.extend(
             [{"course_name": str(cname), **o} for o in overdue]
         )
@@ -273,4 +273,3 @@ def calculate_calendar_adjusted_risk(
         "expected_pct": round(mean(expected_pcts), 4) if expected_pcts else 0.0,
         "actual_pct": round(mean(actual_pcts), 2) if actual_pcts else 0.0,
     }
-

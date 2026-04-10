@@ -12,7 +12,6 @@ Encoding attacks tested:
 5. Null byte injection (%00, \x00, \u0000)
 """
 
-import pytest
 from backend.core.security import SecurityManager
 
 

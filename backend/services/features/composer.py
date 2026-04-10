@@ -20,7 +20,7 @@ from .intent import IntentFeatureExtractor, IntentFeatures
 class FeatureEngineer:
     """
     Composer class that orchestrates all 4 domain feature extractors.
-    
+
     Maintains backward compatibility with the original God class API.
     The public interface (get_features) remains unchanged.
     """
@@ -31,7 +31,7 @@ class FeatureEngineer:
     def __init__(self, registry_lookup: Optional[Callable] = None):
         """
         Initialize all 4 domain extractors.
-        
+
         Args:
             registry_lookup: Optional callable for course content registry lookups
         """
@@ -49,16 +49,16 @@ class FeatureEngineer:
     ) -> Dict[str, Any]:
         """
         Calculate all features for a student (PUBLIC INTERFACE - UNCHANGED).
-        
+
         This method maintains backward compatibility with the original API.
         Route handlers do not need to be updated.
-        
+
         Args:
             student_id: The student's unique identifier
             db: Database session for fetching enrollment/grade data
             is_new_student: If True, apply early-term tolerance (weeks 1-3)
             week_number: Current trimester week (1-based)
-            
+
         Returns:
             Dictionary with all calculated features (same structure as original)
         """
@@ -66,7 +66,7 @@ class FeatureEngineer:
         enrollments = self._fetch_enrollments(student_id, db)
         graded_components = self._fetch_graded_components(student_id, db)
         exam_records = self._fetch_exam_records(student_id, db)
-        
+
         # Calculate total login count for consistency features
         total_logins = sum(e.get("num_logins", 0) or 0 for e in enrollments)
         total_time = sum(e.get("total_time_spent", 0) or 0 for e in enrollments)
@@ -75,7 +75,7 @@ class FeatureEngineer:
         academic = self.academic_extractor.extract(graded_components, exam_records)
         engagement = self.engagement_extractor.extract(enrollments, week_number)
         consistency = self.consistency_extractor.extract(enrollments, total_logins)
-        
+
         # Intent requires combined signals from other domains
         intent = self.intent_extractor.extract(
             content_completion_score=engagement.content_completion_score,
@@ -113,7 +113,7 @@ class FeatureEngineer:
             "exam_score": academic.exam_score,
             "exam_attendance_rate": academic.exam_attendance_rate,
             "academic_flags": academic.academic_flags,
-            
+
             # Engagement features
             "content_completion_score": engagement.content_completion_score,
             "w1w2_completion_score": engagement.w1w2_completion_score,
@@ -126,7 +126,7 @@ class FeatureEngineer:
             "progress_category": engagement.progress_category,
             "per_course_breakdown": engagement.per_course_breakdown,
             "self_directed_learning_score": engagement.self_directed_learning_score,
-            
+
             # Consistency features
             "engagement_trend": consistency.engagement_trend,
             "ghost_info": {
@@ -136,10 +136,10 @@ class FeatureEngineer:
                 "total_enrolled_courses": consistency.total_enrolled_courses,
                 "total_time_seconds": consistency.total_time_seconds,
             },
-            
+
             # Intent features
             "engagement_pattern": intent.engagement_pattern,
-            
+
             # Metadata
             "total_courses": consistency.total_enrolled_courses,
         }
@@ -147,18 +147,18 @@ class FeatureEngineer:
     def _apply_new_student_tolerance(self, features: Dict[str, Any]) -> Dict[str, Any]:
         """
         Apply 20% boost to select scores for new students in weeks 1-3.
-        
+
         New students may have lower initial engagement as they orient to the platform.
         """
         tolerance_fields = ["content_completion_score", "login_consistency_score"]
-        
+
         for field in tolerance_fields:
             if features.get(field) is not None:
                 features[field] = min(
                     100.0,
                     features[field] * self.NEW_STUDENT_TOLERANCE_MULTIPLIER
                 )
-        
+
         return features
 
     def _fetch_enrollments(self, student_id: str, db: Session) -> List[Dict]:
@@ -203,7 +203,7 @@ class FeatureEngineer:
     ) -> Dict:
         """
         Backward-compatible static method for direct feature calculation.
-        
+
         This allows existing code that calls FeatureEngineer.calculate_all_features()
         to continue working without changes.
         """

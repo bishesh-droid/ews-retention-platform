@@ -28,7 +28,6 @@ trend, velocity, and history endpoints have real data to serve.
 """
 
 import json
-import logging
 from datetime import datetime, timezone
 from pathlib import Path
 from typing import Any, Dict, List, Optional, Tuple

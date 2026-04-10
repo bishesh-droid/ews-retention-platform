@@ -4,6 +4,8 @@ Student Schemas
 Pydantic schemas for student data validation and serialization.
 """
 
+from backend.schemas.intervention import Intervention
+from backend.schemas.prediction import Prediction
 from pydantic import BaseModel, ConfigDict, Field
 from typing import Dict, List, Any, Optional
 
@@ -30,7 +32,6 @@ class StudentBase(BaseModel):
 
 class StudentCreate(StudentBase):
     """Schema for creating a new student."""
-    pass
 
 
 class Student(StudentBase):
@@ -94,7 +95,5 @@ class StudentMetricsResponse(BaseModel):
 
 
 # Forward references
-from backend.schemas.prediction import Prediction
-from backend.schemas.intervention import Intervention
 
 Student.model_rebuild()

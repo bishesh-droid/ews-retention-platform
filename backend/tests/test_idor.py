@@ -11,7 +11,7 @@ These tests verify the require_resource_ownership dependency works correctly.
 """
 
 import pytest
-from fastapi import HTTPException, Request
+from fastapi import HTTPException
 from fastapi.testclient import TestClient
 
 from backend.api.deps import require_resource_ownership, ResourceOwnershipChecker
@@ -223,7 +223,6 @@ class TestIDORIntegration:
         Integration Test: /predictions/{student_id} should enforce resource ownership.
         """
         # This would require authentication setup
-        pass
 
 
 # -----------------------------------------------------------------------------

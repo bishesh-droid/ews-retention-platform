@@ -5,7 +5,6 @@ Provides consistent error shapes across the API with request ID tracking.
 """
 
 import logging
-import uuid
 from fastapi import Request
 from fastapi.responses import JSONResponse
 from fastapi.exceptions import RequestValidationError
@@ -17,13 +16,13 @@ logger = logging.getLogger(__name__)
 def error_response(status_code: int, message: str, detail: str = None, request_id: str = None) -> dict:
     """
     Single standard error shape used everywhere in the API.
-    
+
     Args:
         status_code: HTTP status code
         message: Human-readable error message
         detail: Optional additional details (sanitized for client exposure)
         request_id: Request tracking ID for support correlation
-    
+
     Returns:
         Standardized error response dictionary
     """
