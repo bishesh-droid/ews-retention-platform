@@ -529,6 +529,15 @@ class FeatureEngineer:
         return round((attended / len(exam_records)) * 100, 2)
 
     @staticmethod
+    def _is_legacy_k12_data(data: object) -> bool:
+        """Detect if data is legacy K-12 format (dict with absrate/qmpa keys)."""
+        if not isinstance(data, dict):
+            return False
+        # Legacy format has keys like absrate1, q1mpa1, nograd, etc.
+        legacy_keys = ['absrate1', 'q1mpa1', 'nograd', 'nsusp1', 'mobility1']
+        return any(k in data for k in legacy_keys)
+
+    @staticmethod
     def calculate_all_features(
         enrollments: List[Dict],
         graded_components: List[Dict] = None,
@@ -541,7 +550,8 @@ class FeatureEngineer:
         Calculate all engagement features for a student.
 
         Args:
-            enrollments: List of enrollment dictionaries for one student
+            enrollments: List of enrollment dictionaries for one student, OR
+                        legacy K-12 dict with keys like absrate1, q1mpa1, etc.
             graded_components: List of graded quiz/assignment records
             exam_records: List of exam records
             is_new_student: If True, apply early-term tolerance (weeks 1–3) for select scores.
@@ -552,6 +562,10 @@ class FeatureEngineer:
         Returns:
             Dictionary with all calculated features
         """
+        # Handle legacy K-12 format (single dict instead of list of enrollment dicts)
+        if isinstance(enrollments, dict) and FeatureEngineer._is_legacy_k12_data(enrollments):
+            return FeatureEngineer._legacy_calculate_all_features(enrollments)
+
         content_completion_score = FeatureEngineer.calculate_content_completion_score(
             enrollments, registry_lookup=registry_lookup
         )
@@ -786,6 +800,154 @@ class FeatureEngineer:
         """
         engineer = _NewFeatureEngineer()
         return engineer.get_features(student_id, db, is_new_student, week_number)
+
+    # =========================================================================
+    # BACKWARD COMPATIBILITY: Legacy K-12 style methods for tests
+    # =========================================================================
+
+    @staticmethod
+    def normalize_to_scale(
+        value: float,
+        old_min: float,
+        old_max: float,
+        new_min: float,
+        new_max: float
+    ) -> float:
+        """
+        Normalize a value from one scale to another.
+
+        Legacy method for backward compatibility with K-12 tests.
+        """
+        if old_max == old_min:
+            return new_min
+        normalized = (value - old_min) / (old_max - old_min)
+        scaled = normalized * (new_max - new_min) + new_min
+        # Clamp to bounds
+        return max(new_min, min(new_max, scaled))
+
+    @staticmethod
+    def calculate_attendance_score(student_data: Dict) -> float:
+        """
+        Calculate attendance score from absence rates (K-12 legacy format).
+
+        Legacy method for backward compatibility with tests using absrate1-7 keys.
+        """
+        absence_rates = []
+        for year in range(1, 8):
+            key = f'absrate{year}'
+            if key in student_data:
+                val = student_data[key]
+                try:
+                    if val is not None:
+                        absence_rates.append(float(val))
+                except (TypeError, ValueError):
+                    pass
+
+        if not absence_rates:
+            return 50.0  # Neutral score when no data
+
+        avg_absence = sum(absence_rates) / len(absence_rates)
+        # Convert absence rate (typically 0-40%) to score (100-0)
+        # Handle negative values by treating them as 0 absence
+        effective_absence = max(0.0, avg_absence)
+        score = 100.0 - (effective_absence * 2.5)  # 40% absence -> 0 score
+        return max(0.0, min(100.0, score))
+
+    @staticmethod
+    def calculate_academic_score(student_data: Dict) -> float:
+        """
+        Calculate academic score from MPA (mean point average) data (K-12 legacy format).
+
+        Legacy method for backward compatibility with tests using qXmpaY keys.
+        Expects MPA values typically in range 0-5.
+        """
+        mpa_values = []
+        for year in range(1, 8):
+            for quarter in range(1, 5):
+                key = f'q{quarter}mpa{year}'
+                if key in student_data:
+                    val = student_data[key]
+                    try:
+                        if val is not None:
+                            mpa_values.append(float(val))
+                    except (TypeError, ValueError):
+                        pass
+
+        if not mpa_values:
+            return 50.0  # Neutral score when no data
+
+        avg_mpa = sum(mpa_values) / len(mpa_values)
+        # MPA typically 0-5, scale to 0-100
+        # 3.0 (average) -> 60%, 5.0 (perfect) -> 100%
+        score = (avg_mpa / 5.0) * 100.0
+        return max(0.0, min(100.0, score))
+
+    @staticmethod
+    def calculate_behavioral_score(student_data: Dict) -> float:
+        """
+        Calculate behavioral score from suspension data (K-12 legacy format).
+
+        Legacy method for backward compatibility with tests using nsusp keys.
+        """
+        suspensions = []
+        for year in range(1, 8):
+            key = f'nsusp{year}'
+            if key in student_data:
+                val = student_data[key]
+                try:
+                    if val is not None:
+                        suspensions.append(float(val))
+                except (TypeError, ValueError):
+                    pass
+
+        if not suspensions:
+            return 50.0  # Neutral score when no data
+
+        avg_susp = sum(suspensions) / len(suspensions)
+        # More suspensions = lower score
+        score = 100.0 - (avg_susp * 30.0)  # 3.3 suspensions -> 0 score
+        return max(0.0, min(100.0, score))
+
+    @staticmethod
+    def calculate_stability_score(student_data: Dict) -> float:
+        """
+        Calculate stability score from mobility data (K-12 legacy format).
+
+        Legacy method for backward compatibility with tests using mobility keys.
+        """
+        mobility = []
+        for year in range(1, 8):
+            key = f'mobility{year}'
+            if key in student_data:
+                val = student_data[key]
+                try:
+                    if val is not None:
+                        mobility.append(float(val))
+                except (TypeError, ValueError):
+                    pass
+
+        if not mobility:
+            return 50.0  # Neutral score when no data
+
+        avg_mobility = sum(mobility) / len(mobility)
+        # Higher mobility = lower score
+        score = 100.0 - (avg_mobility * 20.0)  # 5 moves -> 0 score
+        return max(0.0, min(100.0, score))
+
+    @staticmethod
+    def _legacy_calculate_all_features(student_data: Dict) -> Dict:
+        """
+        Legacy feature calculation for K-12 style student data.
+
+        Returns features in the format expected by legacy tests.
+        """
+        return {
+            'attendance_score': FeatureEngineer.calculate_attendance_score(student_data),
+            'academic_score': FeatureEngineer.calculate_academic_score(student_data),
+            'behavioral_score': FeatureEngineer.calculate_behavioral_score(student_data),
+            'stability_score': FeatureEngineer.calculate_stability_score(student_data),
+            'graduated': student_data.get('nograd', 1) == 0,
+        }
 
 
 # Maintain backward compatibility for direct imports

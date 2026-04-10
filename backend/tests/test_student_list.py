@@ -130,15 +130,18 @@ def test_risk_filter_works_without_prediction_table():
             current_user=None,
         )
 
-        # Result should be a list (not empty due to prediction table bug)
+        # Result should be a dict with 'students' and 'total' keys
         # Note: Since we're mocking all the repository calls, the actual risk scores
         # will be computed from empty feature data. The key assertion is that
         # the function RUNS without error and applies the filter post-computation.
-        assert isinstance(result, list), "Result should be a list"
+        assert isinstance(result, dict), "Result should be a dict"
+        assert 'students' in result, "Result should have 'students' key"
+        assert 'total' in result, "Result should have 'total' key"
+        students = result['students']
 
         # The key validation: all returned students should have risk_score >= 60
         # (or the list should be empty if no students match, not due to DB bug)
-        for student in result:
+        for student in students:
             assert student.get("risk_score", 0) >= 60, (
                 f"Student {student.get('id')} has risk_score {student.get('risk_score')} < 60"
             )
@@ -184,7 +187,8 @@ def test_risk_filter_0_to_100_scale():
             current_user=None,
         )
 
-        assert isinstance(result, list)
+        assert isinstance(result, dict)
+        assert 'students' in result
 
 
 def test_risk_max_filter_applied():
@@ -221,8 +225,9 @@ def test_risk_max_filter_applied():
             current_user=None,
         )
 
-        assert isinstance(result, list)
-        for student in result:
+        assert isinstance(result, dict)
+        assert 'students' in result
+        for student in result['students']:
             assert student.get("risk_score", 100) <= 40, (
                 f"Student has risk_score {student.get('risk_score')} > 40"
             )
@@ -261,8 +266,9 @@ def test_combined_risk_min_and_max():
             current_user=None,
         )
 
-        assert isinstance(result, list)
-        for student in result:
+        assert isinstance(result, dict)
+        assert 'students' in result
+        for student in result['students']:
             score = student.get("risk_score", 0)
             assert 40 <= score <= 60, \
                 f"Student risk_score {score} outside range [40, 60]"

@@ -142,11 +142,11 @@ class TestValidateRiskScoreDict:
         assert validate_risk_score_dict(result) is False
 
     def test_out_of_range_risk_score_invalid(self):
-        """Risk score outside [0, 1] should return False"""
+        """Risk score outside [0, 100] should return False"""
         result = {'risk_score': -0.5, 'prediction': 1}
         assert validate_risk_score_dict(result) is False
 
-        result = {'risk_score': 1.5, 'prediction': 1}
+        result = {'risk_score': 150.0, 'prediction': 1}
         assert validate_risk_score_dict(result) is False
 
     def test_none_result_invalid(self):
@@ -168,8 +168,8 @@ class TestGetSafeDefaultPrediction:
     def test_risk_score_is_valid(self):
         """Default risk_score should be valid"""
         default = get_safe_default_prediction()
-        assert default['risk_score'] == 0.5
-        assert 0.0 <= default['risk_score'] <= 1.0
+        assert default['risk_score'] == 50.0
+        assert 0.0 <= default['risk_score'] <= 100.0
 
     def test_signals_are_valid(self):
         """All signal scores should be valid"""
