@@ -24,7 +24,7 @@ Feature Categories (mapped to 4 domains):
 - Intent: Engagement pattern classification, motivation signals
 """
 
-from typing import Dict, List, Optional
+from typing import Any, Dict, List, Optional
 from datetime import datetime
 import math
 import warnings
