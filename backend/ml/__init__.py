@@ -10,10 +10,8 @@ This package contains:
 - training/: Model training and evaluation
 """
 
-from backend.ml.features import create_features
 from backend.ml.models import ModelRegistry
 
 __all__ = [
-    "create_features",
     "ModelRegistry",
 ]
