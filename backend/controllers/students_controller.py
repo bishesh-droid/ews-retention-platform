@@ -301,7 +301,7 @@ def get_students(
     risk_min: Optional[float] = Query(None, ge=0, le=100),
     risk_max: Optional[float] = Query(None, ge=0, le=100),
     db: Session = Depends(get_db),
-    request: Optional[Request] = None,
+    request: Request,
     current_user: User = Depends(require_role(_STAFF_ROLES)),
 ):
     """Get paginated list of students with engagement metrics. Staff only."""
@@ -345,7 +345,7 @@ def get_students(
 def get_student_detail(
     student_id: str,
     db: Session = Depends(get_db),
-    request: Optional[Request] = None,
+    request: Request,
     current_user: User = Depends(require_role(_STAFF_ROLES)),
 ):
     """Get detailed engagement information for a single student. Staff only."""
@@ -370,7 +370,7 @@ def get_student_detail(
 def get_student_weekly_summary(
     student_id: str,
     db: Session = Depends(get_db),
-    request: Optional[Request] = None,
+    request: Request,
     current_user: User = Depends(require_role(_STAFF_ROLES)),
 ):
     """Get a lightweight weekly-style summary for the student portal. Staff only."""
@@ -415,7 +415,7 @@ def get_student_risk_trend(
     student_id: str,
     limit: int = Query(8, ge=2, le=52),
     db: Session = Depends(get_db),
-    request: Optional[Request] = None,
+    request: Request,
     current_user: User = Depends(require_role(_STAFF_ROLES)),
 ):
     """Return risk score trend points for a student. Staff only."""
