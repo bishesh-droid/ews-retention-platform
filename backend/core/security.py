@@ -99,7 +99,7 @@ class SecurityManager:
 
     @staticmethod
     def _decode_unicode_escapes(text: str) -> str:
-        """Decode Unicode escape sequences (\uXXXX and \xXX)."""
+        r"""Decode Unicode escape sequences (\uXXXX and \xXX)."""
         unicode_escape_pattern = re.compile(chr(92) + 'u[0-9a-fA-F]{4}|' + chr(92) + 'x[0-9a-fA-F]{2}')
         if not unicode_escape_pattern.search(text):
             return text
