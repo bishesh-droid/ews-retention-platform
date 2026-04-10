@@ -294,6 +294,7 @@ def get_course_engagement(
 
 @router.get("/students", response_model=None)
 def get_students(
+    request: Request,
     skip: int = Query(0, ge=0),
     limit: int = Query(50, ge=1, le=2000),
     sort_by: str = Query("risk_score"),
@@ -301,7 +302,6 @@ def get_students(
     risk_min: Optional[float] = Query(None, ge=0, le=100),
     risk_max: Optional[float] = Query(None, ge=0, le=100),
     db: Session = Depends(get_db),
-    request: Request,
     current_user: User = Depends(require_role(_STAFF_ROLES)),
 ):
     """Get paginated list of students with engagement metrics. Staff only."""
@@ -344,8 +344,8 @@ def get_students(
 @router.get("/students/{student_id}")
 def get_student_detail(
     student_id: str,
-    db: Session = Depends(get_db),
     request: Request,
+    db: Session = Depends(get_db),
     current_user: User = Depends(require_role(_STAFF_ROLES)),
 ):
     """Get detailed engagement information for a single student. Staff only."""
@@ -369,8 +369,8 @@ def get_student_detail(
 @router.get("/students/{student_id}/weekly-summary")
 def get_student_weekly_summary(
     student_id: str,
-    db: Session = Depends(get_db),
     request: Request,
+    db: Session = Depends(get_db),
     current_user: User = Depends(require_role(_STAFF_ROLES)),
 ):
     """Get a lightweight weekly-style summary for the student portal. Staff only."""
@@ -413,9 +413,9 @@ def get_student_weekly_summary(
 @router.get("/students/{student_id}/risk-trend")
 def get_student_risk_trend(
     student_id: str,
+    request: Request,
     limit: int = Query(8, ge=2, le=52),
     db: Session = Depends(get_db),
-    request: Request,
     current_user: User = Depends(require_role(_STAFF_ROLES)),
 ):
     """Return risk score trend points for a student. Staff only."""
