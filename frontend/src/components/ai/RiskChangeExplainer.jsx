@@ -53,6 +53,39 @@ const RiskChangeIndicator = ({ previous, current, change }) => {
 
 const RiskChangeExplainer = ({ studentId, students, limit = 5 }) => {
     // ---------------------------------------------------------------------
+    // Mode B (student portal): explain a specific student's risk change.
+    // Hooks must be called unconditionally before any early returns.
+    // ---------------------------------------------------------------------
+    const [explanation, setExplanation] = useState(null);
+    const [loading, setLoading] = useState(false);
+    const [error, setError] = useState(null);
+    const [showReasoning, setShowReasoning] = useState(false);
+
+    useEffect(() => {
+        if (studentId) {
+            fetchExplanation();
+        }
+    }, [studentId]);
+
+    const fetchExplanation = async () => {
+        setLoading(true);
+        setError(null);
+
+        try {
+            const response = await axios.post(`${API_BASE}/llm/explain-risk-change`, {
+                student_id: studentId,
+                time_period: 'recent'
+            });
+            setExplanation(response.data);
+        } catch (err) {
+            setError('Unable to generate explanation at this time.');
+            console.error('Error fetching risk explanation:', err);
+        } finally {
+            setLoading(false);
+        }
+    };
+
+    // ---------------------------------------------------------------------
     // Mode A (dashboard widget): show top risk changes across a student list.
     // ---------------------------------------------------------------------
     const changedStudents = useMemo(() => {
@@ -224,38 +257,6 @@ const RiskChangeExplainer = ({ studentId, students, limit = 5 }) => {
             </div>
         );
     }
-
-    // ---------------------------------------------------------------------
-    // Mode B (student portal): explain a specific student's risk change.
-    // ---------------------------------------------------------------------
-    const [explanation, setExplanation] = useState(null);
-    const [loading, setLoading] = useState(false);
-    const [error, setError] = useState(null);
-    const [showReasoning, setShowReasoning] = useState(false);
-
-    useEffect(() => {
-        if (studentId) {
-            fetchExplanation();
-        }
-    }, [studentId]);
-
-    const fetchExplanation = async () => {
-        setLoading(true);
-        setError(null);
-
-        try {
-            const response = await axios.post(`${API_BASE}/llm/explain-risk-change`, {
-                student_id: studentId,
-                time_period: 'recent'
-            });
-            setExplanation(response.data);
-        } catch (err) {
-            setError('Unable to generate explanation at this time.');
-            console.error('Error fetching risk explanation:', err);
-        } finally {
-            setLoading(false);
-        }
-    };
 
     const getConfidenceBadge = (confidence) => {
         const badges = {

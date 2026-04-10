@@ -62,16 +62,15 @@ const Settings = () => {
             }));
             const riskPrefs = prefs.risk_thresholds;
             if (riskPrefs && typeof riskPrefs === 'object') {
-                setThresholds({
-                    critical: riskPrefs.critical || prevThreshold('critical', prev).critical,
-                    high: riskPrefs.high || prevThreshold('high', prev).high,
-                    medium: riskPrefs.medium || prevThreshold('medium', prev).medium,
-                    low: riskPrefs.low || prevThreshold('low', prev).low,
-                });
+                setThresholds((prev) => ({
+                    critical: riskPrefs.critical || prev.critical,
+                    high: riskPrefs.high || prev.high,
+                    medium: riskPrefs.medium || prev.medium,
+                    low: riskPrefs.low || prev.low,
+                }));
             }
             setLoading(false);
         };
-        const prevThreshold = (level, prev) => prev || thresholds;
         load();
         return () => { isMounted = false; };
         // eslint-disable-next-line react-hooks/exhaustive-deps
