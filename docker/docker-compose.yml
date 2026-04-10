@@ -1,5 +1,3 @@
-version: '3.8'
-
 services:
   redis:
     image: redis:7-alpine
@@ -10,7 +8,9 @@ services:
     command: redis-server --appendonly yes
 
   backend:
-    build: .
+    build:
+      context: .
+      dockerfile: docker/Dockerfile
     ports:
       - "8000:8000"
     volumes:
@@ -25,7 +25,9 @@ services:
       - redis
 
   scheduler:
-    build: .
+    build:
+      context: .
+      dockerfile: docker/Dockerfile.scheduler
     command: python -m backend.services.scheduler
     volumes:
       - ./models:/app/models

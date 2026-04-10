@@ -279,7 +279,7 @@ def run_threshold_analysis(
     Returns DataFrame with metrics per threshold.
     """
     # Get unique students with their aggregate outcome
-    student_outcomes = outcomes_df.drop_duplicates(subset=["org_id", "student_id"]])[
+    student_outcomes = outcomes_df.drop_duplicates(subset=["org_id", "student_id"])[
         ["org_id", "student_id", "student_outcome"]
     ]
 
