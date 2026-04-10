@@ -44,6 +44,21 @@ const TABS = [
     { id: 'program',       label: 'Program Analytics',   icon: <FaChartBar /> },
 ];
 
+/* ─── Static data for charts & insights ─────────────────────────── */
+const RADAR_DATA = [
+    { factor: 'Attendance',   cs: 78, math: 82, sci: 75, hum: 85 },
+    { factor: 'Grades',       cs: 72, math: 68, sci: 74, hum: 80 },
+    { factor: 'Engagement',   cs: 65, math: 70, sci: 72, hum: 78 },
+    { factor: 'Completion',   cs: 70, math: 75, sci: 68, hum: 82 },
+    { factor: 'Retention',    cs: 75, math: 72, sci: 76, hum: 88 },
+];
+
+const MARKET_INSIGHTS = [
+    { area: 'Early Warning System Alerts', priority: 'HIGH', impact: '15 at-risk students identified this week requiring immediate advisor outreach', action: 'Launch retention campaign: send personalized intervention emails' },
+    { area: 'Course Completion Risk', priority: 'MEDIUM', impact: 'Computer Science showing 12% below-target completion rates', action: 'Schedule TA office hours & create study groups for struggling cohorts' },
+    { area: 'Engagement Opportunity', priority: 'LOW', impact: 'Humanities students show highest forum participation - leverage for peer mentoring', action: 'Recruit high-engagement students as peer mentors for at-risk departments' },
+];
+
 /* ─── Derived data helpers (runtime from backend) ────────────── */
 
 /* ─── Tooltip ────────────────────────────────────────────────── */

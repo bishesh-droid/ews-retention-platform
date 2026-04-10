@@ -119,10 +119,9 @@ jobs:
       uses: docker/setup-buildx-action@v3
 
     - name: Build Docker image
-      working-directory: ./docker
       run: |
-        docker compose config
-        docker compose build
+        docker compose -f docker/docker-compose.yml --project-directory . config
+        docker compose -f docker/docker-compose.yml --project-directory . build
 
   # Ensure all 4 jobs pass before merge
   all-checks-pass:
