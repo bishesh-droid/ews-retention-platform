@@ -48,10 +48,10 @@ jobs:
 
     - name: Run pytest
       env:
-        TESTING: true
-        ENVIRONMENT: development
-        DATABASE_URL: sqlite:///:memory:
-        SECRET_KEY: test-secret-key-min-32-chars-for-testing-only
+        TESTING: "true"
+        ENVIRONMENT: "development"
+        DATABASE_URL: "sqlite:///:memory:"
+        SECRET_KEY: "test-secret-key-min-32-chars-for-testing-only"
       run: |
         pytest backend/tests -v --tb=short --cov=backend --cov-report=xml --cov-report=term
 
