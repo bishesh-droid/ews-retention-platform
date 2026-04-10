@@ -200,18 +200,11 @@ class SchemaInferenceEngine:
         if self._is_percentage_column(non_null, col_name):
             return ColumnType.PERCENTAGE, ColumnConstraints(min_value=0.0, max_value=100.0)
 
-        # Check for date
-        date_result = self._is_date_column(non_null)
-        if date_result:
-            date_format, has_time = date_result
-            col_type = ColumnType.DATETIME if has_time else ColumnType.DATE
-            return col_type, ColumnConstraints(date_format=date_format)
-
         # Check for boolean
         if self._is_boolean_column(non_null):
             return ColumnType.BOOLEAN, ColumnConstraints(allowed_values=['true', 'false'])
 
-        # Check for numeric
+        # Check for numeric BEFORE date to avoid numbers being parsed as timestamps
         if pd.api.types.is_numeric_dtype(non_null):
             # Integer vs float
             if pd.api.types.is_integer_dtype(non_null) or all(non_null == non_null.astype(int)):
@@ -228,6 +221,13 @@ class SchemaInferenceEngine:
                 min_value=min_val - buffer,
                 max_value=max_val + buffer
             )
+
+        # Check for date (string columns that might contain dates)
+        date_result = self._is_date_column(non_null)
+        if date_result:
+            date_format, has_time = date_result
+            col_type = ColumnType.DATETIME if has_time else ColumnType.DATE
+            return col_type, ColumnConstraints(date_format=date_format)
 
         # Check for categorical (limited unique values)
         unique_ratio = non_null.nunique() / len(non_null)

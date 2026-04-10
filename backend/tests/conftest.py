@@ -12,6 +12,9 @@ from sqlalchemy.orm import Session
 os.environ["TESTING"] = "true"
 os.environ["SECRET_KEY"] = "test-secret-key-not-for-production-x7f9k2m"
 
+# Configure greenlet for SQLAlchemy async/sync compatibility
+os.environ["SQLALCHEMY_WARN_20"] = "0"
+
 # All tests use the in-memory DB automatically
 
 
@@ -23,16 +26,23 @@ def client():
     """
     from backend.main import app
     from backend.core.rate_limiting import limiter
+    from backend.database.connection import init_db
     from fastapi.testclient import TestClient
 
     # Initialize app state that would normally be set during lifespan startup
     app.state.limiter = limiter
 
-    with TestClient(app) as test_client:
-        yield test_client
+    # Initialize database synchronously before tests
+    init_db()
 
-    # Clean up dependency overrides after test
-    app.dependency_overrides.clear()
+    # Use TestClient without lifespan to avoid async/sync greenlet issues
+    # The lifespan contains async operations that conflict with sync TestClient
+    try:
+        with TestClient(app, lifespan="off") as test_client:
+            yield test_client
+    finally:
+        # Clean up dependency overrides after test
+        app.dependency_overrides.clear()
 
 
 @pytest.fixture
