@@ -125,7 +125,7 @@ def setup_logger(name: str) -> logging.Logger:
     # Create PII masking filter (applied to all handlers)
     pii_filter = PIIMaskingFilter()
 
-    log_handler = RotatingFileHandler(LOG_FILE, maxBytes=10 * 1024 * 1024, backupCount=5)
+    log_handler = RotatingFileHandler(LOG_FILE, maxBytes=50 * 1024 * 1024, backupCount=5)
     stream_handler = logging.StreamHandler(sys.stdout)
     formatter = JSONFormatter()
 

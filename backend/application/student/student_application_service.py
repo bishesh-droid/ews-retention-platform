@@ -7,6 +7,7 @@ from __future__ import annotations
 from typing import Any, Dict, List, Optional
 
 from sqlalchemy import Float, Integer, case, cast, func
+from sqlalchemy.dialects.sqlite import insert as sqlite_insert
 from sqlalchemy.orm import Session
 
 import backend.config as settings
@@ -116,6 +117,7 @@ class StudentApplicationService:
             "total_courses": features["total_courses"],
             "per_course_breakdown": features["per_course_breakdown"],
             "exam_attendance_score": features.get("exam_attendance_rate"),  # BREAKING_CHANGE: renamed from attendance_score in v1.1
+            "attendance_score": features.get("exam_attendance_rate"),  # DEPRECATED — remove in v1.2
             "academic_score": features["content_completion_score"],
             "behavioral_score": features["discussion_engagement_score"],
             "stability_score": features["time_investment_score"],
@@ -179,7 +181,19 @@ class StudentApplicationService:
         risk_max: Optional[float] = None,
         current_user=None,
         activation_required: Optional[bool] = None,
-    ) -> List[Dict]:
+        semester_name: Optional[str] = None,
+    ) -> Dict[str, Any]:
+        """
+        Get paginated students with computed risk metrics.
+        
+        Returns dict with:
+        - students: List[Dict] — the student records
+        - total: int — total count for pagination (accounts for risk filters)
+        """
+        # D8-3: Default to current semester if not specified
+        if semester_name is None:
+            semester_name = settings.CURRENT_SEMESTER_NAME
+
         pred_subq = StudentRepository.latest_prediction_rows_subquery(db)
         base = db.query(Student, pred_subq).outerjoin(pred_subq, pred_subq.c.student_id == Student.id)
 
@@ -203,9 +217,44 @@ class StudentApplicationService:
         pred_rows = [r[1] for r in rows]
         student_ids = [s.id for s in students]
 
-        enrollment_map = StudentRepository.fetch_enrollments_map(db, student_ids)
-        graded_map = StudentRepository.fetch_graded_map(db, student_ids)
-        exam_map = StudentRepository.fetch_exam_map(db, student_ids)
+        # D5-2: Use pre-computed feature store for list view (fast path)
+        from backend.database.models.event import EngineeredFeatures
+        import json
+
+        feat_map = {
+            f.student_id: {
+                "assignment_completion_rate": f.assignment_completion_rate,
+                "average_grade": f.average_grade,
+                "deadline_adherence_score": f.deadline_adherence_score,
+                "grade_trend": f.grade_trend,
+                "login_frequency": f.login_frequency,
+                "avg_session_duration": f.avg_session_duration,
+                "video_completion_rate": f.video_completion_rate,
+                "platform_interaction_score": f.platform_interaction_score,
+                "attendance_rate": f.attendance_rate,
+                "activity_regularity_score": f.activity_regularity_score,
+                "missed_classes_count": f.missed_classes_count,
+                "attendance_trend": f.attendance_trend,
+                "engagement_trend": f.engagement_trend,
+                "days_inactive": f.days_inactive,
+                "declining_performance_flag": f.declining_performance_flag,
+                "email_open_rate": f.email_open_rate,
+                "message_reply_rate": f.message_reply_rate,
+                "avg_response_time_hours": f.avg_response_time_hours,
+            }
+            for f in db.query(EngineeredFeatures)
+                .filter(EngineeredFeatures.student_id.in_(student_ids))
+                .all()
+        }
+
+        # Fallback: fetch enrollment/graded/exam data for students not in feature store
+        missing_ids = [sid for sid in student_ids if sid not in feat_map]
+        if missing_ids:
+            enrollment_map = StudentRepository.fetch_enrollments_map(db, missing_ids)
+            graded_map = StudentRepository.fetch_graded_map(db, missing_ids)
+            exam_map = StudentRepository.fetch_exam_map(db, missing_ids)
+        else:
+            enrollment_map, graded_map, exam_map = {}, {}, {}
 
         result: List[Dict] = []
         for student, pred_row in zip(students, pred_rows):
@@ -213,13 +262,19 @@ class StudentApplicationService:
             wn = trimester_week_number()
             program = StudentApplicationService._infer_program_from_student(student)
             current_week = get_current_week(settings.TRIMESTER_START_DATE)
-            features = StudentApplicationService._calculate_features(
-                enrollment_map.get(student.id, []),
-                graded_map.get(student.id, []),
-                exam_map.get(student.id, []),
-                is_new_student=is_new,
-                week_number=wn,
-            )
+
+            # Read from feature store if available, else compute live
+            features = feat_map.get(student.id)
+            if features is None:
+                # Fall back to live computation for students not yet in feature store
+                features = StudentApplicationService._calculate_features(
+                    enrollment_map.get(student.id, []),
+                    graded_map.get(student.id, []),
+                    exam_map.get(student.id, []),
+                    is_new_student=is_new,
+                    week_number=wn,
+                )
+
             risk_fields = StudentApplicationService._derive_risk_fields(
                 features,
                 graded_dicts=graded_map.get(student.id, []),
@@ -257,7 +312,18 @@ class StudentApplicationService:
         ]
         if sort_by in computed_fields:
             result.sort(key=lambda x: x.get(sort_by, 0) or 0, reverse=reverse)
-        return result
+        
+        # D5-1: Fix pagination total when risk filter is applied
+        # Risk filtering is post-computation — derive count from filtered results
+        if risk_min is not None or risk_max is not None:
+            total = len(result)
+        else:
+            total = len(result)  # For DB-filtered case, this matches the query count
+        
+        return {
+            "students": result,
+            "total": total,
+        }
 
     @staticmethod
     def get_student_count_filtered(
@@ -580,25 +646,30 @@ class StudentApplicationService:
         if week_number is None:
             week_number = trimester_week_number()
         
-        existing = db.query(InterventionLog).filter(
+        log_data = {
+            "student_org_id": student_org_id,
+            "intervention_type": intervention_type,
+            "engagement_pattern": intervention.get("engagement_pattern"),
+            "risk_score_at_recommendation": risk_score,
+            "week_number": week_number,
+            "semester_name": semester,
+        }
+
+        # Upsert: insert or ignore on conflict
+        stmt = sqlite_insert(InterventionLog).values(**log_data)
+        stmt = stmt.on_conflict_do_nothing(
+            index_elements=['student_org_id', 'week_number', 'semester_name', 'intervention_type']
+        )
+        db.execute(stmt)
+        db.commit()
+
+        # Return the existing or newly created log
+        return db.query(InterventionLog).filter(
             InterventionLog.student_org_id == student_org_id,
             InterventionLog.week_number == week_number,
             InterventionLog.semester_name == semester,
+            InterventionLog.intervention_type == intervention_type,
         ).first()
-        if existing:
-            return existing  # Don't create duplicate for same week
-        
-        log = InterventionLog(
-            student_org_id=student_org_id,
-            intervention_type=intervention_type,
-            engagement_pattern=intervention.get("engagement_pattern"),
-            risk_score_at_recommendation=risk_score,
-            week_number=week_number,
-            semester_name=semester,
-        )
-        db.add(log)
-        db.commit()
-        return log
 
     @staticmethod
     def build_and_log_intervention_recommendation(

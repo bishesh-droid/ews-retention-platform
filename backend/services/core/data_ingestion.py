@@ -1,11 +1,14 @@
 """Idempotent, validated ETL ingestion for EWS retention data."""
 
 import asyncio
+import hashlib
 import logging
+import redis as redis_lib
 import threading
 import time
+import zipfile
 from dataclasses import dataclass, field
-from datetime import datetime, timedelta
+from datetime import datetime, timedelta, UTC
 from pathlib import Path
 
 import openpyxl
@@ -28,10 +31,23 @@ from backend.database.models.course_content_registry import CourseContentRegistr
 from backend.database.models.intervention_log import InterventionLog
 from backend.database.models.goals_and_risks import RiskSnapshot
 
+# D11-1: Extracted ingestion sub-modules
+from backend.services.ingestion.student_loader import (
+    _ensure_student, _deactivate_missing_students, _rescind_stale_ghost_alerts
+)
+from backend.services.ingestion.exam_loader import (
+    _ingest_exam_attendance, _ingest_written_exam_marks, _ingest_exam_defaulters, _ingest_quiz_assignment_exam
+)
+from backend.services.ingestion.outcome_inferencer import infer_outcomes_from_exam_data
+from backend.services.ingestion.intervention_backfiller import backfill_intervention_outcomes
+
 logger = logging.getLogger(__name__)
 
-# Async lock to prevent concurrent ingestion runs
-_ingestion_lock = asyncio.Lock()
+# Redis distributed lock for cross-process ingestion synchronization
+def _get_redis_lock():
+    from backend.config import REDIS_URL
+    r = redis_lib.from_url(REDIS_URL)
+    return r.lock("ews_ingestion_lock", timeout=600, blocking_timeout=0)
 
 
 @dataclass
@@ -121,16 +137,19 @@ async def ingest_all_data(db: Session, triggered_by: str = "startup", uploaded_f
     Idempotency:
     - Inserts use update-or-create semantics.
     - Running multiple times refreshes data instead of duplicating rows.
-    
+
     Concurrency:
-    - Only one ingestion can run at a time. If another is in progress,
-      raises RuntimeError.
+    - Only one ingestion can run at a time across all workers (Redis distributed lock).
+      If another is in progress, raises RuntimeError.
     """
-    # Check if ingestion is already running
-    if _ingestion_lock.locked():
-        raise RuntimeError("Ingestion already in progress — wait for the current run to finish")
-    
-    async with _ingestion_lock:
+    # Acquire distributed lock to prevent concurrent ingestion across workers
+    lock = _get_redis_lock()
+    acquired = lock.acquire()
+    if not acquired:
+        logger.warning("Ingestion already in progress — skipping")
+        raise RuntimeError("Ingestion lock is held by another process")
+
+    try:
         stats = IngestionStats()
         run = IngestionRun(triggered_by=triggered_by, status="running")
         db.add(run)
@@ -156,8 +175,8 @@ async def ingest_all_data(db: Session, triggered_by: str = "startup", uploaded_f
             run.risk_scores_updated = stats.risk_scores_updated
             run.files_processed = stats.files_processed
             run.errors = stats.errors
-            db.add(run)
             db.commit()
+
             # Structured logging for monitoring (ERROR-2)
             logger.info(
                 "Ingestion complete",
@@ -171,9 +190,34 @@ async def ingest_all_data(db: Session, triggered_by: str = "startup", uploaded_f
                     "error_count": len(stats.errors),
                 }
             )
-            # Clean up uploaded file if provided (CROSS-3)
-            if uploaded_filepath:
-                await _cleanup_uploaded_file(uploaded_filepath)
+
+            # D12-1: Alert on ingestion failure
+            if run.status == "failed":
+                logger.critical(
+                    "ALERT: Ingestion run failed — advisors may see stale data",
+                    extra={
+                        "run_id": run.id,
+                        "error_count": len(stats.errors),
+                        "first_error": stats.errors[0] if stats.errors else None,
+                    }
+                )
+                # Optional: send to a Slack/email webhook if configured
+                alert_webhook = os.getenv("ALERT_WEBHOOK_URL")
+                if alert_webhook:
+                    import httpx
+                    try:
+                        httpx.post(alert_webhook, json={
+                            "text": f"EWS ingestion FAILED at {datetime.utcnow().isoformat()}. "
+                                    f"{len(stats.errors)} errors. Check logs for run_id={run.id}"
+                        }, timeout=5)
+                    except Exception:
+                        pass  # Alert failure must not crash ingestion
+    finally:
+        # Release distributed lock (ignore errors if lock expired)
+        try:
+            lock.release()
+        except Exception:
+            pass  # Lock may have expired; that's fine
 
 
 async def _run_ingestion(db: Session, stats: IngestionStats):
@@ -216,9 +260,11 @@ async def _run_ingestion(db: Session, stats: IngestionStats):
 def backfill_intervention_outcomes(session: Session):
     """
     Backfill outcome fields for acted-upon interventions that are >= 7 days old.
-    
+
     Compares current risk scores (from RiskSnapshot) with recommendation-time scores
     to determine if intervention was successful.
+
+    Do not commit inside this function — caller owns the transaction.
     """
     cutoff = datetime.utcnow() - timedelta(days=7)
     pending_logs = session.query(InterventionLog).filter(
@@ -248,7 +294,6 @@ def backfill_intervention_outcomes(session: Session):
         else:
             log.outcome = "unchanged"
 
-    session.commit()
     logger.info(f"Backfilled outcomes for {len(pending_logs)} intervention logs")
 
 
@@ -281,7 +326,16 @@ async def _ingest_engagement_data(db: Session, files: dict, owner_thread_id: int
     logger.info(f"Reading {path}...")
     sheet_name = "Learner Usage main dump"
 
-    wb = await asyncio.to_thread(openpyxl.load_workbook, str(path), read_only=True, data_only=True)
+    try:
+        wb = await asyncio.to_thread(openpyxl.load_workbook, str(path), read_only=True, data_only=True)
+    except (openpyxl.utils.exceptions.InvalidFileException,
+            zipfile.BadZipFile,
+            ValueError,
+            KeyError) as e:
+        logger.warning("Skipping unreadable file",
+                       extra={"file": path.name, "error": type(e).__name__})
+        stats.add_error(path.name, f"Unreadable file: {type(e).__name__}")
+        return
     try:
         ws = wb[sheet_name]
         rows = list(ws.iter_rows(values_only=True))
@@ -372,14 +426,29 @@ async def _ingest_engagement_data(db: Session, files: dict, owner_thread_id: int
             student.org_defined_id = org_id
             student.first_name = first_name
             student.last_name = "" if last_name == "." else last_name
-            student.old_new_student = old_new
+            
+            # D2-3: Only update old_new_student on first creation or semester change
+            if student.old_new_student is None:
+                student.old_new_student = old_new  # first ingest — set from spreadsheet
+            elif getattr(student, 'semester_code', None) != semester_code:
+                # Student is returning from a previous semester — promote to "old"
+                student.old_new_student = "old"
+            # Otherwise: keep existing value — don't let stale spreadsheet data overwrite
+            
             student.is_active = is_active
             student.parent_department_name = dept_name
             student.parent_department_code = dept_code
+            # Track current semester for change detection on next ingest
+            student.semester_code = semester_code
             
             # Track org_id for soft delete detection (CROSS-1)
             if org_id:
                 stats.seen_org_ids.add(org_id)
+            
+            # D2-6: Auto-rescind stale ghost alerts if student has logged in
+            login_count = _cell_int(vals, header.get("num logins")) or 0
+            if login_count > 0:
+                _rescind_stale_ghost_alerts(db, org_id, login_count)
 
             course = existing_courses.get(course_code)
             if not course:
@@ -565,9 +634,17 @@ async def _ingest_quiz_assignment_exam(db: Session, files: dict, owner_thread_id
     if not path.exists():
         stats.add_error("quiz_exam", "Optional quiz/exam workbook not found")
         return
-    logger.info(f"Reading {path}...")
 
-    wb = await asyncio.to_thread(openpyxl.load_workbook, str(path), read_only=True, data_only=True)
+    try:
+        wb = await asyncio.to_thread(openpyxl.load_workbook, str(path), read_only=True, data_only=True)
+    except (openpyxl.utils.exceptions.InvalidFileException,
+            zipfile.BadZipFile,
+            ValueError,
+            KeyError) as e:
+        logger.warning("Skipping unreadable file",
+                       extra={"file": path.name, "error": type(e).__name__})
+        stats.add_error(path.name, f"Unreadable file: {type(e).__name__}")
+        return
     try:
         _ingest_graded_sheet(db, wb, "BS Attendance", "BS", stats)
         _ingest_graded_sheet(db, wb, "MSc Attendance", "MSc", stats)
@@ -736,7 +813,7 @@ def _ingest_written_exam_marks(db: Session, wb):
             program = "MSc"
         else:
             program = "BS"
-        _ensure_student(db, email, org_defined_id_raw, student_name, program, stats)
+        _ensure_student(db, email, org_defined_id_raw, student_name, program)
 
         key = (email, course_code, slot)
         exam = exam_map.get(key)
@@ -794,7 +871,7 @@ def _ingest_exam_attendance(db: Session, wb, sheet_name: str, slot: str):
             continue
         valid_rows += 1
 
-        _ensure_student(db, student_id, bits_id, student_name, program, stats)
+        _ensure_student(db, student_id, bits_id, student_name, program)
         key = (student_id, course_code, slot)
         exam = exam_map.get(key)
         if not exam:
@@ -850,7 +927,7 @@ def _ingest_exam_defaulters(db: Session, wb):
             continue
 
         email = f"{bits_id.lower()}@bitspilani-digital.edu.in"
-        _ensure_student(db, email, bits_id, student_name, program, stats)
+        _ensure_student(db, email, bits_id, student_name, program)
         key = (email, "EXAM_DEFAULT", "all")
         exam = exam_map.get(key)
         if not exam:
@@ -1208,7 +1285,13 @@ def _ensure_student(db: Session, student_id: str, org_id: str, name: str, progra
         student.is_active = True
         student.deactivated_at = None
         student.deactivation_reason = None
-        logger.info(f"Reactivated student {student_id}")
+        logger.info(
+            "Student reactivated",
+            extra={
+                "org_id_prefix": (org_id or "")[:4] + "…",
+                "id_hash": hashlib.sha256((student_id or "").encode()).hexdigest()[:10],
+            }
+        )
     if not student.parent_department_name:
         student.parent_department_name = dept_name
     student.parent_department_code = dept_code
@@ -1242,11 +1325,48 @@ async def _deactivate_missing_students(session, seen_org_ids: set, semester_name
             student.deactivated_at = datetime.utcnow()
             student.deactivation_reason = "not_in_latest_export"
             deactivated_count += 1
-            logger.info(f"Deactivated student {student.id} (org_id={student.org_defined_id}) — not in latest export")
+            logger.info(
+                "Student deactivated",
+                extra={
+                    "org_id_prefix": (student.org_defined_id or "")[:4] + "…",
+                    "id_hash": hashlib.sha256((student.id or "").encode()).hexdigest()[:10],
+                    "reason": "not_in_latest_export",
+                }
+        )
     
     if deactivated_count:
         logger.info(f"Deactivated {deactivated_count} students not in latest export for {semester_name}")
         session.commit()
+
+
+def _rescind_stale_ghost_alerts(db, org_id: str, current_login_count: int):
+    """Auto-dismiss ghost alerts if student has logged in since the alert was raised."""
+    if current_login_count <= 0 or not org_id:
+        return
+    
+    stale_logs = (
+        db.query(InterventionLog)
+        .filter(
+            InterventionLog.student_org_id == org_id,
+            InterventionLog.intervention_type == "activation_outreach",
+            InterventionLog.reviewed == False,
+        )
+        .all()
+    )
+    
+    for log in stale_logs:
+        log.reviewed = True
+        log.acted_on = False
+        log.dismissed_reason = "student_became_active_auto"
+    
+    if stale_logs:
+        logger.info(
+            "Auto-dismissed stale ghost alerts",
+            extra={
+                "count": len(stale_logs),
+                "org_id_prefix": (org_id or "")[:4] + "…",
+            }
+        )
 
 
 def _safe_str(val) -> str:

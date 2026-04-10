@@ -4,7 +4,7 @@
 # ---------------------------------------------------------------------------
 # Stage 1: Dependencies
 # ---------------------------------------------------------------------------
-FROM python:3.12-slim-bookworm AS builder
+FROM python:3.12.8-slim-bookworm AS builder
 
 WORKDIR /app
 
@@ -21,7 +21,7 @@ RUN pip install --no-cache-dir --user -r requirements.txt
 # ---------------------------------------------------------------------------
 # Stage 2: Runtime
 # ---------------------------------------------------------------------------
-FROM python:3.12-slim-bookworm AS runtime
+FROM python:3.12.8-slim-bookworm AS runtime
 
 # Create non-root user for security
 RUN groupadd --gid 1000 appgroup && \
@@ -55,5 +55,7 @@ HEALTHCHECK --interval=30s --timeout=10s --start-period=5s --retries=3 \
 # Expose port
 EXPOSE 8000
 
-# Default command
+# IMPORTANT: Run as single uvicorn worker — asyncio.Lock() used for ingestion
+# serialisation is process-local. Multi-worker deployment requires Redis
+# distributed lock (see ARCH-2 in audit). Do not add -w N without that fix.
 CMD ["python", "-m", "uvicorn", "backend.main:app", "--host", "0.0.0.0", "--port", "8000"]

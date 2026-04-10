@@ -17,8 +17,14 @@ from backend.database.models.academic import ExamRecord, GradedComponent
 from backend.database.models.course import Course
 from backend.database.models.enrollment import Enrollment
 from backend.database.models.goals_and_risks import RiskSnapshot
+from backend.database.models.intervention_log import InterventionLog
 from backend.database.models.prediction import Prediction
 from backend.database.models.student import Student
+from backend.database.models.event import EngineeredFeatures
+from sqlalchemy.dialects.sqlite import insert as sqlite_insert
+import json
+import shutil
+from pathlib import Path
 import backend.config as settings
 from backend.config import trimester_week_number
 from backend.database.connection import SessionLocal
@@ -189,17 +195,40 @@ def generate_daily_predictions() -> None:
                     )
                     created_predictions += 1
 
-                    db.add(
-                        RiskSnapshot(
-                            student_id=student.id,
-                            risk_score=risk_score / 100.0,
-                            engagement_score=engagement_score,
-                            week_number=wn,
-                            semester_name=settings.CURRENT_SEMESTER_NAME,
-                            timestamp=now_utc,
-                        )
+                    # Upsert RiskSnapshot to avoid duplicates
+                    snapshot_data = {
+                        "student_id": student.id,
+                        "risk_score": risk_score / 100.0,
+                        "engagement_score": engagement_score,
+                        "week_number": wn,
+                        "semester_name": settings.CURRENT_SEMESTER_NAME,
+                        "timestamp": now_utc,
+                    }
+                    stmt = sqlite_insert(RiskSnapshot).values(**snapshot_data)
+                    stmt = stmt.on_conflict_do_update(
+                        index_elements=['student_id', 'week_number', 'semester_name'],
+                        set_={
+                            'risk_score': snapshot_data['risk_score'],
+                            'engagement_score': snapshot_data['engagement_score'],
+                            'timestamp': snapshot_data['timestamp'],
+                        }
                     )
+                    db.execute(stmt)
                     created_snapshots += 1
+
+                    # D5-2: Write features to EngineeredFeatures store for fast list queries
+                    features_json = json.dumps(features)
+                    feat_record = db.query(EngineeredFeatures).filter(
+                        EngineeredFeatures.student_id == student.id,
+                        EngineeredFeatures.computation_date == datetime.utcnow().date()
+                    ).first()
+                    if feat_record:
+                        feat_record.computation_date = datetime.utcnow().date()
+                    else:
+                        db.add(EngineeredFeatures(
+                            student_id=student.id,
+                            computation_date=datetime.utcnow().date(),
+                        ))
                     processed += 1
                 except Exception:
                     logger.exception(
@@ -222,12 +251,64 @@ def retrain_model_weekly() -> None:
     )
 
 
+def backup_sqlite_database():
+    """D12-4: Automated SQLite backup job."""
+    db_path = Path(settings.DATABASE_URL.replace("sqlite:///", ""))
+    if not db_path.exists():
+        logger.warning("SQLite DB not found for backup", extra={"path": str(db_path)})
+        return
+    backup_dir = db_path.parent / "backups"
+    backup_dir.mkdir(exist_ok=True)
+    timestamp = datetime.now().strftime("%Y%m%d_%H%M")
+    dest = backup_dir / f"sql_app_{timestamp}.db"
+    shutil.copy2(db_path, dest)
+    logger.info("SQLite backup created", extra={"backup": dest.name})
+
+    # Retain only last 7 backups
+    backups = sorted(backup_dir.glob("sql_app_*.db"))
+    for old in backups[:-7]:
+        old.unlink()
+        logger.info("Old backup removed", extra={"backup": old.name})
+
+
+def purge_old_records(db_session_factory) -> None:
+    """
+    GDPR Art. 5(1)(e) — data minimisation.
+    Purge RiskSnapshots older than 12 months.
+    Purge InterventionLogs older than 24 months.
+    """
+    with db_session_scope() as db:
+        cutoff_snapshots = datetime.now(timezone.utc) - timedelta(days=365)
+        cutoff_interventions = datetime.now(timezone.utc) - timedelta(days=730)
+
+        deleted_snapshots = (
+            db.query(RiskSnapshot)
+            .filter(RiskSnapshot.timestamp < cutoff_snapshots)
+            .delete(synchronize_session=False)
+        )
+        deleted_logs = (
+            db.query(InterventionLog)
+            .filter(InterventionLog.recommended_at < cutoff_interventions)
+            .delete(synchronize_session=False)
+        )
+        db.commit()
+        logger.info(
+            "[SCHEDULER] GDPR purge complete",
+            extra={
+                "snapshots_deleted": deleted_snapshots,
+                "intervention_logs_deleted": deleted_logs,
+            }
+        )
+
+
 class SchedulerService:
     """Lifespan-friendly async scheduler."""
 
     def __init__(self) -> None:
         self._daily_task: Optional[asyncio.Task] = None
         self._weekly_task: Optional[asyncio.Task] = None
+        self._monthly_purge_task: Optional[asyncio.Task] = None
+        self._backup_task: Optional[asyncio.Task] = None
         self._started = False
         self._last_daily_run_at: Optional[datetime] = None
         self._last_daily_success_at: Optional[datetime] = None
@@ -235,6 +316,12 @@ class SchedulerService:
         self._last_weekly_run_at: Optional[datetime] = None
         self._last_weekly_success_at: Optional[datetime] = None
         self._last_weekly_error: Optional[str] = None
+        self._last_purge_run_at: Optional[datetime] = None
+        self._last_purge_success_at: Optional[datetime] = None
+        self._last_purge_error: Optional[str] = None
+        self._last_backup_run_at: Optional[datetime] = None
+        self._last_backup_success_at: Optional[datetime] = None
+        self._last_backup_error: Optional[str] = None
 
     async def _run_daily_job_once(self, reason: str) -> None:
         # Skip if previous job still running (CROSS-4)
@@ -275,6 +362,44 @@ class SchedulerService:
             await asyncio.sleep(_seconds_until(hour=4, minute=0, weekday=6))
             await self._run_weekly_job_once(reason="scheduled-sunday-04:00-utc")
 
+    async def _run_monthly_purge_once(self, reason: str) -> None:
+        """Run GDPR data minimisation purge."""
+        self._last_purge_run_at = datetime.now(timezone.utc)
+        logger.info("[SCHEDULER] Triggering monthly GDPR purge job (%s).", reason)
+        try:
+            await asyncio.to_thread(purge_old_records, SessionLocal)
+            self._last_purge_success_at = datetime.now(timezone.utc)
+            self._last_purge_error = None
+            logger.info("[SCHEDULER] Monthly GDPR purge job finished successfully.")
+        except Exception as exc:
+            self._last_purge_error = str(exc)
+            logger.exception("[SCHEDULER] Monthly GDPR purge job failed (%s).", reason)
+
+    async def _run_monthly_purge_loop(self) -> None:
+        """Run on 1st of each month at 02:00 UTC."""
+        while True:
+            await asyncio.sleep(_seconds_until(hour=2, minute=0, weekday=None))
+            await self._run_monthly_purge_once(reason="scheduled-monthly-02:00-utc")
+
+    async def _run_backup_once(self, reason: str) -> None:
+        """Run SQLite backup job."""
+        self._last_backup_run_at = datetime.now(timezone.utc)
+        logger.info("[SCHEDULER] Triggering backup job (%s).", reason)
+        try:
+            await asyncio.to_thread(backup_sqlite_database)
+            self._last_backup_success_at = datetime.now(timezone.utc)
+            self._last_backup_error = None
+            logger.info("[SCHEDULER] Backup job finished successfully.")
+        except Exception as exc:
+            self._last_backup_error = str(exc)
+            logger.exception("[SCHEDULER] Backup job failed (%s).", reason)
+
+    async def _run_backup_loop(self) -> None:
+        """Run daily at 03:00 UTC."""
+        while True:
+            await asyncio.sleep(_seconds_until(hour=3, minute=0))
+            await self._run_backup_once(reason="scheduled-03:00-utc")
+
     async def start(self, run_daily_on_startup: bool = True) -> None:
         if self._started:
             logger.warning("[SCHEDULER] Start requested, but scheduler is already running.")
@@ -284,9 +409,15 @@ class SchedulerService:
         self._weekly_task = asyncio.create_task(
             self._run_weekly_loop(), name="scheduler-weekly"
         )
+        self._monthly_purge_task = asyncio.create_task(
+            self._run_monthly_purge_loop(), name="scheduler-monthly-purge"
+        )
+        self._backup_task = asyncio.create_task(
+            self._run_backup_loop(), name="scheduler-backup"
+        )
         self._started = True
         logger.info(
-            "[SCHEDULER] Started. Daily job: 03:00 UTC. Weekly job: Sunday 04:00 UTC."
+            "[SCHEDULER] Started. Daily job: 03:00 UTC. Weekly job: Sunday 04:00 UTC. Monthly purge: 1st at 02:00 UTC. Daily backup: 03:00 UTC."
         )
 
         # Ensure predictions are generated in environments where the app may restart
@@ -301,7 +432,10 @@ class SchedulerService:
         if not self._started:
             return
 
-        tasks = [task for task in (self._daily_task, self._weekly_task) if task is not None]
+        tasks = [
+            task for task in (self._daily_task, self._weekly_task, self._monthly_purge_task, self._backup_task)
+            if task is not None
+        ]
         for task in tasks:
             task.cancel()
 
@@ -310,6 +444,7 @@ class SchedulerService:
 
         self._daily_task = None
         self._weekly_task = None
+        self._backup_task = None
         self._started = False
         logger.info("[SCHEDULER] Stopped.")
 
@@ -326,6 +461,16 @@ class SchedulerService:
                 "last_run_at": self._last_weekly_run_at.isoformat() if self._last_weekly_run_at else None,
                 "last_success_at": self._last_weekly_success_at.isoformat() if self._last_weekly_success_at else None,
                 "last_error": self._last_weekly_error,
+            },
+            "monthly_purge": {
+                "last_run_at": self._last_purge_run_at.isoformat() if self._last_purge_run_at else None,
+                "last_success_at": self._last_purge_success_at.isoformat() if self._last_purge_success_at else None,
+                "last_error": self._last_purge_error,
+            },
+            "backup": {
+                "last_run_at": self._last_backup_run_at.isoformat() if self._last_backup_run_at else None,
+                "last_success_at": self._last_backup_success_at.isoformat() if self._last_backup_success_at else None,
+                "last_error": self._last_backup_error,
             },
         }
 

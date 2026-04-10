@@ -207,7 +207,7 @@ class RiskScorer:
             # Do not change risk score — but route to welfare team
             features["health_referral_needed"] = True
 
-        return round(max(0.0, min(100.0, risk_score)), 2)
+        return round(max(0.0, min(100.0, risk_score)), 1)  # D6-2: Standardised to 1 decimal
 
     @staticmethod
     def get_risk_category(risk_score: float) -> str:
@@ -307,8 +307,9 @@ class RiskScorer:
             old_risk = max(0.0, min(100.0, 100.0 - old_weighted))
 
         new_risk = RiskScorer.calculate_risk_score(features)
+        # D6-2: Standardize to 1 decimal place
         return {
-            "old_risk_score": round(old_risk, 2),
-            "new_risk_score": round(new_risk, 2),
-            "delta_new_minus_old": round(new_risk - old_risk, 2),
+            "old_risk_score": round(old_risk, 1),
+            "new_risk_score": round(new_risk, 1),
+            "delta_new_minus_old": round(new_risk - old_risk, 1),
         }

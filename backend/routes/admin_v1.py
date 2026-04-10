@@ -1,14 +1,21 @@
-from fastapi import APIRouter, Depends, Query, HTTPException
+from fastapi import APIRouter, Depends, Query, HTTPException, Response
 from sqlalchemy.orm import Session
 from typing import List, Optional
-from datetime import datetime
+from datetime import datetime, timezone
+import logging
 
 from backend.database import User, AuditLog, IngestionRun
 from backend.api import deps
+from backend.api.deps import require_role, get_current_user
 from backend.schemas.auth import UserOut
 from backend.database.models.student import Student
 from backend.config import INTERVENTION_THRESHOLDS
 from backend.database.models.goals_and_risks import RiskSnapshot
+from backend.database.models.intervention_log import InterventionLog
+from backend.database.models.enrollment import Enrollment
+from backend.database.models.graded_component import GradedComponent
+from backend.database.models.academic import ExamRecord
+from backend.database.models.prediction import Prediction
 
 router = APIRouter()
 
@@ -480,3 +487,76 @@ def evaluate_scorer(
             "cli_command": f"python -m backend.ml.training.evaluate --threshold {threshold}",
             "message": "Evaluation complete. Use --compare-thresholds to test multiple thresholds.",
         }
+
+
+@router.delete("/students/{org_id}/erase", status_code=204,
+               dependencies=[Depends(require_role(["admin"]))])
+async def erase_student(org_id: str, db: Session = Depends(deps.get_db),
+                         _user: User = Depends(get_current_user)):
+    """
+    GDPR Art. 17 right to erasure. Hard deletes all data for this student.
+    Irreversible. Requires admin role. Logged to audit trail.
+    """
+    logger = logging.getLogger(__name__)
+    student = db.query(Student).filter(Student.org_defined_id == org_id).first()
+    if not student:
+        raise HTTPException(404, "Student not found")
+
+    # Log the erasure event BEFORE deletion (audit trail survives the delete)
+    logger.warning(
+        "GDPR erasure requested",
+        extra={
+            "erased_org_id_prefix": org_id[:4] + "…",
+            "requested_by": getattr(_user, "username", "unknown"),
+            "timestamp": datetime.now(timezone.utc).isoformat(),
+        }
+    )
+
+    # Cascade handles: Enrollment, RiskSnapshot, GradedComponent, ExamRecord,
+    # Prediction, InterventionLog (after FIX 1 above)
+    db.delete(student)
+    db.commit()
+    return Response(status_code=204)
+
+
+@router.get("/students/{org_id}/data-export",
+            dependencies=[Depends(require_role(["admin"]))])
+async def export_student_data(org_id: str, db: Session = Depends(deps.get_db)):
+    """GDPR Art. 15 — returns all data held about a student as JSON."""
+    student = db.query(Student).filter(Student.org_defined_id == org_id).first()
+    if not student:
+        raise HTTPException(404, "Student not found")
+
+    enrollments = db.query(Enrollment).filter(Enrollment.student_org_id == org_id).all()
+    snapshots = db.query(RiskSnapshot).filter(RiskSnapshot.student_id == student.id).all()
+    interventions = db.query(InterventionLog).filter(InterventionLog.student_org_id == org_id).all()
+    predictions = db.query(Prediction).filter(Prediction.student_id == student.id).all()
+    graded = db.query(GradedComponent).filter(GradedComponent.student_org_id == org_id).all()
+    exams = db.query(ExamRecord).filter(ExamRecord.student_org_id == org_id).all()
+
+    def student_to_dict(s):
+        return {
+            "id": s.id,
+            "org_defined_id": s.org_defined_id,
+            "first_name": s.first_name,
+            "last_name": s.last_name,
+            "is_active": s.is_active,
+            "parent_department_name": s.parent_department_name,
+        }
+
+    return {
+        "export_generated_at": datetime.now(timezone.utc).isoformat(),
+        "student": student_to_dict(student),
+        "enrollments": [{k: v for k, v in e.__dict__.items() if not k.startswith("_")} for e in enrollments],
+        "risk_snapshots": [{"week": s.week_number, "score": s.risk_score,
+                            "timestamp": s.timestamp.isoformat() if s.timestamp else None} for s in snapshots],
+        "interventions": [{"type": i.intervention_type, "week": i.week_number,
+                           "outcome": i.outcome, "recommended_at": i.recommended_at.isoformat() if i.recommended_at else None}
+                          for i in interventions],
+        "predictions": [{"risk_score": p.risk_score, "retention_likelihood": p.retention_likelihood,
+                          "created_at": p.created_at.isoformat() if p.created_at else None} for p in predictions],
+        "graded_components": [{"course": g.course_name, "component": g.component_name,
+                               "score": g.score, "missed": g.missed} for g in graded],
+        "exam_records": [{"course": e.course_code, "present": e.present,
+                          "score_pct": e.score_pct} for e in exams],
+    }

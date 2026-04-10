@@ -9,9 +9,12 @@ from typing import Optional
 from datetime import datetime, timedelta
 from pydantic import BaseModel
 
-from backend.api.deps import get_db, get_current_user
-from backend.database import StudentResponse, Intervention
+from backend.api.deps import get_db, get_current_user, require_role
+from backend.database import StudentResponse, Intervention, Student
 from fastapi import Depends
+from backend.database.models.user import User
+
+FEEDBACK_ROLES = ["admin", "faculty", "retention_team"]
 
 router = APIRouter(
     responses={404: {"description": "Not found"}},
@@ -32,7 +35,11 @@ class StudentResponseCreate(BaseModel):
 
 
 @router.post("/response", status_code=201)
-def record_student_response(response: StudentResponseCreate, db: Session = Depends(get_db)):
+def record_student_response(
+    response: StudentResponseCreate,
+    db: Session = Depends(get_db),
+    _user: User = Depends(require_role(FEEDBACK_ROLES)),
+):
     """Record student response to an intervention."""
     intervention = db.query(Intervention).filter(Intervention.id == response.intervention_id).first()
     if not intervention:
@@ -75,6 +82,15 @@ def record_student_response(response: StudentResponseCreate, db: Session = Depen
 
 
 @router.get("/effectiveness")
+def get_effectiveness_deprecated():
+    """D10-3: Deprecated stub endpoint — return 410 Gone."""
+    raise HTTPException(
+        status_code=410,
+        detail="This endpoint is no longer available. Use /api/v1/admin/intervention-effectiveness instead."
+    )
+
+
+@router.get("/intervention-effectiveness")
 def get_intervention_effectiveness(
     threshold_category: Optional[str] = None,
     days_lookback: int = 90,
@@ -112,8 +128,22 @@ def get_intervention_effectiveness(
 
 
 @router.get("/{student_id}/history")
-def get_student_feedback_history(student_id: str, db: Session = Depends(get_db)):
+def get_student_feedback_history(
+    student_id: str,
+    db: Session = Depends(get_db),
+    _user: User = Depends(require_role(FEEDBACK_ROLES)),
+):
     """Get feedback history for a specific student."""
+    # Verify student exists and check department scoping
+    target_student = db.query(Student).filter(Student.id == student_id).first()
+    if not target_student:
+        raise HTTPException(404, "Student not found")
+
+    role = (getattr(_user, "role", "") or "").lower()
+    if role == "faculty" and not getattr(_user, "is_superuser", False):
+        if target_student.parent_department_name != getattr(_user, "department", None):
+            raise HTTPException(403, "Access denied — student is not in your department")
+
     responses = db.query(StudentResponse).filter(
         StudentResponse.student_id == student_id
     ).order_by(StudentResponse.recorded_at.desc()).all()

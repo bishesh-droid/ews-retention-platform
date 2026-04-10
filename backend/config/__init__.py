@@ -68,6 +68,16 @@ def validate_security_config():
     if ENVIRONMENT != "development" and SECRET_KEY in ("dev", "test", "changeme", "secret"):
         raise RuntimeError("Insecure SECRET_KEY detected in non-development environment")
 
+
+def validate_ml_config():
+    """Validate ML configuration — crash on startup if weights don't sum to 1.0."""
+    total = sum(FEATURE_WEIGHTS.values())
+    if not (0.99 <= total <= 1.01):
+        raise RuntimeError(
+            f"FEATURE_WEIGHTS values sum to {total:.4f} — must equal 1.0. "
+            f"Current weights: {FEATURE_WEIGHTS}"
+        )
+
 ALGORITHM: str = os.getenv("ALGORITHM", "HS256")
 ACCESS_TOKEN_EXPIRE_MINUTES: int = int(os.getenv("ACCESS_TOKEN_EXPIRE_MINUTES", "60"))
 
@@ -95,7 +105,8 @@ INTEGRATION_API_KEY_HASH: str = os.getenv("INTEGRATION_API_KEY_HASH", "")
 # ---------------------------------------------------------------------------
 LLM_PROVIDER: str = os.getenv("LLM_PROVIDER", "gemini")
 GEMINI_API_KEY: str = os.getenv("GEMINI_API_KEY", "")
-GEMINI_MODEL: str = os.getenv("GEMINI_MODEL", "gemini-1.5-pro")
+GEMINI_MODEL: str = os.getenv("GEMINI_MODEL", "gemini-1.5-pro-002")
+# Note: update this deliberately when upgrading. Do not use aliases.
 CLAUDE_API_KEY: str = os.getenv("CLAUDE_API_KEY", "")
 CLAUDE_MODEL: str = os.getenv("CLAUDE_MODEL", "claude-3-5-sonnet-20241022")
 LLM_TEMPERATURE: float = float(os.getenv("LLM_TEMPERATURE", "0.3"))
@@ -158,6 +169,12 @@ AVERAGE_STUDENT_LTV: float = float(os.getenv("AVERAGE_STUDENT_LTV", "150000.0"))
 TUITION_PER_SEMESTER: float = float(os.getenv("TUITION_PER_SEMESTER", "75000.0"))
 INTERVENTION_COST_PER_STUDENT: float = float(os.getenv("INTERVENTION_COST_PER_STUDENT", "500.0"))
 TARGET_RETENTION_RATE: float = float(os.getenv("TARGET_RETENTION_RATE", "0.90"))
+
+# ---------------------------------------------------------------------------
+# Feature flags (D12-3)
+# ---------------------------------------------------------------------------
+ENABLE_CALENDAR_SCORER: bool = os.getenv("ENABLE_CALENDAR_SCORER", "true").lower() == "true"
+ENABLE_LLM_FEATURES: bool = os.getenv("ENABLE_LLM_FEATURES", "true").lower() == "true"
 
 # ---------------------------------------------------------------------------
 # Data file paths

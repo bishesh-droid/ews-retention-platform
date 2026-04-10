@@ -87,18 +87,19 @@ COURSE_CALENDAR: Dict[Tuple[str, str], List[Dict]] = {
 }
 
 
-def get_current_week(trimester_start: str) -> int:
+def get_current_week(trimester_start: str) -> int | None:
     """
     Compute current trimester week number from today's date.
 
     Week 1 = days 1–7, week 2 = days 8–14, etc.
-    Returns 0 if today is before trimester start.
+    Returns None if today is before trimester start (was returning 0).
     """
     start = date.fromisoformat(trimester_start)
     delta_days = (date.today() - start).days
     if delta_days < 0:
-        return 0
-    return (delta_days // 7) + 1
+        return None  # Before trimester start — was returning 0
+    week = (delta_days // 7) + 1
+    return min(week, 13)  # cap at 13 — no week 14+
 
 
 def _is_exam_component(name: str) -> bool:
@@ -115,14 +116,14 @@ def _infer_program_for_course(course_name: str) -> Optional[str]:
     return None
 
 
-def get_expected_completion_pct(program: str, course_name: str, current_week: int) -> float:
+def get_expected_completion_pct(program: str, course_name: str, current_week: int) -> float | None:
     """
     Baseline completion (0–1) expected by `current_week`, excluding exams.
-    Returns 0.0 if course not found.
+    Returns None if course not found (was returning 0.0 which masked underperformance).
     """
     items = COURSE_CALENDAR.get((program, course_name))
     if not items:
-        return 0.0
+        return None  # caller must handle — do not blend calendar risk for this course
     total = 0.0
     for it in items:
         due_week = int(it.get("week") or 0)
@@ -237,7 +238,7 @@ def calculate_calendar_adjusted_risk(
     for cname in course_names:
         prog = program or _infer_program_for_course(str(cname))
         if not prog:
-            exp = 0.0
+            exp = None
             overdue = []
         else:
             exp = get_expected_completion_pct(prog, str(cname), current_week)
@@ -246,7 +247,12 @@ def calculate_calendar_adjusted_risk(
                 str(cname),
                 current_week,
                 submitted_by_course.get(str(cname), []),
-            )
+            ) if exp is not None else []
+        
+        # Skip courses where expected_pct is None — no calendar data, don't distort risk
+        if exp is None:
+            continue
+        
         overdue_all.extend(
             [{"course_name": str(cname), **o} for o in overdue]
         )

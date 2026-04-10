@@ -10,6 +10,10 @@ class RiskSnapshot(Base):
     __tablename__ = "risk_snapshots"
 
     __table_args__ = (
+        UniqueConstraint(
+            'student_id', 'week_number', 'semester_name',
+            name='uq_risk_snapshot_student_week'
+        ),
         Index('ix_risk_snapshot_student', 'student_id'),
         Index('ix_risk_snapshot_timestamp', 'timestamp'),
         Index('ix_risk_snapshot_week', 'week_number'),

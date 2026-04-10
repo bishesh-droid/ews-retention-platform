@@ -28,8 +28,9 @@ from backend.services.ai.rag_engine import (
 )
 from backend.config import (
     LLM_PROVIDER, GEMINI_API_KEY, GEMINI_MODEL, CLAUDE_API_KEY, CLAUDE_MODEL,
-    LLM_TEMPERATURE, LLM_MAX_TOKENS
+    LLM_TEMPERATURE, LLM_MAX_TOKENS, LLM_TIMEOUT_SECONDS, settings
 )
+from backend.core.security import SecurityManager
 
 # Configure LLMs
 if LLM_PROVIDER == "gemini" and GENAI_AVAILABLE and GEMINI_API_KEY:
@@ -57,7 +58,7 @@ class LLMOrchestrator:
         elif self.llm_provider == "claude":
             if ANTHROPIC_AVAILABLE and CLAUDE_API_KEY:
                 self.llm_model_name = CLAUDE_MODEL
-                self.llm_client = Anthropic(api_key=CLAUDE_API_KEY)
+                self.llm_client = Anthropic(api_key=CLAUDE_API_KEY, timeout=LLM_TIMEOUT_SECONDS)
 
 
     def _check_llm_available(self) -> Optional[Dict[str, Any]]:
@@ -117,14 +118,21 @@ class LLMOrchestrator:
                 full_prompt = prompt
                 if system_message:
                     full_prompt = f"{system_message.strip()}\n\n{prompt}"
-                response = self.llm_client.generate_content(full_prompt)
+                response = self.llm_client.generate_content(
+                    full_prompt,
+                    request_options={"timeout": LLM_TIMEOUT_SECONDS}
+                )
                 text = getattr(response, "text", None)
                 if isinstance(text, str) and text.strip():
                     return text.strip()
                 raise ValueError("Gemini returned an empty response body")
             except Exception as e:
+                logger.warning(
+                    "LLM call failed",
+                    extra={"error": type(e).__name__, "provider": "gemini", "timeout": LLM_TIMEOUT_SECONDS}
+                )
                 raise RuntimeError(f"Gemini generation failed: {str(e)}") from e
-        
+
         if self.llm_provider == "claude":
             try:
                 response = self.llm_client.messages.create(
@@ -133,6 +141,7 @@ class LLMOrchestrator:
                     temperature=LLM_TEMPERATURE,
                     system=system_message or "",
                     messages=[{"role": "user", "content": prompt}],
+                    timeout=LLM_TIMEOUT_SECONDS,
                 )
                 blocks = getattr(response, "content", []) or []
                 text_parts: List[str] = []
@@ -145,8 +154,12 @@ class LLMOrchestrator:
                     return combined
                 raise ValueError("Claude returned an empty response body")
             except Exception as e:
+                logger.warning(
+                    "LLM call failed",
+                    extra={"error": type(e).__name__, "provider": "claude", "timeout": LLM_TIMEOUT_SECONDS}
+                )
                 raise RuntimeError(f"Claude generation failed: {str(e)}") from e
-        
+
         raise RuntimeError(f"Unsupported LLM provider configured: {self.llm_provider}")
     
     def _generate_content(self, system_message: str, user_message: str) -> str:
@@ -337,11 +350,32 @@ class LLMOrchestrator:
         try:
             suggestions = self._generate_content(system_message_interventions, user_message_interventions)
             
+            # D3-6: Apply guardrail validation
+            validated = GuardrailValidator.validate_response(
+                suggestions,
+                student_context
+            )
+            if validated.get("is_valid") is False:
+                logger.warning(
+                    "LLM suggestion failed guardrail validation",
+                    extra={"issues": validated.get("issues", [])}
+                )
+                return {
+                    "content": None,
+                    "error": "Suggestion blocked by content filter",
+                    "ai_suggested": True,
+                    "confidence": "low"
+                }
+            
+            # D3-5: Return AI reasoning for audit trail
             return {
                 "content": suggestions,
                 "confidence": "medium",  # Interventions always medium confidence
                 "sources": student_context.get("data_sources", []),
-                "student_id": student_id
+                "student_id": student_id,
+                "ai_reasoning": (suggestions or "")[:1000],  # truncate for storage
+                "ai_model": settings.GEMINI_MODEL if self.llm_provider == "gemini" else settings.CLAUDE_MODEL,
+                "ai_suggested": True,
             }
         except Exception as e:
             logger.exception("LLM call failed", extra={"operation": "suggest_interventions", "student_id": student_id})
@@ -464,10 +498,26 @@ class LLMOrchestrator:
         try:
             narrative = self._generate_content(system_message_report_narrative, user_message_report_narrative)
             
+            # D3-6: Apply guardrail validation
+            validated = GuardrailValidator.validate_response(narrative, data)
+            if validated.get("is_valid") is False:
+                logger.warning(
+                    "LLM report narrative failed guardrail validation",
+                    extra={"issues": validated.get("issues", []), "report_type": report_type}
+                )
+                return {
+                    "content": None,
+                    "error": "Report narrative blocked by content filter",
+                    "ai_suggested": True,
+                    "confidence": "low"
+                }
+            
             return {
                 "content": narrative,
                 "confidence": "high",
-                "report_type": report_type
+                "report_type": report_type,
+                "ai_suggested": True,
+                "ai_model": settings.GEMINI_MODEL if self.llm_provider == "gemini" else settings.CLAUDE_MODEL,
             }
         except Exception as e:
             logger.exception("LLM call failed", extra={"operation": "generate_report_narrative", "report_type": report_type})
@@ -579,14 +629,17 @@ Provide cohort analysis:"""
     def _build_what_if_prompt(self, context: Dict, scenario: Dict) -> str:
         """Build prompt for what-if simulation."""
         context_text = ContextAssembler.assemble_for_student_explanation(context)
-        
+
+        # Sanitize scenario inputs before interpolation
+        scenario_safe = {k: SecurityManager.llm_sanitize(str(v)) for k, v in scenario.items()}
+
         return f"""You are an academic advisor explaining the likely impact of behavior changes.
 
 CURRENT STUDENT DATA:
 {context_text}
 
 PROPOSED CHANGES:
-{scenario}
+{scenario_safe}
 
 INSTRUCTIONS:
 - Explain how these changes would likely affect risk score
@@ -599,10 +652,13 @@ Explain the projected impact:"""
     
     def _build_report_narrative_prompt(self, report_type: str, data: Dict) -> str:
         """Build prompt for report narrative."""
+        # Sanitize report data before interpolation
+        data_safe = {k: SecurityManager.llm_sanitize(str(v)) for k, v in data.items() if isinstance(v, str)}
+
         return f"""You are a report writer creating executive summaries for leadership.
 
 REPORT TYPE: {report_type}
-REPORT DATA: {data}
+REPORT DATA: {data_safe}
 
 INSTRUCTIONS:
 - Write a calm, professional executive summary

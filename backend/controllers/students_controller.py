@@ -44,6 +44,20 @@ def get_student_interventions(
     _user: User = Depends(require_role(_STAFF_ROLES)),
 ):
     """Get interventions for a specific student. Staff only."""
+    # Verify student exists and check department scoping
+    target_student = db.query(Student).filter(Student.id == student_id).first()
+    if not target_student:
+        raise HTTPException(404, "Student not found")
+
+    role = (getattr(_user, "role", "") or "").lower()
+    if role == "faculty" and not getattr(_user, "is_superuser", False):
+        user_dept = getattr(_user, "department", None)
+        if user_dept and target_student.parent_department_name != user_dept:
+            raise HTTPException(
+                status_code=403,
+                detail="Access denied — student is not in your department"
+            )
+
     interventions = StudentService.get_interventions_by_student_id(db, student_id)
     if not interventions:
         raise HTTPException(status_code=404, detail=f"No interventions found for student '{student_id}'")
@@ -186,10 +200,24 @@ def get_pending_interventions(
     """
     Returns all pending (reviewed=False) InterventionLog records.
     Used as the advisor's action queue — their to-do list.
-    
+
     Ordered by risk_score_at_recommendation DESC (highest risk first).
     """
+    role = (getattr(_user, "role", "") or "").lower()
+    is_superuser = getattr(_user, "is_superuser", False)
+
+    # Scope query to department for faculty users
     query = db.query(InterventionLog).filter(InterventionLog.reviewed == False)
+
+    if role == "faculty" and not is_superuser:
+        dept = getattr(_user, "department", None)
+        if dept:
+            # Join to Student to filter by department
+            query = (
+                query
+                .join(Student, Student.org_defined_id == InterventionLog.student_org_id)
+                .filter(Student.parent_department_name == dept)
+            )
     
     if semester:
         query = query.filter(InterventionLog.semester_name == semester)
@@ -206,11 +234,23 @@ def get_pending_interventions(
     
     logs = query.order_by(desc(InterventionLog.risk_score_at_recommendation)).all()
     
+    # Batch lookup students to avoid N+1 and missing relationship issues
+    student_org_ids = [log.student_org_id for log in logs]
+    student_map = {
+        s.org_defined_id: s
+        for s in db.query(Student)
+            .filter(Student.org_defined_id.in_(student_org_ids))
+            .all()
+    } if student_org_ids else {}
+    
     return [
         {
             "log_id": log.id,
             "student_org_id": log.student_org_id,
-            "student_name": f"{log.student.first_name} {log.student.last_name}".strip() if log.student else "",
+            "student_name": (
+                f"{student_map[log.student_org_id].first_name} "
+                f"{student_map[log.student_org_id].last_name}"
+            ).strip() if log.student_org_id in student_map else "Unknown",
             "risk_score": log.risk_score_at_recommendation,
             "intervention_type": log.intervention_type,
             "engagement_pattern": log.engagement_pattern,
@@ -261,7 +301,7 @@ def get_students(
     risk_min: Optional[float] = Query(None, ge=0, le=100),
     risk_max: Optional[float] = Query(None, ge=0, le=100),
     db: Session = Depends(get_db),
-    request: Request = None,
+    request: Optional[Request] = None,
     current_user: User = Depends(require_role(_STAFF_ROLES)),
 ):
     """Get paginated list of students with engagement metrics. Staff only."""
@@ -305,7 +345,7 @@ def get_students(
 def get_student_detail(
     student_id: str,
     db: Session = Depends(get_db),
-    request: Request = None,
+    request: Optional[Request] = None,
     current_user: User = Depends(require_role(_STAFF_ROLES)),
 ):
     """Get detailed engagement information for a single student. Staff only."""
@@ -330,7 +370,7 @@ def get_student_detail(
 def get_student_weekly_summary(
     student_id: str,
     db: Session = Depends(get_db),
-    request: Request = None,
+    request: Optional[Request] = None,
     current_user: User = Depends(require_role(_STAFF_ROLES)),
 ):
     """Get a lightweight weekly-style summary for the student portal. Staff only."""
@@ -375,7 +415,7 @@ def get_student_risk_trend(
     student_id: str,
     limit: int = Query(8, ge=2, le=52),
     db: Session = Depends(get_db),
-    request: Request = None,
+    request: Optional[Request] = None,
     current_user: User = Depends(require_role(_STAFF_ROLES)),
 ):
     """Return risk score trend points for a student. Staff only."""

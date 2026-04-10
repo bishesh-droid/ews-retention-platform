@@ -5,10 +5,14 @@ Retrieves authorized institutional data for LLM context building.
 Ensures LLM only references actual data, preventing hallucinations.
 """
 
+import hashlib
+import secrets
 from typing import Dict, List, Optional, Any
 from sqlalchemy.orm import Session
 from datetime import datetime, timedelta
 from backend.database import Student, Prediction, Intervention
+from backend.database.models.goals_and_risks import RiskSnapshot
+from backend.database.models.graded_component import GradedComponent
 import statistics
 
 
@@ -17,8 +21,21 @@ class StudentDataRetriever:
     
     def __init__(self, db: Session):
         self.db = db
-    
-    def retrieve_student_context(self, student_id: str, depth: str = 'detailed') -> Dict[str, Any]:
+
+    @staticmethod
+    def _pseudonymise_context(context: dict, session_salt: str) -> dict:
+        """Replace PII identifiers with session-scoped pseudonyms before LLM dispatch."""
+        safe = context.copy()
+        if "student_id" in safe:
+            safe["student_id"] = "STUDENT_" + hashlib.sha256(
+                (str(safe["student_id"]) + session_salt).encode()
+            ).hexdigest()[:8].upper()
+        # Remove any raw email/PII fields
+        for key in ["email", "username", "first_name", "last_name"]:
+            safe.pop(key, None)
+        return safe
+
+    def retrieve_student_context(self, student_id: str, depth: str = 'detailed', pseudonymise: bool = True) -> Dict[str, Any]:
         """
         Retrieve comprehensive student data for LLM prompts.
         
@@ -54,38 +71,38 @@ class StudentDataRetriever:
             }
             context["data_sources"].append("prediction_model")
         
-        # Attendance trend (last 7 periods)
-        attendance_trend = [
-            student.absrate1, student.absrate2, student.absrate3,
-            student.absrate4, student.absrate5, student.absrate6, student.absrate7
-        ]
-        attendance_trend = [a for a in attendance_trend if a is not None]
-        
-        if attendance_trend:
-            # Convert absence rate to attendance percentage
-            attendance_percentages = [(1 - rate) * 100 for rate in attendance_trend]
-            context["attendance_trend"] = {
-                "last_7_periods": [round(a, 1) for a in attendance_percentages],
-                "average": round(statistics.mean(attendance_percentages), 1),
-                "trend": self._calculate_trend(attendance_percentages),
-                "recent_change": self._calculate_recent_change(attendance_percentages)
-            }
-            context["data_sources"].append("attendance_records")
-        
-        # GPA trend (quarterly averages from last 7 quarters)
-        gpa_trend = [
-            student.q4mpa1, student.q4mpa2, student.q4mpa3,
-            student.q4mpa4, student.q4mpa5, student.q4mpa6, student.q4mpa7
-        ]
-        gpa_trend = [g for g in gpa_trend if g is not None]
-        
-        if gpa_trend:
-            context["gpa_trend"] = {
-                "last_7_quarters": [round(g, 2) for g in gpa_trend],
-                "average": round(statistics.mean(gpa_trend), 2),
-                "trend": self._calculate_trend(gpa_trend),
-                "recent_change": self._calculate_recent_change(gpa_trend)
-            }
+        # Risk trend from RiskSnapshot (last 7 weeks)
+        latest_snapshots = (
+            self.db.query(RiskSnapshot)
+            .filter(RiskSnapshot.student_id == student.id)
+            .order_by(RiskSnapshot.timestamp.desc())
+            .limit(7)
+            .all()
+        )
+        risk_trend = [round(s.risk_score, 1) for s in reversed(latest_snapshots) if s.risk_score is not None]
+        context["risk_trend"] = risk_trend
+        context["current_risk_score"] = risk_trend[-1] if risk_trend else None
+        context["risk_trend_direction"] = (
+            "improving" if len(risk_trend) >= 2 and risk_trend[-1] < risk_trend[-2]
+            else "worsening" if len(risk_trend) >= 2 and risk_trend[-1] > risk_trend[-2]
+            else "stable"
+        )
+        if risk_trend:
+            context["data_sources"].append("risk_history")
+
+        # Grade signals from GradedComponent records
+        graded = (
+            self.db.query(GradedComponent)
+            .filter(GradedComponent.student_org_id == student.org_defined_id)
+            .order_by(GradedComponent.created_at.desc())
+            .limit(10)
+            .all()
+        )
+        scores = [g.score for g in graded if g.score is not None]
+        context["recent_quiz_scores"] = [round(s, 1) for s in scores[:5]]
+        context["avg_quiz_score"] = round(sum(scores) / len(scores), 1) if scores else None
+        context["missed_component_count"] = sum(1 for g in graded if g.missed)
+        if scores:
             context["data_sources"].append("grade_records")
         
         # Interventions
@@ -111,7 +128,11 @@ class StudentDataRetriever:
                 context["risk_category"] = "moderate"
             else:
                 context["risk_category"] = "low"
-        
+
+        # Pseudonymise before returning for LLM safety
+        if pseudonymise:
+            session_salt = secrets.token_hex(8)
+            return self._pseudonymise_context(context, session_salt)
         return context
     
     def _calculate_trend(self, values: List[float]) -> str:

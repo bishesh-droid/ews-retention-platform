@@ -5,7 +5,7 @@ Tracks intervention recommendations, advisor actions, and outcome measurements.
 """
 
 from datetime import datetime
-from sqlalchemy import Column, Integer, String, Float, Boolean, ForeignKey, Text, DateTime
+from sqlalchemy import Column, Integer, String, Float, Boolean, ForeignKey, Text, DateTime, UniqueConstraint
 from backend.database.connection import Base
 
 
@@ -14,6 +14,13 @@ class InterventionLog(Base):
     Logs intervention recommendations and tracks advisor actions & outcomes.
     """
     __tablename__ = "intervention_logs"
+
+    __table_args__ = (
+        UniqueConstraint(
+            'student_org_id', 'week_number', 'semester_name', 'intervention_type',
+            name='uq_intervention_log_weekly'
+        ),
+    )
 
     id = Column(Integer, primary_key=True)
     student_org_id = Column(String(64), ForeignKey("students.org_defined_id"), nullable=False, index=True)
