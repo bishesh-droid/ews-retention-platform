@@ -32,15 +32,6 @@ from backend.database.models.course_content_registry import CourseContentRegistr
 from backend.database.models.intervention_log import InterventionLog
 from backend.database.models.goals_and_risks import RiskSnapshot
 
-# D11-1: Extracted ingestion sub-modules
-from backend.services.ingestion.student_loader import (
-    _ensure_student, _deactivate_missing_students, _rescind_stale_ghost_alerts
-)
-from backend.services.ingestion.exam_loader import (
-    _ingest_exam_attendance, _ingest_written_exam_marks, _ingest_exam_defaulters, _ingest_quiz_assignment_exam
-)
-from backend.services.ingestion.outcome_inferencer import infer_outcomes_from_exam_data
-from backend.services.ingestion.intervention_backfiller import backfill_intervention_outcomes
 
 logger = logging.getLogger(__name__)
 

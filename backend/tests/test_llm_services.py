@@ -6,12 +6,12 @@ Tests for RAG engine, hallucination prevention, and audit logging.
 
 import pytest
 from unittest.mock import Mock, MagicMock
-from backend.services.hallucination_prevention import (
+from backend.services.ai.hallucination_guard import (
     HallucinationPrevention,
     ContentFilter,
     ConfidenceScorer
 )
-from backend.services.audit_logger import AuditLogger, RoleBasedAccessControl
+from backend.services.infrastructure.audit_logger import AuditLogger, RoleBasedAccessControl
 
 
 class TestHallucinationPrevention:

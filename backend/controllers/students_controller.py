@@ -292,7 +292,7 @@ def get_course_engagement(
     return engagement
 
 
-@router.get("/students")
+@router.get("/students", response_model=None)
 def get_students(
     skip: int = Query(0, ge=0),
     limit: int = Query(50, ge=1, le=2000),
