@@ -26,6 +26,8 @@ from backend.utils.api import success_response
 
 API_VERSION = "1.0"
 
+router = APIRouter()
+
 
 class StudentRiskProfileResponse(BaseModel):
     """Integration API response schema for student risk profile.

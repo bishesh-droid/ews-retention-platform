@@ -6,7 +6,7 @@ Audit trail for every prediction made by the ML pipeline.
 ML-4: Tracks all inference calls for audit and debugging.
 """
 
-from sqlalchemy import Column, Integer, String, Float, DateTime, Index, JSON
+from sqlalchemy import Column, Integer, String, Float, DateTime, Index, JSON, ForeignKey
 from sqlalchemy.orm import relationship
 from datetime import datetime, timezone
 from backend.database.connection import Base

@@ -6,6 +6,7 @@ without training data. It only consumes present-time engagement features
 from `FeatureEngineer.calculate_all_features()`.
 """
 
+import logging
 from math import isfinite
 from typing import Dict, Optional, Tuple
 
