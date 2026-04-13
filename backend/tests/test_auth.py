@@ -18,7 +18,7 @@ from sqlalchemy.orm import Session
 from backend.database.connection import SessionLocal
 from backend.database.models.user import User
 from backend.database.models.revoked_token import RevokedToken
-from backend.core.auth import create_access_token, get_password_hash
+from backend.core.auth import get_password_hash
 
 
 @pytest.fixture

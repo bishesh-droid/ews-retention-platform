@@ -4,7 +4,6 @@ import uuid
 
 import bcrypt
 import jwt as pyjwt
-from jwt.exceptions import InvalidTokenError
 
 from backend.config import SECRET_KEY, ALGORITHM, EWS_SERVICE_NAME, EWS_TOKEN_AUDIENCE
 

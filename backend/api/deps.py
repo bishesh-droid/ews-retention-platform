@@ -30,7 +30,6 @@ from backend.database.connection import get_db, get_db_async
 from backend.database.models.user import User
 from backend.database.models.student import Student
 from backend.database.models.revoked_token import RevokedToken
-from backend.core.constants import Role
 
 # Re-exported so routes can write `deps.User` without an extra import.
 __all__ = [
@@ -164,7 +163,7 @@ async def get_current_user_async(
         token_jti: Optional[str] = payload.get("jti")
         if user_id is None:
             raise credentials_exc
-        
+
         # Check if token has been revoked (SEC-4)
         if token_jti is not None:
             result = await db.execute(

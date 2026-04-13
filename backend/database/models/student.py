@@ -101,3 +101,7 @@ class Student(Base):
         primaryjoin="Student.org_defined_id == foreign(InterventionLog.student_org_id)",
         overlaps="student"
     )
+    prediction_logs = relationship(
+        "PredictionLog", back_populates="student",
+        cascade="all, delete-orphan"
+    )

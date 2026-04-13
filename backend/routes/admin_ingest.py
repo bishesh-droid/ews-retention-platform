@@ -10,9 +10,7 @@ from typing import Optional
 import magic
 from fastapi import APIRouter, Depends, File, HTTPException, Request, UploadFile, status
 from fastapi import BackgroundTasks
-from sqlalchemy.ext.asyncio import AsyncSession
-
-from backend.api.deps import get_db_async, require_role
+from backend.api.deps import require_role
 from backend.core.constants import Role
 from backend.core.rate_limiting import limiter
 from backend.database.models.user import User

@@ -4,7 +4,7 @@ Pytest fixtures for backend tests.
 
 import os
 import pytest
-from unittest.mock import MagicMock, create_autospec, patch
+from unittest.mock import MagicMock, create_autospec
 from sqlalchemy.orm import Session
 
 
@@ -35,10 +35,9 @@ def client():
     # Initialize database synchronously before tests
     init_db()
 
-    # Use TestClient with lifespan enabled for proper app initialization
-    # TEST-3: Changed from lifespan="off" to lifespan="on" for proper DB init
+    # Use TestClient for app testing
     try:
-        with TestClient(app, lifespan="on") as test_client:
+        with TestClient(app) as test_client:
             yield test_client
     finally:
         # Clean up dependency overrides after test

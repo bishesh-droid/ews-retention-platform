@@ -6,7 +6,6 @@ When a user logs out, their token's JTI is added to this table
 and the token becomes invalid even before its natural expiration.
 """
 
-from datetime import datetime
 from sqlalchemy import Column, Integer, String, DateTime, ForeignKey, Index
 from sqlalchemy.sql import func
 from backend.database.connection import Base

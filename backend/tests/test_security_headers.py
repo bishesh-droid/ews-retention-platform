@@ -11,10 +11,6 @@ These tests ensure protection against:
 - Referrer leakage
 """
 
-import pytest
-from fastapi.testclient import TestClient
-
-
 class TestSecurityHeaders:
     """Tests for security headers on HTTP responses."""
 

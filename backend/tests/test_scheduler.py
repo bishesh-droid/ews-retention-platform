@@ -8,7 +8,6 @@ Covers the generate_daily_predictions scheduler job:
 """
 
 import pytest
-from datetime import datetime, timezone
 from sqlalchemy.orm import Session
 
 from backend.database.connection import SessionLocal
@@ -223,10 +222,10 @@ class TestGenerateDailyPredictions:
         generate_daily_predictions()
         
         # student3 is inactive, should not get a prediction
-        pred = seeded_test_db.query(Prediction).filter(
+        _pred = seeded_test_db.query(Prediction).filter(
             Prediction.student_id == "student3@test.edu"
         ).first()
-        
+
         # Note: Depending on implementation, inactive students may or may not get predictions
         # The test documents current behavior
         # If the scheduler filters by is_active=True, this should be None
