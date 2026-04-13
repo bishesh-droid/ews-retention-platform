@@ -105,69 +105,69 @@ Student retention directly impacts institutional revenue and student outcomes. A
               │                         │                         │
               ▼                         ▼                         ▼
 ┌─────────────────────────────────────────────────────────────────────────────────────────┐
-│                              INGESTION PIPELINE (Async)                                │
+│                              INGESTION PIPELINE (Async)                                 │
 │  ┌─────────────────────────────────────────────────────────────────────────────────┐    │
 │  │  POST /api/v1/admin/ingest  →  Excel Validation  →  StudentLoader/ExamLoader    │    │
 │  │                                   ↓                                             │    │
-│  │  ┌─────────────┐  ┌─────────────┐  ┌─────────────────┐  ┌─────────────────┐   │    │
-│  │  │Idempotent   │  │Auto-        │  │Outcome          │  │Intervention     │   │    │
-│  │  │Upsert       │  │Deactivation │  │Inference        │  │Backfill         │   │    │
-│  │  └─────────────┘  └─────────────┘  └─────────────────┘  └─────────────────┘   │    │
+│  │  ┌─────────────┐  ┌─────────────┐  ┌─────────────────┐  ┌─────────────────┐     │    │
+│  │  │Idempotent   │  │Auto-        │  │Outcome          │  │Intervention     │     │    │
+│  │  │Upsert       │  │Deactivation │  │Inference        │  │Backfill         │     │    │
+│  │  └─────────────┘  └─────────────┘  └─────────────────┘  └─────────────────┘     │    │
 │  └─────────────────────────────────────────────────────────────────────────────────┘    │
 └─────────────────────────────────────────────────────────────────────────────────────────┘
                                           │
                                           ▼
 ┌─────────────────────────────────────────────────────────────────────────────────────────┐
-│                              DATA PERSISTENCE LAYER                                      │
-│  ┌────────────────┐ ┌────────────────┐ ┌────────────────┐ ┌────────────────────────┐  │
-│  │    students    │ │  enrollments   │ │  risk_snapshots│ │  intervention_logs     │  │
-│  │  (identity)    │ │  (courses)     │ │  (scores)      │ │  (actions/outcomes)    │  │
-│  └────────────────┘ └────────────────┘ └────────────────┘ └────────────────────────┘  │
-│  ┌────────────────┐ ┌────────────────┐ ┌────────────────┐ ┌────────────────────────┐  │
-│  │ graded_        │ │  exam_records  │ │engineered_     │ │  course_registry       │  │
-│  │ _components    │ │  (marks)       │ │_features       │ │  (metadata)            │  │
-│  └────────────────┘ └────────────────┘ └────────────────┘ └────────────────────────┘  │
+│                              DATA PERSISTENCE LAYER                                     │
+│  ┌────────────────┐ ┌────────────────┐ ┌────────────────┐ ┌────────────────────────┐    │
+│  │    students    │ │  enrollments   │ │  risk_snapshots│ │  intervention_logs     │    │
+│  │  (identity)    │ │  (courses)     │ │  (scores)      │ │  (actions/outcomes)    │    │
+│  └────────────────┘ └────────────────┘ └────────────────┘ └────────────────────────┘    │
+│  ┌────────────────┐ ┌────────────────┐ ┌────────────────┐ ┌────────────────────────┐    │
+│  │ graded_        │ │  exam_records  │ │engineered_     │ │  course_registry       │    │
+│  │ _components    │ │  (marks)       │ │_features       │ │  (metadata)            │    │
+│  └────────────────┘ └────────────────┘ └────────────────┘ └────────────────────────┘    │
 └─────────────────────────────────────────────────────────────────────────────────────────┘
                                           │
                                           ▼
 ┌─────────────────────────────────────────────────────────────────────────────────────────┐
-│                           FEATURE ENGINEERING & SCORING                                  │
+│                           FEATURE ENGINEERING & SCORING                                 │
 │                                                                                         │
-│   ┌────────────────────────┐         ┌─────────────────────────────────────────┐     │
-│   │  Raw LMS Metrics       │         │  RiskScorer                             │     │
-│   │  • Login count         │────────▶│  • Normalization (0-100)                │     │
-│   │  • Content views       │         │  • Weighted aggregation                 │     │
-│   │  • Quiz attempts       │         │  • Calendar-aware adjustment (optional) │     │
-│   │  • Time spent          │         │  • Output: 0-100 risk score               │     │
-│   │  • Discussion posts    │         └─────────────────────────────────────────┘     │
-│   └────────────────────────┘                                                        │
+│   ┌────────────────────────┐         ┌─────────────────────────────────────────┐        │
+│   │  Raw LMS Metrics       │         │  RiskScorer                             │        │
+│   │  • Login count         │────────▶│  • Normalization (0-100)                │        │
+│   │  • Content views       │         │  • Weighted aggregation                 │        │
+│   │  • Quiz attempts       │         │  • Calendar-aware adjustment (optional) │        │
+│   │  • Time spent          │         │  • Output: 0-100 risk score             │        │
+│   │  • Discussion posts    │         └─────────────────────────────────────────┘        │
+│   └────────────────────────┘                                                            │
 └─────────────────────────────────────────────────────────────────────────────────────────┘
                                           │
                                           ▼
 ┌─────────────────────────────────────────────────────────────────────────────────────────┐
-│                           DECISION ENGINE & INTERVENTIONS                              │
+│                           DECISION ENGINE & INTERVENTIONS                               │
 │                                                                                         │
 │   Risk Score + Pattern Analysis  →  get_intervention_recommendation()                   │
 │                                                                                         │
-│   Score Range    Pattern        Intervention Type         Priority                        │
+│   Score Range    Pattern        Intervention Type         Priority                      │
 │   ─────────────────────────────────────────────────────────────                         │
-│   0-29           on_track       none                      Low                            │
-│   30-49          at_risk        gentle_reminder           Medium                         │
-│   50-69          struggling     mentor_outreach           High                           │
-│   70-89          disengaged     urgent                   Critical                        │
-│   90-100         ghost          activation_outreach      Critical                        │
+│   0-29           on_track       none                      Low                           │
+│   30-49          at_risk        gentle_reminder           Medium                        │
+│   50-69          struggling     mentor_outreach           High                          │
+│   70-89          disengaged     urgent                   Critical                       │
+│   90-100         ghost          activation_outreach      Critical                       │
 └─────────────────────────────────────────────────────────────────────────────────────────┘
                                           │
                                           ▼
 ┌─────────────────────────────────────────────────────────────────────────────────────────┐
-│                              API LAYER (FastAPI + JWT)                                 │
+│                              API LAYER (FastAPI + JWT)                                  │
 │                                                                                         │
-│   100+ REST Endpoints  │  Role-Based Access Control  │  Rate Limiting  │  Audit Log   │
+│   100+ REST Endpoints  │  Role-Based Access Control  │  Rate Limiting  │  Audit Log     │
 └─────────────────────────────────────────────────────────────────────────────────────────┘
                                           │
                                           ▼
 ┌─────────────────────────────────────────────────────────────────────────────────────────┐
-│                              REACT FRONTEND DASHBOARD                                  │
+│                              REACT FRONTEND DASHBOARD                                   │
 │                                                                                         │
 │   ┌──────────────┐  ┌──────────────┐  ┌──────────────┐  ┌──────────────┐                │
 │   │  Advisor     │  │   Student    │  │   Cohort     │  │   Admin      │                │
