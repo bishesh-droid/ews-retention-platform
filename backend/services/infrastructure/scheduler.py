@@ -76,6 +76,14 @@ def _seconds_until(hour: int, minute: int, weekday: Optional[int] = None) -> flo
 def generate_daily_predictions() -> None:
     """Generate and persist risk predictions for all students."""
     logger.info("[SCHEDULER] Daily prediction job started.")
+    try:
+        with db_session_scope() as db:
+            # Check DB is accessible before proceeding (handles in-memory SQLite issues)
+            db.execute("SELECT 1")
+    except Exception as e:
+        logger.warning(f"[SCHEDULER] Database not ready, skipping daily prediction job: {e}")
+        return
+
     with db_session_scope() as db:
         # Pre-load reference data (once per job)
         all_enrollments = (

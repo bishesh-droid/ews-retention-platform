@@ -43,6 +43,52 @@ from backend.utils.api import AppError, success_response
 
 
 # ---------------------------------------------------------------------------
+# Monkey-patch slowapi's error handler to be defensive
+# ---------------------------------------------------------------------------
+# Slowapi's internal handler assumes all exceptions have .detail, but other
+# exceptions (like ConnectionError) may bubble up to it. We patch it to be safe.
+def _patch_slowapi_error_handler():
+    import slowapi.extension
+    from starlette.requests import Request
+    from starlette.responses import Response, JSONResponse
+
+    original_handler = slowapi.extension._rate_limit_exceeded_handler
+
+    def _safe_rate_limit_handler(request: Request, exc: Exception) -> Response:
+        import slowapi.errors
+        # Only handle RateLimitExceeded as a 429 response
+        # Other exceptions should be re-raised to be handled by proper exception handlers
+        if not isinstance(exc, slowapi.errors.RateLimitExceeded):
+            # Re-raise the original exception to be handled by the app's exception handlers
+            raise exc
+        # Safely extract detail without assuming .detail attribute exists
+        detail = getattr(exc, "detail", None)
+        if detail is None:
+            detail = str(exc) if str(exc) else "Rate limit exceeded"
+        response = JSONResponse(
+            {"error": f"Rate limit exceeded: {detail}"}, status_code=429
+        )
+        # Safely inject headers if limiter is available
+        try:
+            limiter = getattr(request.app.state, "limiter", None)
+            if limiter and hasattr(request.state, "view_rate_limit"):
+                response = limiter._inject_headers(response, request.state.view_rate_limit)
+        except Exception:
+            pass  # Ignore header injection errors
+        return response
+
+    # Patch in both locations where it's imported/referenced
+    slowapi.extension._rate_limit_exceeded_handler = _safe_rate_limit_handler
+    import slowapi
+    slowapi._rate_limit_exceeded_handler = _safe_rate_limit_handler
+    import slowapi.middleware
+    slowapi.middleware._rate_limit_exceeded_handler = _safe_rate_limit_handler
+
+
+_patch_slowapi_error_handler()
+
+
+# ---------------------------------------------------------------------------
 # Lifespan
 # ---------------------------------------------------------------------------
 
@@ -149,7 +195,24 @@ async def lifespan(app: FastAPI):
     # Initialize rate limiter with selected backend.
     try:
         limiter._storage_uri = limiter_storage_uri  # type: ignore[attr-defined]
-        limiter._default_limits = [RATE_LIMIT_DEFAULT]  # type: ignore[attr-defined, list-item]
+        # Parse string limits into Limit objects using slowapi's internal parsing
+        # Matching slowapi's Limiter.__init__ approach:
+        # LimitGroup(limit, self._key_func, None, False, None, None, None, False)
+        from slowapi.wrappers import LimitGroup
+        limiter._default_limits = [  # type: ignore[attr-defined]
+            LimitGroup(
+                RATE_LIMIT_DEFAULT,
+                limiter._key_func,  # type: ignore[attr-defined]
+                None,  # scope
+                False,  # per_method
+                None,  # methods
+                None,  # error_message
+                None,  # exempt_when
+                False,  # override_defaults
+            )
+        ]
+        # Set custom exception handler on the limiter to override slowapi's internal handler
+        limiter._exception_handler = rate_limit_exceeded_handler  # type: ignore[attr-defined]
         app.state.limiter = limiter
         app.add_exception_handler(RateLimitExceeded, rate_limit_exceeded_handler)  # type: ignore[arg-type]
         sys_logger.info(f"Rate limiter initialized with backend: {limiter_storage_uri}")
@@ -265,11 +328,12 @@ app.middleware("http")(request_validation_middleware)
 # ---------------------------------------------------------------------------
 # Centralised exception handlers (using standardized errors)
 # ---------------------------------------------------------------------------
+# Register generic handler FIRST so specific handlers (registered later) take precedence
+app.add_exception_handler(Exception, unhandled_exception_handler)
 
 
 app.add_exception_handler(StarletteHTTPException, http_exception_handler)  # type: ignore[arg-type]
 app.add_exception_handler(RequestValidationError, validation_exception_handler)  # type: ignore[arg-type]
-app.add_exception_handler(Exception, unhandled_exception_handler)
 
 # Keep AppError handler for custom application errors
 

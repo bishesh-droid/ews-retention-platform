@@ -118,13 +118,21 @@ def require_llm_rate_limit():
     return check_rate_limit
 
 
-async def rate_limit_exceeded_handler(request: Request, exc: RateLimitExceeded):
+async def rate_limit_exceeded_handler(request: Request, exc: Exception):
+    """
+    Handler for rate limit exceeded exceptions.
+    Defensively handles any exception type since slowapi may pass non-RateLimitExceeded exceptions.
+    """
+    # Safely extract retry_after if available
     retry_after = getattr(exc, "retry_after", 60)
+    # Safely extract detail message - don't assume .detail attribute exists
+    detail = getattr(exc, "detail", None) or str(exc) or "Rate limit exceeded"
     return JSONResponse(
         status_code=429,
         content={
             "detail": "Rate limit exceeded. Please wait before retrying.",
             "retry_after": retry_after,
+            "info": str(detail),
         },
         headers={"Retry-After": str(retry_after)},
     )
