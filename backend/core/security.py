@@ -87,27 +87,47 @@ class SecurityManager:
 
     @staticmethod
     def _decode_url_encoding(text: str) -> str:
-        """Decode URL percent-encoded strings if they contain suspicious content."""
+        """Decode URL percent-encoded strings and sanitize any malicious content."""
         url_encoded_pattern = re.compile(r'%[0-9a-fA-F]{2}')
         if not url_encoded_pattern.search(text):
             return text
         try:
             import urllib.parse
             decoded = urllib.parse.unquote(text)
-            if '<' in decoded or 'script' in decoded.lower():
+            # If decoded content contains malicious patterns, sanitize it thoroughly
+            if '<' in decoded or 'script' in decoded.lower() or 'alert' in decoded.lower():
+                # Remove script tags and their content
+                decoded = re.sub(r'(?i)<script[^>]*>.*?</script>', '', decoded, flags=re.DOTALL)
+                # Remove remaining tags
+                decoded = re.sub(r'(?i)<[^>]+>', '', decoded)
+                # Remove javascript event handlers and alerts
+                decoded = re.sub(r'(?i)alert\s*\([^)]*\)', '[REDACTED]', decoded)
+                decoded = re.sub(r'(?i)javascript:', '[REDACTED]', decoded)
                 return decoded
+            return decoded
         except Exception:
             pass
         return text
 
     @staticmethod
     def _decode_unicode_escapes(text: str) -> str:
-        r"""Decode Unicode escape sequences (\uXXXX and \xXX)."""
+        r"""Decode Unicode escape sequences (\uXXXX and \xXX) and sanitize malicious content."""
         unicode_escape_pattern = re.compile(r'\\u[0-9a-fA-F]{4}|\\x[0-9a-fA-F]{2}')
         if not unicode_escape_pattern.search(text):
             return text
         try:
-            return text.encode('utf-8').decode('unicode_escape')
+            decoded = text.encode('utf-8').decode('unicode_escape')
+            # If decoded content contains malicious patterns, sanitize it thoroughly
+            if '<' in decoded or 'script' in decoded.lower() or 'alert' in decoded.lower():
+                # Remove script tags and their content
+                decoded = re.sub(r'(?i)<script[^>]*>.*?</script>', '', decoded, flags=re.DOTALL)
+                # Remove remaining tags
+                decoded = re.sub(r'(?i)<[^>]+>', '', decoded)
+                # Remove javascript event handlers and alerts
+                decoded = re.sub(r'(?i)alert\s*\([^)]*\)', '[REDACTED]', decoded)
+                decoded = re.sub(r'(?i)javascript:', '[REDACTED]', decoded)
+                return decoded
+            return decoded
         except (UnicodeDecodeError, UnicodeEncodeError):
             return text
 
@@ -144,13 +164,21 @@ class SecurityManager:
 
     @staticmethod
     def _check_double_encoding(original: str, text: str) -> str:
-        """Check for and handle double-encoding attempts."""
+        """Check for and handle double-encoding attempts with sanitization."""
         url_encoded_pattern = re.compile(r'%[0-9a-fA-F]{2}')
         if '%25' not in original or not url_encoded_pattern.search(text):
             return text
         try:
             import urllib.parse
-            return urllib.parse.unquote(text)
+            decoded = urllib.parse.unquote(text)
+            # Sanitize any malicious content in double-decoded text
+            if '<' in decoded or 'script' in decoded.lower() or 'alert' in decoded.lower():
+                decoded = re.sub(r'(?i)<script[^>]*>.*?</script>', '', decoded, flags=re.DOTALL)
+                decoded = re.sub(r'(?i)<[^>]+>', '', decoded)
+                decoded = re.sub(r'(?i)alert\s*\([^)]*\)', '[REDACTED]', decoded)
+                decoded = re.sub(r'(?i)javascript:', '[REDACTED]', decoded)
+                return decoded
+            return decoded
         except Exception:
             return text
 

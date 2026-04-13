@@ -1257,6 +1257,27 @@ def _merge_enrollment_fields(enrollment: Enrollment, vals: list, fields: dict):
             setattr(enrollment, fname, str(raw))
 
 
+def derive_program_from_org_id(org_id: str) -> str:
+    """
+    Derive program (BS/MSc) from Org_Defined_Id prefix.
+
+    B-3 Fix: This function checks for exact prefix "2025EM" or "2024EM"
+    to identify MSc students, NOT use substring matching on email.
+
+    Args:
+        org_id: The Org_Defined_Id (e.g., "2025EB1100001" or "2025EM1100001")
+
+    Returns:
+        "MSc" if org_id starts with "2025EM" or "2024EM", otherwise "BS"
+    """
+    if not org_id:
+        return "BS"
+    oid = org_id.upper()
+    if oid.startswith("2025EM") or oid.startswith("2024EM"):
+        return "MSc"
+    return "BS"
+
+
 def _ensure_student(db: Session, student_id: str, org_id: str, name: str, program: str, stats: IngestionStats = None):
     student = db.query(Student).filter(Student.id == student_id).first()
     if not student:
@@ -1271,7 +1292,9 @@ def _ensure_student(db: Session, student_id: str, org_id: str, name: str, progra
     first_name = parts[0] if parts else ""
     last_name = parts[1] if len(parts) > 1 else ""
 
-    if "msc" in _safe_str(program).lower() or "ms" in _safe_str(program).lower():
+    # B-3 Fix: Derive program from org_id, not from the file's program column
+    derived_program = derive_program_from_org_id(org_id)
+    if derived_program == "MSc":
         dept_name = "MSc - Data Science & AI"
         dept_code = "dept_msc_dsai"
     else:

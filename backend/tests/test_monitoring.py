@@ -1,10 +1,11 @@
 from backend.routes import monitoring
 from backend.main import health_check
-from backend.api.deps import get_current_user
+from backend.api.deps import get_current_user_async
 from pathlib import Path
 import sys
 
 import pytest
+import pytest_asyncio
 from fastapi import FastAPI
 from fastapi.testclient import TestClient
 
@@ -30,7 +31,7 @@ def monitoring_app() -> FastAPI:
 
 @pytest.fixture
 def authed_client(monitoring_app: FastAPI) -> TestClient:
-    monitoring_app.dependency_overrides[get_current_user] = lambda: _TestUser()
+    monitoring_app.dependency_overrides[get_current_user_async] = lambda: _TestUser()
     return TestClient(monitoring_app)
 
 
@@ -49,11 +50,12 @@ def test_health_check_returns_success_envelope():
     assert "meta" in payload
 
 
-def test_get_prediction_stats_unit_success(monkeypatch):
+@pytest.mark.asyncio
+async def test_get_prediction_stats_unit_success(monkeypatch):
     expected = {"total_predictions": 12, "model_used": False}
     monkeypatch.setattr(monitoring.ml_service, "get_runtime_stats", lambda: expected)
 
-    response = monitoring.get_prediction_stats(_user=_TestUser())
+    response = await monitoring.get_prediction_stats(_user=_TestUser())
 
     assert response["success"] is True
     assert response["message"] == "ML pipeline stats"

@@ -187,14 +187,14 @@ class ContentFilter:
         "stupid"
     ]
 
-    # Sensitive topics that need careful handling
-    SENSITIVE_TOPICS = [
-        "mental health",
-        "depression",
-        "anxiety",
-        "suicide",
-        "self-harm"
-    ]
+    # Sensitive topics that need careful handling (topic -> category mapping)
+    SENSITIVE_TOPICS = {
+        "mental health": "mental health",
+        "depression": "mental health",
+        "anxiety": "mental health",
+        "suicide": "mental health",
+        "self-harm": "mental health"
+    }
 
     @staticmethod
     def check_content(response: str) -> Dict[str, Any]:
@@ -220,11 +220,11 @@ class ContentFilter:
                 result["issues"].append(f"Contains inappropriate phrase: '{phrase}'")
 
         # Check for sensitive topics (flag but don't block)
-        for topic in ContentFilter.SENSITIVE_TOPICS:
+        for topic, category in ContentFilter.SENSITIVE_TOPICS.items():
             if topic in response_lower:
                 result["needs_escalation"] = True
                 result["issues"].append(
-                    f"Contains sensitive topic '{topic}' - human review recommended"
+                    f"Contains sensitive topic '{category}' - human review recommended"
                 )
 
         # If inappropriate, replace with safe message

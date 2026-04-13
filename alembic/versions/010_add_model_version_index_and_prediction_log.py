@@ -35,29 +35,40 @@ def upgrade():
         )
     
     # ML-4: Create prediction_logs table
-    op.create_table(
-        'prediction_logs',
-        sa.Column('id', sa.Integer(), primary_key=True, index=True),
-        sa.Column('student_id', sa.String(), sa.ForeignKey('students.id'), nullable=False, index=True),
-        sa.Column('model_version', sa.String(), nullable=False, index=True),
-        sa.Column('input_features', sa.JSON(), nullable=True),
-        sa.Column('output_score', sa.Float(), nullable=False),
-        sa.Column('output_category', sa.String(20), nullable=True),
-        sa.Column('created_at', sa.DateTime(), nullable=False, index=True),
-        sa.Column('source', sa.String(50), nullable=True),
-    )
+    conn = op.get_bind()
+    inspector = inspect(conn)
     
-    # Add composite index for common queries
-    op.create_index(
-        'ix_prediction_logs_student_created',
-        'prediction_logs',
-        ['student_id', 'created_at']
-    )
-    op.create_index(
-        'ix_prediction_logs_model_version',
-        'prediction_logs',
-        ['model_version']
-    )
+    # Check if prediction_logs table already exists (e.g., created by SQLAlchemy model)
+    existing_tables = inspector.get_table_names()
+    
+    if 'prediction_logs' not in existing_tables:
+        op.create_table(
+            'prediction_logs',
+            sa.Column('id', sa.Integer(), primary_key=True, index=True),
+            sa.Column('student_id', sa.String(), sa.ForeignKey('students.id'), nullable=False, index=True),
+            sa.Column('model_version', sa.String(), nullable=False, index=True),
+            sa.Column('input_features', sa.JSON(), nullable=True),
+            sa.Column('output_score', sa.Float(), nullable=False),
+            sa.Column('output_category', sa.String(20), nullable=True),
+            sa.Column('created_at', sa.DateTime(), nullable=False, index=True),
+            sa.Column('source', sa.String(50), nullable=True),
+        )
+    
+    # Add composite index for common queries (check if exists first)
+    existing_prediction_indexes = [idx['name'] for idx in inspector.get_indexes('prediction_logs')]
+    
+    if 'ix_prediction_logs_student_created' not in existing_prediction_indexes:
+        op.create_index(
+            'ix_prediction_logs_student_created',
+            'prediction_logs',
+            ['student_id', 'created_at']
+        )
+    if 'ix_prediction_logs_model_version' not in existing_prediction_indexes:
+        op.create_index(
+            'ix_prediction_logs_model_version',
+            'prediction_logs',
+            ['model_version']
+        )
 
 
 def downgrade():

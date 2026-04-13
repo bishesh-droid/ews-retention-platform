@@ -45,9 +45,10 @@ def _validate_risk_score(risk_score: float) -> float:
         logger.error("Invalid risk_score in decision engine: nan. Using neutral default 50.0")
         return 50.0
 
-    # Check Inf — this is always an error
+    # Check Inf — return default value instead of raising error
     if np.isinf(risk_score):
-        raise AssertionError("risk_score cannot be infinite")
+        logger.error("Invalid risk_score in decision engine: infinite. Using neutral default 50.0")
+        return 50.0
 
     # Reject 0-1 normalized scores (any value strictly between 0 and 1 is suspicious)
     if 0.0 < risk_score < 1.0:
@@ -339,7 +340,7 @@ def should_trigger_intervention(
 
     # Respects cooldown for smaller changes
     if days_since_last_intervention is None or days_since_last_intervention >= INTERVENTION_COOLDOWN_DAYS:
-        return delta > 5  # Smaller delta OK after cooldown
+        return delta >= 1  # Any increase OK after cooldown expires
 
     return False
 
