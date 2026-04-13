@@ -37,12 +37,17 @@ CORS_ORIGINS: list = os.getenv(
 # ---------------------------------------------------------------------------
 TESTING: bool = os.getenv("TESTING", "false").lower() == "true"
 
-# Force in-memory SQLite when TESTING=true, regardless of DATABASE_URL
+# Use a temp file SQLite DB when TESTING=true so both the sync and async
+# SQLAlchemy engines share the same file (in-memory DBs are per-connection).
 DATABASE_URL: str
 if TESTING:
-    DATABASE_URL = "sqlite:///:memory:"
+    import tempfile, atexit
+    _test_db_fd, _test_db_path = tempfile.mkstemp(suffix=".db", prefix="ews_test_")
+    os.close(_test_db_fd)
+    DATABASE_URL = f"sqlite:///{_test_db_path}"
+    atexit.register(lambda p=_test_db_path: os.unlink(p) if os.path.exists(p) else None)
     logger = logging.getLogger(__name__)
-    logger.info("TESTING=true: using in-memory SQLite database")
+    logger.info(f"TESTING=true: using temp SQLite database at {_test_db_path}")
 else:
     # In non-test environments, require explicit DATABASE_URL (PostgreSQL recommended)
     db_url = os.getenv("DATABASE_URL")

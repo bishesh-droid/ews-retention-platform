@@ -180,15 +180,17 @@ class TestAuthLogout:
         )
         
         assert logout_response.status_code == 200
-        assert "successfully logged out" in logout_response.json()["error"]["message"].lower() or \
-               logout_response.json()["error"]["message"].lower() == "successfully logged out"
-        
+        assert "successfully logged out" in logout_response.json()["message"].lower()
+
         # Verify the token is in the revocation blocklist
-        # Decode token to get JTI
+        # Decode token to get JTI (skip audience/issuer validation — we just need the jti)
         import jwt as pyjwt
-        from backend.config import SECRET_KEY, ALGORITHM
-        
-        payload = pyjwt.decode(access_token, SECRET_KEY, algorithms=[ALGORITHM])
+        from backend.config import SECRET_KEY, ALGORITHM, EWS_TOKEN_AUDIENCE, EWS_SERVICE_NAME
+
+        payload = pyjwt.decode(
+            access_token, SECRET_KEY, algorithms=[ALGORITHM],
+            audience=EWS_TOKEN_AUDIENCE, issuer=EWS_SERVICE_NAME,
+        )
         token_jti = payload.get("jti")
         
         revoked = db_session.query(RevokedToken).filter(RevokedToken.jti == token_jti).first()

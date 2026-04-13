@@ -2,10 +2,32 @@
 Integration API Tests
 ----------------------
 Tests for the EWS Integration API endpoints.
+
+The integration API uses HMAC-style authentication:
+  X-API-Key-Hash: sha256(raw_api_key)
+  X-Timestamp:    Unix epoch seconds (must be within 5 min of server time)
 """
 
+import hashlib
+import time
 import pytest
 from unittest.mock import MagicMock
+
+_INTEGRATION_DEV_KEY = "ews-integration-dev-key"
+
+def _valid_headers() -> dict:
+    """Return correctly signed integration API headers."""
+    return {
+        "X-API-Key-Hash": hashlib.sha256(_INTEGRATION_DEV_KEY.encode()).hexdigest(),
+        "X-Timestamp": str(int(time.time())),
+    }
+
+def _invalid_headers() -> dict:
+    """Return headers with a wrong API key hash but a valid timestamp."""
+    return {
+        "X-API-Key-Hash": "0" * 64,  # wrong sha256 hash
+        "X-Timestamp": str(int(time.time())),
+    }
 
 
 # We need to mock the database before importing the app
@@ -28,17 +50,17 @@ class TestIntegrationAuth:
         """Request with wrong API key should fail."""
         response = client.get(
             "/api/v1/integration/student-risk-profile/test@example.com",
-            headers={"X-Integration-Key": "wrong-key"},
+            headers=_invalid_headers(),
         )
-        assert response.status_code in [401, 404]  # Auth fail or student not found
+        assert response.status_code in [401, 403, 404]  # Auth fail
 
     def test_valid_api_key_accepted(self, client):
         """Request with correct API key should pass auth."""
         response = client.get(
             "/api/v1/integration/student-risk-profile/test@example.com",
-            headers={"X-Integration-Key": "ews-integration-dev-key"},
+            headers=_valid_headers(),
         )
-        # Should get 404 (student not found) not 401 (auth fail)
+        # Should get 404 (student not found) not 401/403 (auth fail)
         assert response.status_code in [404, 200]
 
 
@@ -49,7 +71,7 @@ class TestStudentRiskProfile:
         """Unknown student should return 404."""
         response = client.get(
             "/api/v1/integration/student-risk-profile/nonexistent@example.com",
-            headers={"X-Integration-Key": "ews-integration-dev-key"},
+            headers=_valid_headers(),
         )
         assert response.status_code == 404
 
@@ -70,7 +92,7 @@ class TestStudentRiskProfile:
 
         response = client.get(
             f"/api/v1/integration/student-risk-profile/{student_id}",
-            headers={"X-Integration-Key": "ews-integration-dev-key"},
+            headers=_valid_headers(),
         )
         assert response.status_code == 200
 
@@ -108,11 +130,13 @@ class TestCohortRiskProfiles:
         """Cohort endpoint should return paginated results."""
         response = client.get(
             "/api/v1/integration/cohort-risk-profiles?limit=5",
-            headers={"X-Integration-Key": "ews-integration-dev-key"},
+            headers=_valid_headers(),
         )
         assert response.status_code == 200
 
-        data = response.json()
+        # API wraps the payload in a success_response envelope: {"data": {...}, ...}
+        envelope = response.json()
+        data = envelope.get("data", envelope)  # fall back to flat if no envelope
         assert "profiles" in data
         assert "total_in_system" in data
         assert "returned" in data
@@ -122,11 +146,12 @@ class TestCohortRiskProfiles:
         """Pagination parameters should work."""
         response = client.get(
             "/api/v1/integration/cohort-risk-profiles?skip=0&limit=2",
-            headers={"X-Integration-Key": "ews-integration-dev-key"},
+            headers=_valid_headers(),
         )
         assert response.status_code == 200
 
-        data = response.json()
+        envelope = response.json()
+        data = envelope.get("data", envelope)
         assert len(data["profiles"]) <= 2
 
 

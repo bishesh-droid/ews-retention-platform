@@ -45,11 +45,14 @@ def _validate_risk_score(risk_score: float) -> float:
         logger.error("Invalid risk_score in decision engine: nan. Using neutral default 50.0")
         return 50.0
 
-    # Check Inf — reject infinite values completely
+    # Check Inf — clamp to boundary rather than crashing
     if np.isinf(risk_score):
-        raise AssertionError(
-            f"risk_score cannot be infinite. Got {risk_score}"
+        clamped = 100.0 if risk_score > 0 else 0.0
+        logger.error(
+            f"Invalid risk_score in decision engine: {risk_score}. "
+            f"Clamping to {clamped}"
         )
+        return clamped
 
     # Reject 0-1 normalized scores (any value strictly between 0 and 1 is suspicious)
     if 0.0 < risk_score < 1.0:

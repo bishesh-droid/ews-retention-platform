@@ -66,7 +66,7 @@ class HallucinationPrevention:
         hedge_count = sum(1 for word in uncertainty_indicators if word in llm_response.lower())
 
         if hedge_count > 2:
-            validation_result["confidence"] *= 0.8
+            validation_result["confidence"] *= 0.75
             validation_result["warnings"].append(
                 f"Response contains {hedge_count} uncertainty indicators - may be speculative"
             )
@@ -169,6 +169,11 @@ class HallucinationPrevention:
                 numbers.extend(self._extract_numbers_from_data(item))
         elif isinstance(data, (int, float)):
             numbers.append(float(data))
+        elif isinstance(data, str):
+            try:
+                numbers.append(float(data))
+            except ValueError:
+                pass
 
         return numbers
 

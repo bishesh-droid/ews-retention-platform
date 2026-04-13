@@ -2,6 +2,7 @@
 Pytest fixtures for backend tests.
 """
 
+import hashlib
 import os
 import pytest
 from unittest.mock import MagicMock, create_autospec
@@ -15,7 +16,19 @@ os.environ["SECRET_KEY"] = "test-secret-key-not-for-production-x7f9k2m"
 # Configure greenlet for SQLAlchemy async/sync compatibility
 os.environ["SQLALCHEMY_WARN_20"] = "0"
 
-# All tests use the in-memory DB automatically
+# Pre-configure integration API key hash so integration tests can authenticate
+_INTEGRATION_DEV_KEY = "ews-integration-dev-key"
+os.environ["INTEGRATION_API_KEY_HASH"] = hashlib.sha256(
+    _INTEGRATION_DEV_KEY.encode()
+).hexdigest()
+
+
+@pytest.fixture(autouse=True, scope="session")
+def initialize_test_db():
+    """Create all DB tables once per test session before any test runs."""
+    from backend.database.connection import init_db
+    init_db()
+    yield
 
 
 @pytest.fixture

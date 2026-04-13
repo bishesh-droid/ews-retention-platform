@@ -39,7 +39,7 @@ class Student(Base):
     )
 
     id = Column(String, primary_key=True, index=True)  # Username (email)
-    org_defined_id = Column(String, index=True)
+    org_defined_id = Column(String, index=True, unique=True)
     first_name = Column(String)
     last_name = Column(String)
     old_new_student = Column(String)  # 'old' or 'new'

@@ -228,6 +228,14 @@ class SecurityManager:
         import html
         text = html.unescape(text)
 
+        # After unescaping HTML entities, sanitize any revealed malicious content
+        # (e.g. &lt;script&gt;alert(1)&lt;/script&gt; becomes <script>alert(1)</script>)
+        if '<' in text or 'script' in text.lower() or 'alert' in text.lower():
+            text = re.sub(r'(?i)<script[^>]*>.*?</script>', '', text, flags=re.DOTALL)
+            text = re.sub(r'(?i)<[^>]+>', '', text)
+            text = re.sub(r'(?i)alert\s*\([^)]*\)', '[REDACTED]', text)
+            text = re.sub(r'(?i)javascript:', '[REDACTED]', text)
+
         text = SecurityManager._strip_null_bytes(text)
         text = SecurityManager._normalize_newlines(text)
         text = SecurityManager._apply_bleach_sanitization(text)

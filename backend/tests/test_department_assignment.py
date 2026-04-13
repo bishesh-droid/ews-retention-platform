@@ -107,19 +107,20 @@ def derive_program_from_org_id(org_id: str) -> str:
     """
     Derive program (BS/MSc) from Org_Defined_Id prefix.
 
-    B-3 Fix: This function must check for exact prefix "2025EM" or "2024EM"
+    B-3 Fix: This function must check for a 4-digit year followed by "EM"
     to identify MSc students, NOT use substring matching on email.
 
     Args:
         org_id: The Org_Defined_Id (e.g., "2025EB1100001" or "2025EM1100001")
 
     Returns:
-        "MSc" if org_id starts with "2025EM" or "2024EM", otherwise "BS"
+        "MSc" if org_id starts with any 4-digit year + "EM", otherwise "BS"
     """
+    import re
     if not org_id:
         return "BS"
     oid = org_id.upper()
-    if oid.startswith("2025EM") or oid.startswith("2024EM"):
+    if re.match(r'^\d{4}EM', oid):
         return "MSc"
     return "BS"
 
@@ -258,24 +259,7 @@ def test_faculty_sees_only_own_department_students(mock_session_with_students, m
     This guards against the B-3 regression where faculty might see all students
     regardless of department, or where department scoping filters are bypassed.
     """
-    # Mock the query chain to simulate filtered results
-    # In reality, the query would include a filter like:
-    #   .filter(Student.parent_department_name == current_user.department)
-
-    mock_query = MagicMock()
-
-    # Simulate: when filtered by department, only BS students return
-    bs_students_only = [
-        s for s in mock_session_with_students.query().all.return_value
-        if s.parent_department_name == "BS - Data Science & AI"
-    ]
-
-    mock_filtered_query = MagicMock()
-    mock_filtered_query.all.return_value = bs_students_only
-    mock_query.filter.return_value = mock_filtered_query
-    mock_session_with_students.query.return_value = mock_query
-
-    # Simulate the filtering logic from StudentService.get_all_students
+    # Get all students from the fixture (20 students: 10 BS + 10 MSc)
     all_students = mock_session_with_students.query(Student).all()
 
     # Apply department filter (as done in actual code)

@@ -289,22 +289,9 @@ class ResourceOwnershipChecker:
         if current_user.is_superuser:
             return current_user
 
-        # Ownership is determined by matching student email to user email.
-        # Username is not used for ownership verification.
-        # Query the Student table to find the actual student record
-        from sqlalchemy import select
-
-        with get_db() as db:
-            student = db.execute(select(Student).where(Student.id == student_id)).scalars().first()
-
-        if student is None:
-            raise HTTPException(
-                status_code=status.HTTP_404_NOT_FOUND,
-                detail="Student not found",
-            )
-
-        # Allow access if student email matches current user's email
-        if student.email == current_user.email:
+        # Ownership is determined by matching the path student_id against
+        # the authenticated user's email or username.
+        if student_id == current_user.email or student_id == current_user.username:
             return current_user
 
         # Deny access for non-staff users
