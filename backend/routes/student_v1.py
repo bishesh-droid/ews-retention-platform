@@ -1,16 +1,19 @@
+from typing import Any, Dict, List
 from fastapi import APIRouter, Depends
 from sqlalchemy.orm import Session
 
 from backend.database import Student, Goal, RiskSnapshot
 from backend.api import deps
+from backend.core.constants import Role
+from backend.schemas.common import APIResponse
 from backend.utils.api import success_response
 
 router = APIRouter()
 
 
-@router.get("/me")
+@router.get("/me", response_model=APIResponse)
 def get_my_profile(
-    current_user: deps.User = Depends(deps.require_role(["Student"])),
+    current_user: deps.User = Depends(deps.require_role([Role.STUDENT])),
     db: Session = Depends(deps.get_db)
 ):
     """
@@ -20,9 +23,9 @@ def get_my_profile(
     return success_response(student, message="Student profile")
 
 
-@router.get("/goals")
+@router.get("/goals", response_model=APIResponse)
 def get_my_goals(
-    current_user: deps.User = Depends(deps.require_role(["Student"])),
+    current_user: deps.User = Depends(deps.require_role([Role.STUDENT])),
     db: Session = Depends(deps.get_db)
 ):
     """
@@ -36,9 +39,9 @@ def get_my_goals(
     )
 
 
-@router.get("/risk-history")
+@router.get("/risk-history", response_model=APIResponse)
 def get_my_risk_history(
-    current_user: deps.User = Depends(deps.require_role(["Student"])),
+    current_user: deps.User = Depends(deps.require_role([Role.STUDENT])),
     db: Session = Depends(deps.get_db)
 ):
     """

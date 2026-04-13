@@ -260,6 +260,10 @@ class MLService:
                 is_new_student=False,
                 week_number=trimester_week_number(),
             )
+            
+            # ML-4: Add student_id and model_version for audit logging
+            features["student_id"] = student_id
+            features["model_version"] = settings.RISK_MODEL_VERSION
 
             # Get rule-based score (always calculated)
             rule_based_score = RiskScorer.calculate_risk_score(
@@ -380,7 +384,7 @@ class MLService:
         try:
             pred = Prediction(  # type: ignore[arg-type]
                 student_id=student_id,
-                risk_score=risk_score / 100.0,          # stored as 0-1 probability
+                risk_score=risk_score,                   # stored as 0-100 scale (DB-5)
                 engagement_score=features.get("content_completion_score", 0) / 100.0,
                 retention_likelihood=RiskScorer.get_retention_likelihood(risk_score),
                 # Legacy fields (kept for backward compatibility with analytics endpoints)
@@ -393,7 +397,7 @@ class MLService:
                 consistency_signal_score=features.get("login_consistency_score", 0) / 100.0,
                 intent_signal_score=features.get("assignment_score", 0) / 100.0,
                 responsiveness_signal_score=features.get("discussion_engagement_score", 0) / 100.0,
-                model_version="rule-based-v1",
+                model_version=settings.RISK_MODEL_VERSION,
                 prediction_timestamp=datetime.now(timezone.utc),
                 top_risk_factors=json.dumps(
                     [RiskScorer.get_dominant_risk_factor(features)]

@@ -1,14 +1,20 @@
 from fastapi import APIRouter, Depends, HTTPException, Request, Response, status
-from fastapi.security import OAuth2PasswordRequestForm
+from fastapi.security import OAuth2PasswordRequestForm, OAuth2PasswordBearer
 from sqlalchemy.orm import Session
+from sqlalchemy.ext.asyncio import AsyncSession
+from sqlalchemy import select
 from datetime import timedelta, datetime, timezone
+from typing import Optional
 import json
+
+import jwt as pyjwt
 
 from backend.database import User
 from backend.api import deps
 from backend.core import auth
 from backend.core.rate_limiting import limiter
 from backend.database.models.audit import AuditLog
+from backend.database.models.revoked_token import RevokedToken
 from backend.schemas.auth import (
     Token,
     UserOut,
@@ -33,13 +39,14 @@ REFRESH_TOKEN_EXPIRE_DAYS = 7
 async def login(
     request: Request,
     response: Response,
-    db: Session = Depends(deps.get_db),
+    db: AsyncSession = Depends(deps.get_db_async),
     form_data: OAuth2PasswordRequestForm = Depends(),
 ):
     """
     OAuth2 token login — returns a Bearer JWT and sets httpOnly refresh token cookie.
     """
-    user = db.query(User).filter(User.username == form_data.username).first()
+    result = await db.execute(select(User).where(User.username == form_data.username))
+    user = result.scalar_one_or_none()
     if not user or not auth.verify_password(form_data.password, user.hashed_password):  # type: ignore[arg-type]
         raise HTTPException(
             status_code=status.HTTP_401_UNAUTHORIZED,
@@ -91,7 +98,7 @@ async def login(
 async def refresh_token(
     request: Request,
     response: Response,
-    db: Session = Depends(deps.get_db),
+    db: AsyncSession = Depends(deps.get_db_async),
 ):
     """
     Refresh access token using httpOnly cookie refresh token.
@@ -122,7 +129,8 @@ async def refresh_token(
 
     # Get user from token
     user_id = payload.get("sub")
-    user = db.query(User).filter(User.id == user_id).first()
+    result = await db.execute(select(User).where(User.id == user_id))
+    user = result.scalar_one_or_none()
     if not user or not user.is_active:
         raise HTTPException(
             status_code=status.HTTP_401_UNAUTHORIZED,
@@ -165,12 +173,50 @@ async def refresh_token(
     }
 
 
+oauth2_scheme = OAuth2PasswordBearer(tokenUrl="/api/v1/auth/login", auto_error=False)
+
+
 @router.post("/logout")
-async def logout(response: Response):
+async def logout(
+    response: Response,
+    request: Request,
+    db: AsyncSession = Depends(deps.get_db_async),
+    current_user: User = Depends(deps.get_current_user_async),
+    token: Optional[str] = Depends(oauth2_scheme),
+):
     """
-    Logout user by clearing refresh token cookie.
-    Client should also clear in-memory access token.
+    Logout user by revoking the access token and clearing refresh token cookie.
+    
+    The token's JTI is added to the revocation blocklist, making the token
+    invalid immediately even before its natural expiration (SEC-4).
     """
+    if token:
+        try:
+            # Decode without verification to extract jti and exp
+            unverified_payload = pyjwt.decode(
+                token,
+                key="",
+                options={"verify_signature": False, "verify_exp": False}
+            )
+            token_jti = unverified_payload.get("jti")
+            token_exp = unverified_payload.get("exp")
+            
+            if token_jti and token_exp:
+                # Add token to revocation blocklist
+                revoked_token = RevokedToken(
+                    jti=token_jti,
+                    user_id=str(current_user.id),
+                    expires_at=datetime.fromtimestamp(token_exp),
+                )
+                db.add(revoked_token)
+                await db.commit()
+                logger.info(f"Token revoked for user {current_user.id}, jti={token_jti}")
+        except Exception as e:
+            # Log but don't fail the logout if token revocation fails
+            logger.warning(f"Failed to revoke token during logout: {e}")
+            await db.rollback()
+    
+    # Clear the refresh token cookie
     response.delete_cookie(
         key=REFRESH_TOKEN_COOKIE_NAME,
         path="/",

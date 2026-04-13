@@ -8,13 +8,14 @@ from datetime import datetime, timezone
 from typing import Any, Dict
 from fastapi import APIRouter, Depends, HTTPException, status
 from fastapi.responses import JSONResponse
-from sqlalchemy import text
-from sqlalchemy.orm import Session
+from sqlalchemy import text, select
+from sqlalchemy.ext.asyncio import AsyncSession
 
-from backend.api.deps import get_current_user, get_db
+from backend.api.deps import get_current_user_async, get_db_async
 from backend.database.models.user import User
 from backend.database.models.ingestion_run import IngestionRun
 from backend.core.logger import sys_logger
+from backend.schemas.common import APIResponse
 from backend.services.ml_service import ml_service
 from backend.utils.api import success_response
 
@@ -22,23 +23,22 @@ router = APIRouter(prefix="/monitoring", tags=["monitoring"])
 
 
 @router.get("/health")
-async def health_check(db: Session = Depends(get_db)):
+async def health_check(db: AsyncSession = Depends(get_db_async)):
     health: Dict[str, Any] = {"status": "healthy", "timestamp": datetime.now(timezone.utc).isoformat()}
 
     # Check DB connectivity
     try:
-        db.execute(text("SELECT 1"))
+        await db.execute(text("SELECT 1"))
         health["database"] = "connected"
     except Exception:
         health["database"] = "error"
         health["status"] = "unhealthy"
 
     # Check ingestion staleness
-    latest_run = (
-        db.query(IngestionRun)
-        .order_by(IngestionRun.run_at.desc())
-        .first()
+    result = await db.execute(
+        select(IngestionRun).order_by(IngestionRun.run_at.desc())
     )
+    latest_run = result.scalar_one_or_none()
     if latest_run is None:
         health["last_ingestion"] = "never"
         health["ingestion_status"] = "warning"
@@ -58,9 +58,9 @@ async def health_check(db: Session = Depends(get_db)):
     return JSONResponse(content=health, status_code=status_code)
 
 
-@router.get("/predictions")
-def get_prediction_stats(
-    _user: User = Depends(get_current_user),
+@router.get("/predictions", response_model=APIResponse)
+async def get_prediction_stats(
+    _user: User = Depends(get_current_user_async),
 ):
     """
     Return in-memory statistics about prediction calls.

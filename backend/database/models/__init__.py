@@ -19,6 +19,8 @@ from .audit import AuditLog
 from .ingestion_run import IngestionRun
 from .course_content_registry import CourseContentRegistry
 from .intervention_log import InterventionLog
+from .revoked_token import RevokedToken
+from .prediction_log import PredictionLog
 from .canonical import (
     DimStudent,
     DimCourse,
@@ -51,6 +53,8 @@ __all__ = [
     "IngestionRun",
     "CourseContentRegistry",
     "InterventionLog",
+    "RevokedToken",
+    "PredictionLog",
     "DimStudent",
     "DimCourse",
     "FactAcademicPerformance",

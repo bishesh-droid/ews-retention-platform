@@ -32,14 +32,38 @@ THRESHOLD_URGENT = INTERVENTION_THRESHOLDS['urgent']
 
 
 def _validate_risk_score(risk_score: float) -> float:
-    """Validate and normalize risk score."""
-    if risk_score is None or np.isnan(risk_score) or np.isinf(risk_score):
-        logger.error(
-            f"Invalid risk_score in decision engine: {risk_score}. Using neutral default 50.0"
-        )
+    """Validate and normalize risk score.
+
+    Enforces 0-100 scale (not 0-1). Rejects Inf values; uses 50.0 default for NaN.
+    """
+    # Check type
+    if not isinstance(risk_score, (int, float)):
+        raise AssertionError(f"risk_score must be numeric, got {type(risk_score)}")
+
+    # Check NaN — use neutral default rather than raising
+    if risk_score != risk_score:  # NaN check (NaN != NaN is always True)
+        logger.error("Invalid risk_score in decision engine: nan. Using neutral default 50.0")
         return 50.0
-    assert 0.0 <= risk_score <= 100.0, f"Expected risk score in [0,100], got {risk_score}"
-    return risk_score
+
+    # Check Inf — this is always an error
+    if np.isinf(risk_score):
+        raise AssertionError("risk_score cannot be infinite")
+
+    # Reject 0-1 normalized scores (any value strictly between 0 and 1 is suspicious)
+    if 0.0 < risk_score < 1.0:
+        raise AssertionError(
+            f"risk_score {risk_score} appears to be on a 0-1 scale. "
+            f"Expected 0-100 scale."
+        )
+
+    # Check 0-100 range
+    if not (0.0 <= risk_score <= 100.0):
+        raise AssertionError(
+            f"risk_score must be 0-100 scale, got {risk_score}. "
+            f"Normalized (0-1) scores not accepted."
+        )
+
+    return float(risk_score)
 
 
 def _handle_ghost_outreach(features: Dict[str, Any]) -> Optional[Dict[str, Any]]:
@@ -169,6 +193,7 @@ def _get_threshold_intervention(risk_score: float) -> Dict[str, Any]:
             "assigned_team": "none",
             "message_template": None,
             "urgency": "none",
+            "priority": None,
             "description": (
                 "Student is on track, no intervention needed. "
                 "Continue to monitor engagement and risk score."
@@ -185,6 +210,7 @@ def _get_threshold_intervention(risk_score: float) -> Dict[str, Any]:
             "assigned_team": "automated",
             "message_template": "gentle_reminder_email",
             "urgency": "low",
+            "priority": "low",
             "description": "Send automated email reminder to check in with student",
             "threshold_used": THRESHOLD_GENTLE,
         }
@@ -198,6 +224,7 @@ def _get_threshold_intervention(risk_score: float) -> Dict[str, Any]:
             "assigned_team": "faculty",
             "message_template": "mentor_outreach_email",
             "urgency": "medium",
+            "priority": "medium",
             "description": "Assign faculty mentor for personalized outreach and support",
             "threshold_used": THRESHOLD_MENTOR,
         }
@@ -211,6 +238,7 @@ def _get_threshold_intervention(risk_score: float) -> Dict[str, Any]:
             "assigned_team": "faculty",
             "message_template": "mentor_outreach_email",
             "urgency": "high",
+            "priority": "high",
             "description": (
                 "Escalated faculty mentor outreach — heightened engagement risk; "
                 "prioritize personalized support and follow-up"
@@ -226,6 +254,7 @@ def _get_threshold_intervention(risk_score: float) -> Dict[str, Any]:
         "assigned_team": "sales",
         "message_template": "urgent_intervention_package",
         "urgency": "high",
+        "priority": "critical",
         "description": "Immediate escalation to sales team with multi-channel outreach and incentive offer",
         "threshold_used": THRESHOLD_URGENT,
     }
@@ -271,7 +300,9 @@ def should_trigger_intervention(
     days_since_last_intervention: int = None
 ) -> bool:
     """
-    Determine if an intervention should be triggered based on risk score and history
+    Determine if an intervention should be triggered based on risk score and history.
+
+    Uses 0-100 scale. Spike threshold is 10 points (not 0.1).
 
     Args:
         current_risk_score: Current risk score (0–100)
@@ -281,15 +312,34 @@ def should_trigger_intervention(
     Returns:
         Boolean indicating whether to trigger intervention
     """
-    # Always trigger if risk is above threshold and no recent intervention
-    if current_risk_score >= THRESHOLD_NO_ACTION:
-        # Don't spam: wait at least INTERVENTION_COOLDOWN_DAYS between interventions
-        if days_since_last_intervention is None or days_since_last_intervention >= INTERVENTION_COOLDOWN_DAYS:
-            return True
+    # Validate current score is on 0-100 scale
+    if not (0 <= current_risk_score <= 100):
+        raise AssertionError(
+            f"current_risk_score must be 0-100, got {current_risk_score}"
+        )
 
-        # Exception: if risk increased significantly (> RISK_SPIKE_THRESHOLD), trigger even if recent
-        if previous_risk_score and (current_risk_score - previous_risk_score) > RISK_SPIKE_THRESHOLD:
-            return True
+    # Validate previous score if provided
+    if previous_risk_score is not None and not (0 <= previous_risk_score <= 100):
+        raise AssertionError(
+            f"previous_risk_score must be 0-100, got {previous_risk_score}"
+        )
+
+    # No previous score — respect cooldown, then trigger only if above action threshold
+    if previous_risk_score is None:
+        if days_since_last_intervention is not None and days_since_last_intervention < INTERVENTION_COOLDOWN_DAYS:
+            return False  # In cooldown, no delta to justify bypass
+        return current_risk_score >= THRESHOLD_NO_ACTION
+
+    # Calculate delta on 0-100 scale
+    delta = current_risk_score - previous_risk_score
+
+    # Large spike (>= RISK_SPIKE_THRESHOLD) overrides cooldown
+    if delta >= RISK_SPIKE_THRESHOLD:
+        return True
+
+    # Respects cooldown for smaller changes
+    if days_since_last_intervention is None or days_since_last_intervention >= INTERVENTION_COOLDOWN_DAYS:
+        return delta > 5  # Smaller delta OK after cooldown
 
     return False
 

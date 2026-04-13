@@ -1,10 +1,12 @@
 from datetime import datetime, timedelta, timezone
 from typing import Any, Optional, Union
+import uuid
 
 import bcrypt
-from jose import jwt
+import jwt as pyjwt
+from jwt.exceptions import InvalidTokenError
 
-from backend.config import SECRET_KEY, ALGORITHM
+from backend.config import SECRET_KEY, ALGORITHM, EWS_SERVICE_NAME, EWS_TOKEN_AUDIENCE
 
 
 def create_access_token(
@@ -18,6 +20,11 @@ def create_access_token(
       - sub   : user ID (str)
       - role  : lowercased role string embedded at issue time
       - exp   : expiry timestamp
+      - iat   : issued at timestamp
+      - iss   : issuer (EWS_SERVICE_NAME)
+      - aud   : audience (EWS_TOKEN_AUDIENCE)
+      - jti   : unique token ID
+      - nbf   : not before timestamp
       - type  : token type ("access" or "refresh")
 
     Embedding role in the token means authorization checks do not require
@@ -29,14 +36,20 @@ def create_access_token(
         expires_delta: Token lifetime (default: 15 minutes)
         token_type: Token purpose ("access" or "refresh")
     """
-    expire = datetime.now(timezone.utc) + (expires_delta or timedelta(minutes=15))
+    now = datetime.now(timezone.utc)
+    expire = now + (expires_delta or timedelta(minutes=15))
     to_encode = {
         "exp": expire,
+        "iat": now,
         "sub": str(subject),
         "role": role.lower(),
         "type": token_type,
+        "iss": EWS_SERVICE_NAME,
+        "aud": EWS_TOKEN_AUDIENCE,
+        "jti": str(uuid.uuid4()),
+        "nbf": now,
     }
-    return jwt.encode(to_encode, SECRET_KEY, algorithm=ALGORITHM)
+    return pyjwt.encode(to_encode, SECRET_KEY, algorithm=ALGORITHM)
 
 
 def decode_token(token: str) -> dict:
@@ -50,9 +63,16 @@ def decode_token(token: str) -> dict:
         Decoded token payload dict
 
     Raises:
-        jwt.JWTError: If token is invalid or expired
+        InvalidTokenError: If token is invalid or expired
     """
-    return jwt.decode(token, SECRET_KEY, algorithms=[ALGORITHM])
+    return pyjwt.decode(
+        token,
+        SECRET_KEY,
+        algorithms=[ALGORITHM],
+        options={"require": ["exp", "iat", "sub", "jti", "iss", "aud", "nbf"]},
+        audience=EWS_TOKEN_AUDIENCE,
+        issuer=EWS_SERVICE_NAME,
+    )
 
 
 def verify_password(plain_password: str, hashed_password: str) -> bool:
@@ -60,4 +80,4 @@ def verify_password(plain_password: str, hashed_password: str) -> bool:
 
 
 def get_password_hash(password: str) -> str:
-    return bcrypt.hashpw(password.encode("utf-8"), bcrypt.gensalt()).decode("utf-8")
+    return bcrypt.hashpw(password.encode("utf-8"), bcrypt.gensalt(rounds=12)).decode("utf-8")

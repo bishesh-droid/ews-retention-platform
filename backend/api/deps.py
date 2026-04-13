@@ -19,14 +19,18 @@ from typing import List, Optional
 
 from fastapi import Depends, HTTPException, Request, status
 from fastapi.security import OAuth2PasswordBearer
-from jose import JWTError, jwt
+import jwt as pyjwt
+from jwt.exceptions import InvalidTokenError
 from sqlalchemy import select
 from sqlalchemy.orm import Session
 from sqlalchemy.ext.asyncio import AsyncSession
 
-from backend.config import ALGORITHM, SECRET_KEY
+from backend.config import ALGORITHM, SECRET_KEY, EWS_SERVICE_NAME, EWS_TOKEN_AUDIENCE
 from backend.database.connection import get_db, get_db_async
 from backend.database.models.user import User
+from backend.database.models.student import Student
+from backend.database.models.revoked_token import RevokedToken
+from backend.core.constants import Role
 
 # Re-exported so routes can write `deps.User` without an extra import.
 __all__ = [
@@ -75,11 +79,29 @@ def get_current_user(
     )
 
     try:
-        payload = jwt.decode(token, SECRET_KEY, algorithms=[ALGORITHM])
+        payload = pyjwt.decode(
+            token,
+            SECRET_KEY,
+            algorithms=[ALGORITHM],
+            options={"require": ["exp", "iat", "sub", "jti", "iss", "aud", "nbf"]},
+            audience=EWS_TOKEN_AUDIENCE,
+            issuer=EWS_SERVICE_NAME,
+        )
         user_id: Optional[str] = payload.get("sub")
+        token_jti: Optional[str] = payload.get("jti")
         if user_id is None:
             raise credentials_exc
-    except JWTError:
+        
+        # Check if token has been revoked (SEC-4)
+        if token_jti is not None:
+            revoked = db.query(RevokedToken).filter(RevokedToken.jti == token_jti).first()
+            if revoked is not None:
+                raise HTTPException(
+                    status_code=status.HTTP_401_UNAUTHORIZED,
+                    detail="Token has been revoked",
+                    headers={"WWW-Authenticate": "Bearer"},
+                )
+    except InvalidTokenError:
         # Covers expired tokens, bad signature, malformed payload, etc.
         raise credentials_exc
 
@@ -130,11 +152,32 @@ async def get_current_user_async(
     )
 
     try:
-        payload = jwt.decode(token, SECRET_KEY, algorithms=[ALGORITHM])
+        payload = pyjwt.decode(
+            token,
+            SECRET_KEY,
+            algorithms=[ALGORITHM],
+            options={"require": ["exp", "iat", "sub", "jti", "iss", "aud", "nbf"]},
+            audience=EWS_TOKEN_AUDIENCE,
+            issuer=EWS_SERVICE_NAME,
+        )
         user_id: Optional[str] = payload.get("sub")
+        token_jti: Optional[str] = payload.get("jti")
         if user_id is None:
             raise credentials_exc
-    except JWTError:
+        
+        # Check if token has been revoked (SEC-4)
+        if token_jti is not None:
+            result = await db.execute(
+                select(RevokedToken).where(RevokedToken.jti == token_jti)
+            )
+            revoked = result.scalar_one_or_none()
+            if revoked is not None:
+                raise HTTPException(
+                    status_code=status.HTTP_401_UNAUTHORIZED,
+                    detail="Token has been revoked",
+                    headers={"WWW-Authenticate": "Bearer"},
+                )
+    except InvalidTokenError:
         raise credentials_exc
 
     try:
@@ -247,13 +290,25 @@ class ResourceOwnershipChecker:
         if current_user.is_superuser:
             return current_user
 
-        # Students can only access their own records
-        # Match by username (id field) or email
-        user_identifier = current_user.username or current_user.email or ""
-        if user_identifier == student_id:
+        # Ownership is determined by matching student email to user email.
+        # Username is not used for ownership verification.
+        # Query the Student table to find the actual student record
+        from sqlalchemy import select
+
+        with get_db() as db:
+            student = db.execute(select(Student).where(Student.id == student_id)).scalars().first()
+
+        if student is None:
+            raise HTTPException(
+                status_code=status.HTTP_404_NOT_FOUND,
+                detail="Student not found",
+            )
+
+        # Allow access if student email matches current user's email
+        if student.email == current_user.email:
             return current_user
 
-        # FERPA violation - deny access with generic message
+        # Deny access for non-staff users
         raise HTTPException(
             status_code=status.HTTP_403_FORBIDDEN,
             detail="Access denied. You do not have permission to access this resource.",

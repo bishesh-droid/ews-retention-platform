@@ -14,7 +14,9 @@ class SecurityManager:
 
     # Prompt injection patterns to detect and remove
     PROMPT_INJECTION_PATTERNS = [
-        # Role manipulation
+        # Role manipulation - standalone patterns for simple matches
+        r'\bignore\s+previous\b',
+        r'\bignore\s+all\s+previous\b',
         r'\bignore\s+(?:all\s+)?(?:previous|prior|above|the\s+above)\s+(?:instructions?|prompts?|commands?|context)\b',
         r'\bforget\s+(?:all\s+)?(?:previous|prior)\s+(?:instructions?|prompts?|commands?)\b',
         r'\bdiscard\s+(?:all\s+)?(?:previous|prior)\s+(?:instructions?|prompts?|context?)\b',
@@ -35,6 +37,7 @@ class SecurityManager:
         r'^\s*DAN\s*[:\-]',
         r'^\s*Jailbreak\s*[:\-]',
         r'^\s*Developer\s*Mode\s*[:\-]',
+        r'\bdeveloper\s+mode\b',
         r'\bignore\s+your\s+(?:programming|training|instructions|guidelines)\b',
         r'\bdo\s+not\s+(?:follow|obey|adhere\s+to)\s+(?:your|the)\s+(?:instructions|guidelines|rules)\b',
         r'\byou\s+are\s+now\s+(?:in|entering)\s+(?:developer\s+mode|DAN\s+mode|jailbreak\s+mode)\b',
@@ -100,7 +103,7 @@ class SecurityManager:
     @staticmethod
     def _decode_unicode_escapes(text: str) -> str:
         r"""Decode Unicode escape sequences (\uXXXX and \xXX)."""
-        unicode_escape_pattern = re.compile(chr(92) + 'u[0-9a-fA-F]{4}|' + chr(92) + 'x[0-9a-fA-F]{2}')
+        unicode_escape_pattern = re.compile(r'\\u[0-9a-fA-F]{4}|\\x[0-9a-fA-F]{2}')
         if not unicode_escape_pattern.search(text):
             return text
         try:
@@ -310,12 +313,13 @@ class SecurityManager:
         # Step 3: Strip HTML using bleach
         name = bleach.clean(name, tags=[], attributes={}, strip=True)
 
-        # Step 4: Remove any characters not typically found in names
-        # Allow: letters, spaces, hyphens, apostrophes, periods (for initials)
-        name = re.sub(r"[^\w\s\-\'\.\,]", "", name, flags=re.UNICODE)
-
-        # Step 5: Remove prompt injection patterns
+        # Step 4: Remove prompt injection patterns BEFORE stripping special chars
+        # (so patterns like "system:" are caught before the colon is removed)
         name = SecurityManager._INJECTION_REGEX.sub('[REDACTED]', name)
+
+        # Step 5: Remove any characters not typically found in names
+        # Allow: letters, spaces, hyphens, apostrophes, periods (for initials)
+        name = re.sub(r"[^\w\s\-\'\.\,\[\]]", "", name, flags=re.UNICODE)
 
         # Step 6: Truncate
         if len(name) > SecurityManager.LLM_MAX_NAME_LENGTH:

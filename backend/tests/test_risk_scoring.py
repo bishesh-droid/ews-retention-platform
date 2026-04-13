@@ -206,5 +206,136 @@ class TestRiskScoring:
         assert abs(total - 1.0) < 0.001  # Allow tiny floating point error
 
 
+class TestProductionLMSFormula:
+    """
+    TEST-4: Tests for production LMS feature formula (not legacy K-12).
+    
+    These tests verify the actual feature keys used in production:
+    - content_completion_score
+    - login_consistency_score
+    - quiz_engagement_score
+    - assignment_score
+    - time_investment_score
+    - discussion_engagement_score
+    """
+
+    def _create_lms_features(self, **kwargs) -> dict:
+        """Helper to create LMS feature dict with realistic default values."""
+        defaults = {
+            "content_completion_score": 70.0,
+            "login_consistency_score": 75.0,
+            "quiz_engagement_score": 80.0,
+            "assignment_score": 65.0,
+            "time_investment_score": 72.0,
+            "discussion_engagement_score": 68.0,
+            "student_id": "test@lms.edu",
+            "model_version": "test-v1.0",
+        }
+        defaults.update(kwargs)
+        return defaults
+
+    def test_lms_features_returns_valid_score(self):
+        """LMS features dict returns a float between 0 and 100."""
+        features = self._create_lms_features()
+        
+        score = RiskScorer.calculate_risk_score(features)
+        
+        assert isinstance(score, float), f"Score should be float, got {type(score)}"
+        assert 0.0 <= score <= 100.0, f"Score {score} out of valid range [0, 100]"
+        # Score should be reasonable given the input values (all around 65-80)
+        # High engagement = low risk, so score should be in lower half
+        assert score < 75.0, f"Score {score} should reflect good engagement (low risk)"
+
+    def test_high_risk_profile_all_features_low(self):
+        """High-risk profile: all features at 10 → category should be 'high'."""
+        features = self._create_lms_features(
+            content_completion_score=10.0,
+            login_consistency_score=10.0,
+            quiz_engagement_score=10.0,
+            assignment_score=10.0,
+            time_investment_score=10.0,
+            discussion_engagement_score=10.0,
+        )
+        
+        score = RiskScorer.calculate_risk_score(features)
+        category = RiskScorer.get_risk_category(score)
+        
+        assert category == "high", f"All low features should be high risk, got {category} with score {score}"
+        assert score >= 70.0, f"High risk should have score >= 70, got {score}"
+
+    def test_low_risk_profile_all_features_high(self):
+        """Low-risk profile: all features at 90 → category should be 'low'."""
+        features = self._create_lms_features(
+            content_completion_score=90.0,
+            login_consistency_score=90.0,
+            quiz_engagement_score=90.0,
+            assignment_score=90.0,
+            time_investment_score=90.0,
+            discussion_engagement_score=90.0,
+        )
+        
+        score = RiskScorer.calculate_risk_score(features)
+        category = RiskScorer.get_risk_category(score)
+        
+        assert category == "low", f"All high features should be low risk, got {category} with score {score}"
+        assert score <= 40.0, f"Low risk should have score <= 40, got {score}"
+
+    def test_nan_input_does_not_crash(self):
+        """TEST-4 + ML-3: NaN input should not crash, return a valid score."""
+        features = self._create_lms_features(
+            content_completion_score=float('nan'),  # One NaN feature
+            login_consistency_score=75.0,
+            quiz_engagement_score=80.0,
+            assignment_score=65.0,
+            time_investment_score=72.0,
+            discussion_engagement_score=68.0,
+        )
+        
+        # Should not raise an exception
+        score = RiskScorer.calculate_risk_score(features)
+        
+        # Should return a valid score in range
+        assert isinstance(score, float), f"Score should be float, got {type(score)}"
+        assert 0.0 <= score <= 100.0, f"Score {score} out of valid range [0, 100]"
+        assert not __import__('math').isnan(score), "Score should not be NaN"
+
+    def test_missing_features_handled_gracefully(self):
+        """Missing some features should still produce a valid score."""
+        # Only provide partial features
+        features = {
+            "content_completion_score": 80.0,
+            "quiz_engagement_score": 75.0,
+            "student_id": "test@lms.edu",
+            "model_version": "test-v1.0",
+        }
+        
+        score = RiskScorer.calculate_risk_score(features)
+        
+        assert isinstance(score, float), f"Score should be float, got {type(score)}"
+        assert 0.0 <= score <= 100.0, f"Score {score} out of valid range [0, 100]"
+
+    def test_lms_vs_legacy_k12_different_keys(self):
+        """Verify LMS keys are different from legacy K-12 keys."""
+        lms_keys = {
+            "content_completion_score",
+            "login_consistency_score",
+            "quiz_engagement_score",
+            "assignment_score",
+            "time_investment_score",
+            "discussion_engagement_score",
+        }
+        
+        legacy_keys = {
+            "attendance_score",
+            "academic_score",
+            "behavioral_score",
+            "stability_score",
+        }
+        
+        # No overlap between LMS and legacy keys
+        overlap = lms_keys & legacy_keys
+        assert len(overlap) == 0, f"LMS and legacy keys should not overlap: {overlap}"
+
+
 if __name__ == "__main__":
     pytest.main([__file__, "-v"])

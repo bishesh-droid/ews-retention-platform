@@ -40,25 +40,34 @@ TESTING: bool = os.getenv("TESTING", "false").lower() == "true"
 # Force in-memory SQLite when TESTING=true, regardless of DATABASE_URL
 DATABASE_URL: str
 if TESTING:
-    DATABASE_URL = "sqlite+aiosqlite:///:memory:"
+    DATABASE_URL = "sqlite:///:memory:"
     logger = logging.getLogger(__name__)
     logger.info("TESTING=true: using in-memory SQLite database")
 else:
-    DATABASE_URL = os.getenv(
-        "DATABASE_URL",
-        f"sqlite:///{DATA_DIR / 'sql_app.db'}"
-    )
+    # In non-test environments, require explicit DATABASE_URL (PostgreSQL recommended)
+    db_url = os.getenv("DATABASE_URL")
+    if not db_url:
+        raise RuntimeError(
+            "DATABASE_URL environment variable is required. "
+            "Example: postgresql://user:password@localhost/ews_db "
+            "For SQLite (development only): sqlite:///./data.db"
+        )
+    DATABASE_URL = db_url
 
 # ---------------------------------------------------------------------------
 # Security / Auth
 # ---------------------------------------------------------------------------
 ENVIRONMENT: str = os.getenv("ENVIRONMENT", "development").lower()
 
+EWS_SERVICE_NAME: str = os.getenv("EWS_SERVICE_NAME", "ews-retention-platform")
+EWS_TOKEN_AUDIENCE: str = os.getenv("EWS_TOKEN_AUDIENCE", "ews-api")
+
 SECRET_KEY: str = os.getenv("SECRET_KEY", "")
 
 
 # Validate on startup — crash immediately if misconfigured rather than running insecurely
 def validate_security_config():
+    # Validate SECRET_KEY
     if not SECRET_KEY:
         raise RuntimeError(
             "SECRET_KEY environment variable is not set. "
@@ -69,6 +78,41 @@ def validate_security_config():
     if ENVIRONMENT != "development" and SECRET_KEY in ("dev", "test", "changeme", "secret"):
         raise RuntimeError("Insecure SECRET_KEY detected in non-development environment")
 
+    # Validate against placeholder patterns in non-test environments
+    if not TESTING and ENVIRONMENT != "development":
+        _validate_no_placeholders("SECRET_KEY", SECRET_KEY)
+        _validate_no_placeholders("CLAUDE_API_KEY", CLAUDE_API_KEY)
+        _validate_no_placeholders("INTEGRATION_API_KEY_HASH", INTEGRATION_API_KEY_HASH)
+
+
+def _validate_no_placeholders(name: str, value: str):
+    """Raise RuntimeError if value is empty or contains placeholder patterns."""
+    if not value:
+        raise RuntimeError(
+            f"{name} environment variable is not set. "
+            "Generate a new secure value and update your .env file."
+        )
+
+    lower_value = value.lower()
+    placeholder_patterns = [
+        "change-this", "example", "placeholder", "your-", "changeme",
+        "test", "dummy", "fake", "invalid", "none", "null", "0000000000000000"
+    ]
+
+    for pattern in placeholder_patterns:
+        if pattern in lower_value:
+            raise RuntimeError(
+                f"{name} contains placeholder value '{pattern}'. "
+                "Generate a new secure value and update your .env file."
+            )
+
+    # Detect live Anthropic API keys (sk-ant- prefix) in non-test environments
+    if name == "CLAUDE_API_KEY" and value.startswith("sk-ant-"):
+        raise RuntimeError(
+            f"{name} appears to contain a live Anthropic API key. "
+            "Generate a new key at https://console.anthropic.com/ and never commit it to version control."
+        )
+
 
 def validate_ml_config():
     """Validate ML configuration — crash on startup if weights don't sum to 1.0."""
@@ -78,6 +122,16 @@ def validate_ml_config():
             f"FEATURE_WEIGHTS values sum to {total:.4f} — must equal 1.0. "
             f"Current weights: {FEATURE_WEIGHTS}"
         )
+
+
+# ---------------------------------------------------------------------------
+# ML Model Versioning (ML-2)
+# ---------------------------------------------------------------------------
+# Version string stored with every prediction for traceability and rollback.
+# Update this when the scoring formula changes significantly.
+# Format: {model-type}-v{major}.{minor}
+RISK_MODEL_VERSION: str = os.getenv("RISK_MODEL_VERSION", "rule-based-v1.0")
+# When XGBoost is re-enabled, set to: "xgboost-v2.1"
 
 
 ALGORITHM: str = os.getenv("ALGORITHM", "HS256")

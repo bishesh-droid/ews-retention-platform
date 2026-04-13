@@ -9,7 +9,9 @@ import uuid
 
 from backend.database import User, Prediction, Student
 from backend.api import deps
+from backend.core.constants import Role
 from backend.database import AuditLog
+from backend.schemas.common import APIResponse
 from backend.services.audit_service import AuditService
 from backend.services.export_service import ExportService
 from backend.services.student_service import StudentService
@@ -102,9 +104,9 @@ class ReportGenerateRequest(BaseModel):
     options: Optional[Dict[str, Any]] = None
 
 
-@router.get("/templates")
+@router.get("/templates", response_model=APIResponse)
 def list_report_templates(
-    current_user: User = Depends(deps.require_role(["Retention Team", "Admin", "Faculty"])),
+    current_user: User = Depends(deps.require_role([Role.RETENTION_TEAM, Role.ADMIN, Role.FACULTY])),
 ):
     """
     List available downloadable report templates.
@@ -112,10 +114,10 @@ def list_report_templates(
     return success_response(REPORT_TEMPLATES, message="Report templates")
 
 
-@router.get("/generated")
+@router.get("/generated", response_model=APIResponse)
 def list_generated_reports(
     db: Session = Depends(deps.get_db),
-    current_user: User = Depends(deps.require_role(["Retention Team", "Admin", "Faculty"])),
+    current_user: User = Depends(deps.require_role([Role.RETENTION_TEAM, Role.ADMIN, Role.FACULTY])),
     limit: int = Query(50, ge=1, le=500),
 ):
     """
@@ -148,11 +150,11 @@ def list_generated_reports(
     return success_response(rows, message="Generated reports")
 
 
-@router.post("/generate")
+@router.post("/generate", response_model=APIResponse)
 def generate_report(
     req: ReportGenerateRequest,
     db: Session = Depends(deps.get_db),
-    current_user: User = Depends(deps.require_role(["Retention Team", "Admin", "Faculty"])),
+    current_user: User = Depends(deps.require_role([Role.RETENTION_TEAM, Role.ADMIN, Role.FACULTY])),
 ):
     """
     Trigger report generation and return generated metadata.
@@ -274,11 +276,11 @@ def generate_report(
     )
 
 
-@router.get("/download/{report_id}")
+@router.get("/download/{report_id}", response_model=None)  # Returns StreamingResponse
 def download_generated_report(
     report_id: int,
     db: Session = Depends(deps.get_db),
-    current_user: User = Depends(deps.require_role(["Retention Team", "Admin", "Faculty"])),
+    current_user: User = Depends(deps.require_role([Role.RETENTION_TEAM, Role.ADMIN, Role.FACULTY])),
 ):
     """
     Download a previously generated report file by audit log id.
@@ -316,11 +318,11 @@ def download_generated_report(
     )
 
 
-@router.get("/export/students")
+@router.get("/export/students", response_model=None)  # Returns StreamingResponse
 def export_students(
     format: str = Query("csv", enum=["csv", "excel", "pdf"]),
     db: Session = Depends(deps.get_db),
-    current_user: User = Depends(deps.require_role(["Retention Team", "Admin"]))
+    current_user: User = Depends(deps.require_role([Role.RETENTION_TEAM, Role.ADMIN]))
 ):
     """
     Export all students list in specified format.
@@ -358,11 +360,11 @@ def export_students(
         )
 
 
-@router.get("/export/risk-summary")
+@router.get("/export/risk-summary", response_model=None)  # Returns StreamingResponse
 def export_risk_summary(
     format: str = Query("csv", enum=["csv", "excel", "pdf"]),
     db: Session = Depends(deps.get_db),
-    current_user: User = Depends(deps.require_role(["Retention Team", "Admin"]))
+    current_user: User = Depends(deps.require_role([Role.RETENTION_TEAM, Role.ADMIN]))
 ):
     """
     Export high-level risk summary.

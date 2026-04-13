@@ -10,9 +10,10 @@ from typing import Optional
 import magic
 from fastapi import APIRouter, Depends, File, HTTPException, Request, UploadFile, status
 from fastapi import BackgroundTasks
-from sqlalchemy.orm import Session
+from sqlalchemy.ext.asyncio import AsyncSession
 
-from backend.api.deps import get_db, require_role
+from backend.api.deps import get_db_async, require_role
+from backend.core.constants import Role
 from backend.core.rate_limiting import limiter
 from backend.database.models.user import User
 from backend.services.task_tracker import create_task, get_task, update_task
@@ -41,8 +42,7 @@ async def trigger_ingestion(
     request: Request,
     background_tasks: BackgroundTasks,
     file: Optional[UploadFile] = File(None),
-    current_user: User = Depends(require_role(["Admin"])),
-    db: Session = Depends(get_db),
+    current_user: User = Depends(require_role([Role.ADMIN])),
 ):
     """
     Trigger data ingestion in the background.

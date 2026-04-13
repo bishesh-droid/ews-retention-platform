@@ -2,6 +2,22 @@
 Prediction Model
 ---------------
 Database model for ML predictions and risk scores.
+
+DB-5 SCALE STANDARD:
+All risk_score values in this table MUST be on a 0-100 scale (not 0-1).
+- 0 = no risk (student fully engaged)
+- 100 = maximum dropout risk
+- Values are stored as Float to support 2 decimal precision (e.g., 75.42)
+
+Write paths MUST normalize any 0-1 probability outputs by multiplying by 100:
+    risk_score = round(raw_probability * 100, 2)
+
+Query filters MUST use 0-100 thresholds:
+    risk_score >= 70.0  # high risk threshold
+    risk_score >= 40.0  # medium risk threshold
+
+Mixed-scale bugs (storing both 0-1 and 0-100) have been fixed.
+Always validate risk scores are within [0.0, 100.0] before storing.
 """
 
 from sqlalchemy import Column, Integer, String, Float, ForeignKey, DateTime
@@ -23,8 +39,8 @@ class Prediction(Base):
     # Foreign Key
     student_id = Column(String, ForeignKey("students.id"), index=True)
 
-    # Core predictions
-    risk_score = Column(Float, index=True)  # 0-1 probability of dropout
+    # Core predictions (DB-5: ALL scores MUST be 0-100 scale, not 0-1)
+    risk_score = Column(Float, index=True)  # 0-100 dropout risk scale
     engagement_score = Column(Float)
     retention_likelihood = Column(String)  # 'high', 'medium', 'low'
 

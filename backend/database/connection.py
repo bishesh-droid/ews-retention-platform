@@ -27,8 +27,11 @@ def _set_sqlite_pragmas(dbapi_connection, connection_record):
 # SYNCHRONOUS DATABASE (for background tasks, migrations, admin scripts)
 # ============================================================================
 
-# Create sync engine
-engine = create_engine(DATABASE_URL, connect_args={"check_same_thread": False})
+# Create sync engine with SQLite-specific args only when needed
+connect_args = {}
+if DATABASE_URL.startswith("sqlite"):
+    connect_args["check_same_thread"] = False
+engine = create_engine(DATABASE_URL, connect_args=connect_args)
 
 # Attach pragma configuration to every new connection
 event.listen(engine, "connect", _set_sqlite_pragmas)
@@ -54,10 +57,13 @@ elif DATABASE_URL.startswith("sqlite:///"):
 else:
     ASYNC_DATABASE_URL = DATABASE_URL
 
-# Create async engine
+# Create async engine with SQLite-specific args only when needed
+async_connect_args = {}
+if ASYNC_DATABASE_URL.startswith("sqlite"):
+    async_connect_args["check_same_thread"] = False
 async_engine = create_async_engine(
     ASYNC_DATABASE_URL,
-    connect_args={"check_same_thread": False},
+    connect_args=async_connect_args,
     # Pool settings for async
     pool_pre_ping=True,
     echo=False,  # Set True for debugging SQL
@@ -107,8 +113,9 @@ async def get_db_async() -> AsyncGenerator[AsyncSession, None]:
             return students
     """
     async with AsyncSessionLocal() as session:
-        # Configure SQLite pragmas for this session
-        await _set_async_sqlite_pragmas(session.bind)
+        # Configure SQLite pragmas for this session using the async_engine
+        async with async_engine.connect() as conn:
+            await _set_async_sqlite_pragmas(conn)
         try:
             yield session
         except Exception:

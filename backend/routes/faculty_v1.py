@@ -1,16 +1,19 @@
-from fastapi import APIRouter, Depends, Query
+from fastapi import APIRouter, Depends, Query, Request
 from sqlalchemy.orm import Session
 from typing import List, Dict, Any
 
 from backend.api import deps
+from backend.core.constants import Role
+from backend.core.rate_limiting import limiter
+from backend.schemas.common import APIResponse
 from backend.services.student_service import StudentService
 
 router = APIRouter()
 
 
-@router.get("/students")
+@router.get("/students", response_model=APIResponse)
 def get_faculty_students(
-    current_user: deps.User = Depends(deps.require_role(["Faculty"])),
+    current_user: deps.User = Depends(deps.require_role([Role.FACULTY])),
     db: Session = Depends(deps.get_db),
     limit: int = Query(200, ge=1, le=1000),
 ) -> Dict[str, Any]:
@@ -27,9 +30,9 @@ def get_faculty_students(
     }
 
 
-@router.get("/at-risk")
+@router.get("/at-risk", response_model=APIResponse)
 def get_faculty_at_risk_students(
-    current_user: deps.User = Depends(deps.require_role(["Faculty"])),
+    current_user: deps.User = Depends(deps.require_role([Role.FACULTY])),
     db: Session = Depends(deps.get_db),
     threshold: float = Query(60.0, ge=0, le=100, description="Risk score threshold for at-risk list"),
     limit: int = Query(200, ge=1, le=1000),
@@ -48,9 +51,11 @@ def get_faculty_at_risk_students(
     }
 
 
-@router.get("/alerts")
+@router.get("/alerts", response_model=APIResponse)
+@limiter.limit("60/minute")
 def get_engagement_alerts(
-    current_user: deps.User = Depends(deps.require_role(["Faculty"])),
+    request: Request,
+    current_user: deps.User = Depends(deps.require_role([Role.FACULTY])),
     db: Session = Depends(deps.get_db),
     limit: int = Query(100, ge=1, le=1000),
 ) -> Dict[str, Any]:

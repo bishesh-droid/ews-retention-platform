@@ -35,10 +35,10 @@ def client():
     # Initialize database synchronously before tests
     init_db()
 
-    # Use TestClient without lifespan to avoid async/sync greenlet issues
-    # The lifespan contains async operations that conflict with sync TestClient
+    # Use TestClient with lifespan enabled for proper app initialization
+    # TEST-3: Changed from lifespan="off" to lifespan="on" for proper DB init
     try:
-        with TestClient(app, lifespan="off") as test_client:
+        with TestClient(app, lifespan="on") as test_client:
             yield test_client
     finally:
         # Clean up dependency overrides after test

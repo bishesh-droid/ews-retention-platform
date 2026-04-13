@@ -170,6 +170,37 @@ class RiskScorer:
         - Includes a bounded zero-progress penalty.
         - Detects and handles legacy K-12 feature format for backward compatibility.
         """
+        # ML-3: Sanitize input features - handle NaN/null values
+        import math
+        import logging
+        logger = logging.getLogger(__name__)
+
+        required_keys = set(FEATURE_WEIGHTS.keys())
+        missing_keys = []
+
+        for key in list(features.keys()):
+            val = features[key]
+            # Handle None or NaN values
+            if val is None or (isinstance(val, float) and math.isnan(val)):
+                features[key] = 0.0
+                if key in required_keys:
+                    missing_keys.append(key)
+            else:
+                # Clamp to valid range [0.0, 100.0]
+                try:
+                    features[key] = max(0.0, min(100.0, float(val)))
+                except (TypeError, ValueError):
+                    features[key] = 0.0
+                    if key in required_keys:
+                        missing_keys.append(key)
+
+        # Log warning for missing required features
+        if missing_keys:
+            logger.warning(
+                f"ML-3: Missing or invalid required features for risk scoring: {missing_keys}. "
+                f"Substituting 0.0 for missing values."
+            )
+
         # Check for legacy K-12 features and use appropriate computation
         if RiskScorer._is_legacy_k12_features(features):
             weighted_engagement, observed_weight = RiskScorer._compute_weighted_engagement_legacy(features)
@@ -258,7 +289,20 @@ class RiskScorer:
             # Do not change risk score — but route to welfare team
             features["health_referral_needed"] = True
 
-        return round(max(0.0, min(100.0, risk_score)), 1)  # D6-2: Standardised to 1 decimal
+        final_score = round(max(0.0, min(100.0, risk_score)), 1)  # D6-2: Standardised to 1 decimal
+        
+        # ML-4: Log prediction to audit trail if student_id is available in features
+        student_id = features.get("student_id")
+        if student_id:
+            RiskScorer._log_prediction(
+                student_id=student_id,
+                model_version=features.get("model_version", "unknown"),
+                input_features=features,
+                output_score=final_score,
+                output_category=RiskScorer.get_risk_category(final_score),
+            )
+        
+        return final_score
 
     @staticmethod
     def get_risk_category(risk_score: float) -> str:
@@ -347,6 +391,48 @@ class RiskScorer:
         if not isfinite(float(risk_score)):
             return False
         return 0.0 <= float(risk_score) <= 100.0
+
+    @staticmethod
+    def _log_prediction(
+        student_id: str,
+        model_version: str,
+        input_features: Dict,
+        output_score: float,
+        output_category: str,
+        source: str = "api",
+    ) -> None:
+        """
+        ML-4: Log prediction to audit trail (PredictionLog table).
+        
+        This is a best-effort logging — failures are logged but don't
+        block the prediction response.
+        """
+        try:
+            from datetime import datetime, timezone
+            from backend.database.connection import SessionLocal
+            from backend.database.models.prediction_log import PredictionLog
+            
+            db = SessionLocal()
+            try:
+                log_entry = PredictionLog(
+                    student_id=student_id,
+                    model_version=model_version,
+                    input_features=dict(input_features),  # Copy to avoid mutations
+                    output_score=output_score,
+                    output_category=output_category,
+                    source=source,
+                    created_at=datetime.now(timezone.utc),
+                )
+                db.add(log_entry)
+                db.commit()
+            except Exception as e:
+                db.rollback()
+                logging.getLogger(__name__).warning(f"ML-4: Failed to log prediction: {e}")
+            finally:
+                db.close()
+        except Exception as e:
+            # Best-effort: log failure but don't block
+            logging.getLogger(__name__).warning(f"ML-4: Prediction logging failed: {e}")
 
     @staticmethod
     def compare_old_vs_new_formula(features: Dict) -> Dict[str, float]:

@@ -1294,9 +1294,10 @@ def _ensure_student(db: Session, student_id: str, org_id: str, name: str, progra
                 "id_hash": hashlib.sha256((student_id or "").encode()).hexdigest()[:10],
             }
         )
+    # B-3 Fix: Do NOT overwrite existing department assignments
     if not student.parent_department_name:
         student.parent_department_name = dept_name
-    student.parent_department_code = dept_code
+        student.parent_department_code = dept_code
 
 
 def _assert_session_thread(owner_thread_id: int):

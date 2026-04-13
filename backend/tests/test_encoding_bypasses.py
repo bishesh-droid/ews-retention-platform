@@ -57,18 +57,18 @@ class TestEncodingBypasses:
         These should be decoded and sanitized.
         """
         # Unicode escape for <script>
-        unicode_escaped = "\\u003cscript\\u003ealert(1)\\u003c/script\\u003e"
+        unicode_escaped = r"\u003cscript\u003ealert(1)\u003c/script\u003e"
         result = SecurityManager.llm_sanitize(unicode_escaped)
         assert "<script>" not in result.lower()
         assert "alert" not in result.lower()
 
         # Hex escape format (often used in JavaScript contexts)
-        hex_escaped = "\\x3cscript\\x3ealert(1)\\x3c/script\\x3e"
+        hex_escaped = r"\x3cscript\x3ealert(1)\x3c/script\x3e"
         result = SecurityManager.llm_sanitize(hex_escaped)
         assert "<script>" not in result.lower()
 
         # Mixed unicode and normal text
-        mixed = "Hello \\u003cb\\u003eWorld\\u003c/b\\u003e"
+        mixed = r"Hello \u003cb\u003eWorld\u003c/b\u003e"
         result = SecurityManager.llm_sanitize(mixed)
         assert "<b>" not in result.lower()
 
@@ -150,14 +150,14 @@ class TestEncodingBypasses:
         assert "\x00" not in result
 
         # Unicode escape null byte
-        unicode_null = "Hello\\u0000World"
+        unicode_null = r"Hello\u0000World"
         result = SecurityManager.llm_sanitize(unicode_null)
         assert "\\u0000" not in result
         assert "\x00" not in result
         assert "\u0000" not in result
 
         # Hex escape null byte
-        hex_null = "Hello\\x00World"
+        hex_null = r"Hello\x00World"
         result = SecurityManager.llm_sanitize(hex_null)
         assert "\\x00" not in result
         assert "\x00" not in result
@@ -180,7 +180,7 @@ class TestEncodingBypasses:
         assert "<script>" not in result.lower()
 
         # Unicode escape + null byte
-        combined2 = "\\u003cscript\\u0000>alert(1)"
+        combined2 = r"\u003cscript\u0000>alert(1)"
         result = SecurityManager.llm_sanitize(combined2)
         assert "\x00" not in result
         assert "<script>" not in result.lower()

@@ -1,13 +1,18 @@
-from fastapi import APIRouter, Depends, Query, HTTPException, Response
+from fastapi import APIRouter, Depends, Query, HTTPException, Response, Request
 from sqlalchemy.orm import Session
+from sqlalchemy.ext.asyncio import AsyncSession
+from sqlalchemy import select
 from typing import List, Optional
 from datetime import datetime, timezone
 import logging
 
 from backend.database import User, AuditLog, IngestionRun
 from backend.api import deps
-from backend.api.deps import require_role, get_current_user
+from backend.api.deps import require_role, get_current_user_async
+from backend.core.constants import Role
+from backend.core.rate_limiting import limiter
 from backend.schemas.auth import UserOut
+from backend.schemas.common import APIResponse
 from backend.database.models.student import Student
 from backend.config import INTERVENTION_THRESHOLDS
 from backend.database.models.goals_and_risks import RiskSnapshot
@@ -21,7 +26,7 @@ router = APIRouter()
 
 @router.get("/users", response_model=List[UserOut])
 def list_users(
-    current_user: deps.User = Depends(deps.require_role(["Admin"])),
+    current_user: deps.User = Depends(deps.require_role([Role.ADMIN])),
     db: Session = Depends(deps.get_db)
 ):
     """
@@ -30,9 +35,9 @@ def list_users(
     return db.query(User).all()
 
 
-@router.get("/audit-logs")
+@router.get("/audit-logs", response_model=APIResponse)
 def get_audit_logs(
-    current_user: deps.User = Depends(deps.require_role(["Admin"])),
+    current_user: deps.User = Depends(deps.require_role([Role.ADMIN])),
     db: Session = Depends(deps.get_db)
 ):
     """
@@ -41,9 +46,9 @@ def get_audit_logs(
     return db.query(AuditLog).order_by(AuditLog.timestamp.desc()).limit(100).all()
 
 
-@router.get("/ingestion-runs")
+@router.get("/ingestion-runs", response_model=APIResponse)
 def list_ingestion_runs(
-    current_user: deps.User = Depends(deps.require_role(["Admin"])),
+    current_user: deps.User = Depends(deps.require_role([Role.ADMIN])),
     db: Session = Depends(deps.get_db),
     limit: int = Query(20, ge=1, le=100),
     skip: int = Query(0, ge=0),
@@ -79,9 +84,9 @@ def list_ingestion_runs(
     ]
 
 
-@router.get("/course-registry")
+@router.get("/course-registry", response_model=APIResponse)
 def list_course_registry(
-    current_user: deps.User = Depends(deps.require_role(["Admin"])),
+    current_user: deps.User = Depends(deps.require_role([Role.ADMIN])),
     db: Session = Depends(deps.get_db),
 ):
     """
@@ -107,11 +112,11 @@ def list_course_registry(
     ]
 
 
-@router.put("/course-registry/{course_code}")
+@router.put("/course-registry/{course_code}", response_model=APIResponse)
 def update_course_registry(
     course_code: str,
     request: dict,
-    current_user: deps.User = Depends(deps.require_role(["Admin"])),
+    current_user: deps.User = Depends(deps.require_role([Role.ADMIN])),
     db: Session = Depends(deps.get_db),
 ):
     """
@@ -173,9 +178,9 @@ def update_course_registry(
     }
 
 
-@router.get("/intervention-effectiveness")
+@router.get("/intervention-effectiveness", response_model=APIResponse)
 def get_intervention_effectiveness(
-    current_user: deps.User = Depends(deps.require_role(["Admin"])),
+    current_user: deps.User = Depends(deps.require_role([Role.ADMIN])),
     db: Session = Depends(deps.get_db),
     semester: Optional[str] = None,
     program: Optional[str] = None,
@@ -301,10 +306,10 @@ def get_intervention_effectiveness(
     }
 
 
-@router.get("/ingestion-runs/{run_id}/summary")
+@router.get("/ingestion-runs/{run_id}/summary", response_model=APIResponse)
 def get_ingestion_run_summary(
     run_id: int,
-    current_user: deps.User = Depends(deps.require_role(["Admin"])),
+    current_user: deps.User = Depends(deps.require_role([Role.ADMIN])),
     db: Session = Depends(deps.get_db),
 ):
     """
@@ -392,9 +397,9 @@ def get_ingestion_run_summary(
     }
 
 
-@router.get("/config/thresholds")
+@router.get("/config/thresholds", response_model=APIResponse)
 async def get_thresholds(
-    current_user: deps.User = Depends(deps.require_role(["Admin"])),
+    current_user: deps.User = Depends(deps.require_role([Role.ADMIN])),
 ):
     """
     Get current risk threshold configuration.
@@ -410,11 +415,13 @@ async def get_thresholds(
     }
 
 
-@router.get("/evaluate-scorer")
+@router.get("/evaluate-scorer", response_model=APIResponse)
+@limiter.limit("5/minute")
 def evaluate_scorer(
+    request: Request,
     threshold: float = Query(60.0, ge=0, le=100),
     compare_thresholds: bool = Query(False),
-    current_user: deps.User = Depends(deps.require_role(["Admin"])),
+    current_user: deps.User = Depends(deps.require_role([Role.ADMIN])),
     db: Session = Depends(deps.get_db),
 ):
     """
@@ -488,15 +495,16 @@ def evaluate_scorer(
 
 
 @router.delete("/students/{org_id}/erase", status_code=204,
-               dependencies=[Depends(require_role(["admin"]))])
-async def erase_student(org_id: str, db: Session = Depends(deps.get_db),
-                        _user: User = Depends(get_current_user)):
+               dependencies=[Depends(require_role([Role.ADMIN]))])
+async def erase_student(org_id: str, db: AsyncSession = Depends(deps.get_db_async),
+                        _user: User = Depends(get_current_user_async)):
     """
     GDPR Art. 17 right to erasure. Hard deletes all data for this student.
     Irreversible. Requires admin role. Logged to audit trail.
     """
     logger = logging.getLogger(__name__)
-    student = db.query(Student).filter(Student.org_defined_id == org_id).first()
+    result = await db.execute(select(Student).where(Student.org_defined_id == org_id))
+    student = result.scalar_one_or_none()
     if not student:
         raise HTTPException(404, "Student not found")
 
@@ -512,25 +520,32 @@ async def erase_student(org_id: str, db: Session = Depends(deps.get_db),
 
     # Cascade handles: Enrollment, RiskSnapshot, GradedComponent, ExamRecord,
     # Prediction, InterventionLog (after FIX 1 above)
-    db.delete(student)
-    db.commit()
+    await db.delete(student)
+    await db.commit()
     return Response(status_code=204)
 
 
 @router.get("/students/{org_id}/data-export",
-            dependencies=[Depends(require_role(["admin"]))])
-async def export_student_data(org_id: str, db: Session = Depends(deps.get_db)):
+            dependencies=[Depends(require_role([Role.ADMIN]))])
+async def export_student_data(org_id: str, db: AsyncSession = Depends(deps.get_db_async)):
     """GDPR Art. 15 — returns all data held about a student as JSON."""
-    student = db.query(Student).filter(Student.org_defined_id == org_id).first()
+    result = await db.execute(select(Student).where(Student.org_defined_id == org_id))
+    student = result.scalar_one_or_none()
     if not student:
         raise HTTPException(404, "Student not found")
 
-    enrollments = db.query(Enrollment).filter(Enrollment.student_org_id == org_id).all()
-    snapshots = db.query(RiskSnapshot).filter(RiskSnapshot.student_id == student.id).all()
-    interventions = db.query(InterventionLog).filter(InterventionLog.student_org_id == org_id).all()
-    predictions = db.query(Prediction).filter(Prediction.student_id == student.id).all()
-    graded = db.query(GradedComponent).filter(GradedComponent.student_org_id == org_id).all()
-    exams = db.query(ExamRecord).filter(ExamRecord.student_org_id == org_id).all()
+    enrollments_result = await db.execute(select(Enrollment).where(Enrollment.student_org_id == org_id))
+    enrollments = enrollments_result.scalars().all()
+    snapshots_result = await db.execute(select(RiskSnapshot).where(RiskSnapshot.student_id == student.id))
+    snapshots = snapshots_result.scalars().all()
+    interventions_result = await db.execute(select(InterventionLog).where(InterventionLog.student_org_id == org_id))
+    interventions = interventions_result.scalars().all()
+    predictions_result = await db.execute(select(Prediction).where(Prediction.student_id == student.id))
+    predictions = predictions_result.scalars().all()
+    graded_result = await db.execute(select(GradedComponent).where(GradedComponent.student_org_id == org_id))
+    graded = graded_result.scalars().all()
+    exams_result = await db.execute(select(ExamRecord).where(ExamRecord.student_org_id == org_id))
+    exams = exams_result.scalars().all()
 
     def student_to_dict(s):
         return {

@@ -29,6 +29,38 @@ class ErrorResponse(BaseModel):
 
 
 # ============================================================================
+# API-4: Standard API Response Envelope
+# ============================================================================
+
+class APIResponse(BaseModel):
+    """
+    Standard API response envelope used across all endpoints.
+    
+    All successful responses follow this structure:
+    {
+        "success": true,
+        "message": "Human readable message",
+        "data": object | array | null,
+        "meta": {...}
+    }
+    """
+    success: bool = True
+    message: str
+    data: Optional[Any] = None
+    meta: Optional[Dict[str, Any]] = None
+
+
+class ListResponse(BaseModel):
+    """
+    Standard list response with pagination meta.
+    """
+    success: bool = True
+    message: str
+    data: List[Any]
+    meta: Optional[Dict[str, Any]] = None
+
+
+# ============================================================================
 # Strict Field Validators for FERPA Compliance
 # ============================================================================
 # These fields enforce strict validation to prevent data corruption and

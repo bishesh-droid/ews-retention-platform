@@ -21,13 +21,14 @@ from backend.database.models.intervention_log import InterventionLog
 from backend.database.models.prediction import Prediction
 from backend.database.models.student import Student
 from backend.database.models.event import EngineeredFeatures
-from sqlalchemy.dialects.sqlite import insert as sqlite_insert
+from sqlalchemy.dialects.postgresql import insert as pg_insert
 import shutil
 from pathlib import Path
 import backend.config as settings
 from backend.config import trimester_week_number
 from backend.database.connection import SessionLocal
 from backend.services.feature_engineering import FeatureEngineer
+from backend.services.infrastructure.token_cleanup import purge_expired_revoked_tokens
 from backend.services.calendar_scorer import get_current_week
 from backend.services.risk_scoring import RiskScorer
 
@@ -163,6 +164,10 @@ def generate_daily_predictions() -> None:
                         is_new_student=is_new,
                         week_number=wn,
                     )
+                    # ML-4: Add student_id and model_version for audit logging
+                    features["student_id"] = student.id
+                    features["model_version"] = settings.RISK_MODEL_VERSION
+                    
                     risk_score = RiskScorer.calculate_risk_score(
                         features,
                         graded_components=graded_map.get(student.id, []) or [],
@@ -185,10 +190,10 @@ def generate_daily_predictions() -> None:
                     db.add(
                         Prediction(  # type: ignore[arg-type]
                             student_id=student.id,
-                            risk_score=risk_score / 100.0,
+                            risk_score=risk_score,  # 0-100 scale (DB-5)
                             engagement_score=engagement_score,
                             retention_likelihood=RiskScorer.get_retention_likelihood(risk_score),
-                            model_version="rule-based-v1",
+                            model_version=settings.RISK_MODEL_VERSION,
                             prediction_timestamp=now_utc,
                         )
                     )
@@ -197,13 +202,13 @@ def generate_daily_predictions() -> None:
                     # Upsert RiskSnapshot to avoid duplicates
                     snapshot_data = {
                         "student_id": student.id,
-                        "risk_score": risk_score / 100.0,
+                        "risk_score": risk_score,  # 0-100 scale (DB-5)
                         "engagement_score": engagement_score,
                         "week_number": wn,
                         "semester_name": settings.CURRENT_SEMESTER_NAME,
                         "timestamp": now_utc,
                     }
-                    stmt = sqlite_insert(RiskSnapshot).values(**snapshot_data)
+                    stmt = pg_insert(RiskSnapshot).values(**snapshot_data)
                     stmt = stmt.on_conflict_do_update(
                         index_elements=['student_id', 'week_number', 'semester_name'],
                         set_={
@@ -299,6 +304,19 @@ def purge_old_records(db_session_factory) -> None:
         )
 
 
+def cleanup_revoked_tokens() -> None:
+    """
+    SEC-4: Purge expired revoked tokens from the blocklist.
+    Runs nightly to prevent the revoked_tokens table from growing indefinitely.
+    """
+    with db_session_scope() as db:
+        deleted_count = purge_expired_revoked_tokens(db)
+        logger.info(
+            "[SCHEDULER] Token cleanup complete",
+            extra={"revoked_tokens_deleted": deleted_count},
+        )
+
+
 class SchedulerService:
     """Lifespan-friendly async scheduler."""
 
@@ -307,6 +325,7 @@ class SchedulerService:
         self._weekly_task: Optional[asyncio.Task] = None
         self._monthly_purge_task: Optional[asyncio.Task] = None
         self._backup_task: Optional[asyncio.Task] = None
+        self._token_cleanup_task: Optional[asyncio.Task] = None
         self._started = False
         self._last_daily_run_at: Optional[datetime] = None
         self._last_daily_success_at: Optional[datetime] = None
@@ -320,6 +339,9 @@ class SchedulerService:
         self._last_backup_run_at: Optional[datetime] = None
         self._last_backup_success_at: Optional[datetime] = None
         self._last_backup_error: Optional[str] = None
+        self._last_token_cleanup_run_at: Optional[datetime] = None
+        self._last_token_cleanup_success_at: Optional[datetime] = None
+        self._last_token_cleanup_error: Optional[str] = None
 
     async def _run_daily_job_once(self, reason: str) -> None:
         # Skip if previous job still running (CROSS-4)
@@ -398,6 +420,25 @@ class SchedulerService:
             await asyncio.sleep(_seconds_until(hour=3, minute=0))
             await self._run_backup_once(reason="scheduled-03:00-utc")
 
+    async def _run_token_cleanup_once(self, reason: str) -> None:
+        """Run revoked token cleanup job."""
+        self._last_token_cleanup_run_at = datetime.now(timezone.utc)
+        logger.info("[SCHEDULER] Triggering token cleanup job (%s).", reason)
+        try:
+            await asyncio.to_thread(cleanup_revoked_tokens)
+            self._last_token_cleanup_success_at = datetime.now(timezone.utc)
+            self._last_token_cleanup_error = None
+            logger.info("[SCHEDULER] Token cleanup job finished successfully.")
+        except Exception as exc:
+            self._last_token_cleanup_error = str(exc)
+            logger.exception("[SCHEDULER] Token cleanup job failed (%s).", reason)
+
+    async def _run_token_cleanup_loop(self) -> None:
+        """Run daily at 04:00 UTC (after backup)."""
+        while True:
+            await asyncio.sleep(_seconds_until(hour=4, minute=0))
+            await self._run_token_cleanup_once(reason="scheduled-04:00-utc")
+
     async def start(self, run_daily_on_startup: bool = True) -> None:
         if self._started:
             logger.warning("[SCHEDULER] Start requested, but scheduler is already running.")
@@ -413,10 +454,14 @@ class SchedulerService:
         self._backup_task = asyncio.create_task(
             self._run_backup_loop(), name="scheduler-backup"
         )
+        self._token_cleanup_task = asyncio.create_task(
+            self._run_token_cleanup_loop(), name="scheduler-token-cleanup"
+        )
         self._started = True
         logger.info(
             "[SCHEDULER] Started. Daily job: 03:00 UTC. Weekly job: Sunday 04:00 UTC. "
-            "Monthly purge: 1st at 02:00 UTC. Daily backup: 03:00 UTC."
+            "Monthly purge: 1st at 02:00 UTC. Daily backup: 03:00 UTC. "
+            "Token cleanup: 04:00 UTC."
         )
 
         # Ensure predictions are generated in environments where the app may restart
@@ -432,7 +477,7 @@ class SchedulerService:
             return
 
         tasks = [
-            task for task in (self._daily_task, self._weekly_task, self._monthly_purge_task, self._backup_task)
+            task for task in (self._daily_task, self._weekly_task, self._monthly_purge_task, self._backup_task, self._token_cleanup_task)
             if task is not None
         ]
         for task in tasks:
@@ -444,6 +489,7 @@ class SchedulerService:
         self._daily_task = None
         self._weekly_task = None
         self._backup_task = None
+        self._token_cleanup_task = None
         self._started = False
         logger.info("[SCHEDULER] Stopped.")
 
@@ -470,6 +516,11 @@ class SchedulerService:
                 "last_run_at": self._last_backup_run_at.isoformat() if self._last_backup_run_at else None,
                 "last_success_at": self._last_backup_success_at.isoformat() if self._last_backup_success_at else None,
                 "last_error": self._last_backup_error,
+            },
+            "token_cleanup": {
+                "last_run_at": self._last_token_cleanup_run_at.isoformat() if self._last_token_cleanup_run_at else None,
+                "last_success_at": self._last_token_cleanup_success_at.isoformat() if self._last_token_cleanup_success_at else None,
+                "last_error": self._last_token_cleanup_error,
             },
         }
 

@@ -14,7 +14,7 @@ from urllib.parse import urlparse
 
 from contextlib import asynccontextmanager
 
-from fastapi import FastAPI, Request, status
+from fastapi import FastAPI, Request, Response, status
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.responses import JSONResponse
 from sqlalchemy import text
@@ -276,19 +276,19 @@ app.add_exception_handler(Exception, unhandled_exception_handler)
 
 @app.exception_handler(AppError)
 async def app_error_handler(request: Request, exc: AppError):
-    from backend.core.errors import error_response as std_error_response
+    from backend.core.errors import make_error
     request_id = getattr(request.state, "request_id", None)
     sys_logger.warning(
         f"AppError [{exc.status_code}] {request.method} {request.url.path}: {exc.message}"
     )
     return JSONResponse(
         status_code=exc.status_code,
-        content=std_error_response(
-            exc.status_code,
-            exc.message,
-            str(exc.details) if exc.details else None,
-            request_id,
-        ),  # type: ignore[arg-type]
+        content=make_error(
+            code=f"APP_ERROR_{exc.status_code}",
+            message=exc.message,
+            details={"info": str(exc.details)} if exc.details else None,
+            request_id=request_id,
+        ),
     )
 
 
@@ -313,7 +313,7 @@ def read_root():
 
 
 @app.get("/health", tags=["System"])
-def health_check():
+def health_check(response: Response = None):
     """Health probe with dependency checks for production readiness."""
     db_ok = check_db_connection()
     redis_ok = check_redis_connection()
@@ -331,8 +331,9 @@ def health_check():
         },
         "ml": ml_stats,
     }
-    http_status = status.HTTP_200_OK if healthy else status.HTTP_503_SERVICE_UNAVAILABLE
-    return JSONResponse(status_code=http_status, content=success_response(payload, message="OK"))
+    if response is not None and not healthy:
+        response.status_code = status.HTTP_503_SERVICE_UNAVAILABLE
+    return success_response(payload, message="OK")
 
 
 # ---------------------------------------------------------------------------

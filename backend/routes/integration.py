@@ -11,6 +11,7 @@ Authentication: X-API-Key-Hash + X-Timestamp headers with replay protection.
 import time
 
 from fastapi import APIRouter, Depends, HTTPException, Header, Query, Request
+from pydantic import BaseModel, field_validator
 from sqlalchemy.orm import Session
 from typing import Optional
 from datetime import datetime
@@ -20,11 +21,37 @@ from backend.services.student_service import StudentService
 from backend.database import Student
 from backend.config import INTEGRATION_API_KEY_HASH
 from backend.core.signing import constant_time_compare
+from backend.core.rate_limiting import limiter
 from backend.utils.api import success_response
 
-router = APIRouter()
-
 API_VERSION = "1.0"
+
+
+class StudentRiskProfileResponse(BaseModel):
+    """Integration API response schema for student risk profile.
+    
+    DB-5: risk_score is ALWAYS on a 0-100 scale (not 0-1).
+    """
+    student_id: str
+    student_name: str
+    risk_score: float
+    risk_level: str
+    academic_signals: dict
+    engagement_signals: dict
+    consistency_signals: dict
+    trend_summary: str
+    dominant_risk_factor: str
+    risk_breakdown: dict
+    exported_at: str
+    api_version: str
+
+    @field_validator('risk_score')
+    @classmethod
+    def validate_risk_score(cls, v: float) -> float:
+        """Validate risk_score is within 0-100 scale."""
+        if not (0.0 <= v <= 100.0):
+            raise ValueError(f'risk_score must be between 0 and 100, got {v}')
+        return v
 
 
 # ─── Authentication ─────────────────────────────────────────────────────────
@@ -120,13 +147,16 @@ def _build_risk_profile(db: Session, student: Student) -> dict:
         "exported_at": datetime.now().isoformat(),
         "api_version": API_VERSION,
     }
-    return data
+    # Return validated Pydantic model (DB-5: validates risk_score is 0-100)
+    return StudentRiskProfileResponse(**data)
 
 
 # ─── Endpoints ───────────────────────────────────────────────────────────────
 
-@router.get("/student-risk-profile/{student_id}")
+@router.get("/student-risk-profile/{student_id}", response_model=StudentRiskProfileResponse)
+@limiter.limit("60/minute")
 def get_student_risk_profile(
+    request: Request,
     student_id: str,
     db: Session = Depends(get_db),
     _key: str = Depends(verify_integration_key),
@@ -145,15 +175,14 @@ def get_student_risk_profile(
     if not profile:
         raise HTTPException(status_code=500, detail="Failed to build risk profile")
 
-    return success_response(
-        profile,
-        message="Student risk profile",
-        meta={"model_version": API_VERSION},
-    )
+    # Return validated Pydantic model (DB-5: response_model validates risk_score is 0-100)
+    return profile
 
 
 @router.get("/cohort-risk-profiles")
+@limiter.limit("10/minute")
 def get_cohort_risk_profiles(
+    request: Request,
     skip: int = Query(0, ge=0, description="Records to skip"),
     limit: int = Query(50, ge=1, le=500, description="Max records"),
     risk_min: Optional[float] = Query(None, ge=0, le=100),

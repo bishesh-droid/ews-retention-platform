@@ -7,7 +7,7 @@ from __future__ import annotations
 from typing import Any, Dict, List, Optional
 
 from sqlalchemy import Float, Integer, case, cast, func
-from sqlalchemy.dialects.sqlite import insert as sqlite_insert
+from sqlalchemy.dialects.postgresql import insert as pg_insert
 from sqlalchemy.orm import Session
 
 import backend.config as settings
@@ -671,7 +671,7 @@ class StudentApplicationService:
         }
 
         # Upsert: insert or ignore on conflict
-        stmt = sqlite_insert(InterventionLog).values(**log_data)
+        stmt = pg_insert(InterventionLog).values(**log_data)
         stmt = stmt.on_conflict_do_nothing(
             index_elements=['student_org_id', 'week_number', 'semester_name', 'intervention_type']
         )
