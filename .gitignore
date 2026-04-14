@@ -57,6 +57,9 @@ backend/sql_app.db
 # ML model artifacts (large binary files)
 backend/ml/models/saved/*.joblib
 backend/ml/evaluation/
+models/saved_models/*.pkl
+models/saved_models/*.joblib
+*.pkl
 
 # OS
 .DS_Store
@@ -72,6 +75,24 @@ Thumbs.db
 # Temporary files
 .tmp/
 *.tmp
+
+# Student data files (sensitive / large — never commit real student data)
+data/raw/
+data/processed/
+data/archive/
+data/quarantine/
+data/reports/generated/
+backend/data/*.xlsx
+backend/data/*.csv
+
+# Logs directory
+logs/
+
+# Type-checker caches
+.mypy_cache/
+
+# Claude Code local settings (machine-specific)
+.claude/
 
 # Misc
 cursor.AppImage
