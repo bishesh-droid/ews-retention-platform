@@ -31,11 +31,34 @@ def initialize_test_db():
     yield
 
 
+@pytest.fixture(autouse=True, scope="function")
+def cleanup_db_after_each_test():
+    """
+    Clean up database after each test function to ensure test isolation.
+    This runs automatically for all tests.
+    """
+    yield
+    from backend.database.connection import SessionLocal, Base
+
+    db = SessionLocal()
+    try:
+        # Delete data in reverse dependency order to avoid FK violations
+        for table in reversed(Base.metadata.sorted_tables):
+            if table.name != 'sqlite_sequence':
+                db.execute(table.delete())
+        db.commit()
+    except Exception:
+        db.rollback()
+    finally:
+        db.close()
+
+
 @pytest.fixture
 def client():
     """
     Returns a TestClient with proper app state initialization.
     This ensures rate limiter and other state is set for integration tests.
+    Database cleanup is handled by the autouse cleanup_db_after_each_test fixture.
     """
     from backend.main import app
     from backend.core.rate_limiting import limiter
