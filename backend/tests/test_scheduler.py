@@ -47,7 +47,6 @@ def seeded_test_db(db_session: Session):
     course = Course(
         id="TEST101",
         name="Test Course",
-        code="TEST101",
     )
     existing_course = db_session.query(Course).filter(Course.id == "TEST101").first()
     if not existing_course:

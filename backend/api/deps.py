@@ -274,6 +274,7 @@ class ResourceOwnershipChecker:
         self,
         request: Request,
         current_user: User = Depends(get_current_user),
+        db: Session = Depends(get_db),
     ) -> User:
         # Extract student_id from path parameters
         student_id = request.path_params.get(self.student_id_param, "")
@@ -289,16 +290,23 @@ class ResourceOwnershipChecker:
         if current_user.is_superuser:
             return current_user
 
-        # Ownership is determined by matching the path student_id against
-        # the authenticated user's email or username.
-        if student_id == current_user.email or student_id == current_user.username:
-            return current_user
+        # Check if student exists first (404 before 403)
+        student = db.query(Student).filter(Student.id == student_id).first()
+        if student is None:
+            raise HTTPException(
+                status_code=status.HTTP_404_NOT_FOUND,
+                detail="Student not found",
+            )
 
-        # Deny access for non-staff users
-        raise HTTPException(
-            status_code=status.HTTP_403_FORBIDDEN,
-            detail="Access denied. You do not have permission to access this resource.",
-        )
+        # Ownership is determined by matching the authenticated user's email
+        # against the student's email record.
+        if current_user.email != student.email:
+            raise HTTPException(
+                status_code=status.HTTP_403_FORBIDDEN,
+                detail="Access denied. You do not have permission to access this resource.",
+            )
+
+        return current_user
 
 
 # Convenience factory function matching the expected pattern
