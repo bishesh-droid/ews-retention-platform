@@ -195,22 +195,26 @@ async def lifespan(app: FastAPI):
     # Initialize rate limiter with selected backend.
     try:
         limiter._storage_uri = limiter_storage_uri  # type: ignore[attr-defined]
-        # Parse string limits into Limit objects using slowapi's internal parsing
-        # Matching slowapi's Limiter.__init__ approach:
-        # LimitGroup(limit, self._key_func, None, False, None, None, None, False)
+        # Build LimitGroup using keyword args so the call is compatible with both
+        # older slowapi (no 'cost' param) and newer slowapi (adds 'cost' between
+        # 'exempt_when' and 'override_defaults').  Positional args silently mis-map
+        # when the signature changes, so keywords are safer here.
+        import inspect
         from slowapi.wrappers import LimitGroup
-        limiter._default_limits = [  # type: ignore[attr-defined]
-            LimitGroup(
-                RATE_LIMIT_DEFAULT,
-                limiter._key_func,  # type: ignore[attr-defined]
-                None,   # scope
-                False,  # per_method
-                None,   # methods
-                None,   # error_message
-                None,   # exempt_when
-                False,  # override_defaults
-            )
-        ]
+        _lg_params = inspect.signature(LimitGroup.__init__).parameters
+        _lg_kwargs: dict = dict(
+            limit_provider=RATE_LIMIT_DEFAULT,
+            key_function=limiter._key_func,  # type: ignore[attr-defined]
+            scope=None,
+            per_method=False,
+            methods=None,
+            error_message=None,
+            exempt_when=None,
+            override_defaults=False,
+        )
+        if "cost" in _lg_params:
+            _lg_kwargs["cost"] = 1
+        limiter._default_limits = [LimitGroup(**_lg_kwargs)]  # type: ignore[attr-defined]
         # Set custom exception handler on the limiter to override slowapi's internal handler
         limiter._exception_handler = rate_limit_exceeded_handler  # type: ignore[attr-defined]
         app.state.limiter = limiter
