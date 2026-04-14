@@ -21,7 +21,7 @@ from backend.database.models.intervention_log import InterventionLog
 from backend.database.models.prediction import Prediction
 from backend.database.models.student import Student
 from backend.database.models.event import EngineeredFeatures
-from sqlalchemy.dialects.postgresql import insert as pg_insert
+from sqlalchemy import text
 import shutil
 from pathlib import Path
 import backend.config as settings
@@ -79,7 +79,7 @@ def generate_daily_predictions() -> None:
     try:
         with db_session_scope() as db:
             # Check DB is accessible before proceeding (handles in-memory SQLite issues)
-            db.execute("SELECT 1")
+            db.execute(text("SELECT 1"))
     except Exception as e:
         logger.warning(f"[SCHEDULER] Database not ready, skipping daily prediction job: {e}")
         return
@@ -207,25 +207,26 @@ def generate_daily_predictions() -> None:
                     )
                     created_predictions += 1
 
-                    # Upsert RiskSnapshot to avoid duplicates
-                    snapshot_data = {
-                        "student_id": student.id,
-                        "risk_score": risk_score,  # 0-100 scale (DB-5)
-                        "engagement_score": engagement_score,
-                        "week_number": wn,
-                        "semester_name": settings.CURRENT_SEMESTER_NAME,
-                        "timestamp": now_utc,
-                    }
-                    stmt = pg_insert(RiskSnapshot).values(**snapshot_data)
-                    stmt = stmt.on_conflict_do_update(
-                        index_elements=['student_id', 'week_number', 'semester_name'],
-                        set_={
-                            'risk_score': snapshot_data['risk_score'],
-                            'engagement_score': snapshot_data['engagement_score'],
-                            'timestamp': snapshot_data['timestamp'],
-                        }
-                    )
-                    db.execute(stmt)
+                    # Upsert RiskSnapshot to avoid duplicates (cross-dialect: works with
+                    # both SQLite and PostgreSQL without dialect-specific INSERT syntax)
+                    existing_snapshot = db.query(RiskSnapshot).filter(
+                        RiskSnapshot.student_id == student.id,
+                        RiskSnapshot.week_number == wn,
+                        RiskSnapshot.semester_name == settings.CURRENT_SEMESTER_NAME,
+                    ).first()
+                    if existing_snapshot:
+                        existing_snapshot.risk_score = risk_score
+                        existing_snapshot.engagement_score = engagement_score
+                        existing_snapshot.timestamp = now_utc
+                    else:
+                        db.add(RiskSnapshot(
+                            student_id=student.id,
+                            risk_score=risk_score,
+                            engagement_score=engagement_score,
+                            week_number=wn,
+                            semester_name=settings.CURRENT_SEMESTER_NAME,
+                            timestamp=now_utc,
+                        ))
                     created_snapshots += 1
 
                     # D5-2: Write features to EngineeredFeatures store for fast list queries

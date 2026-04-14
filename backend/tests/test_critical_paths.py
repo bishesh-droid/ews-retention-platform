@@ -403,15 +403,16 @@ class TestDecisionEngineEdgeCases:
     """Additional edge cases for decision engine."""
 
     def test_invalid_risk_score_handling(self):
-        """Decision engine should handle NaN/Inf risk scores gracefully."""
+        """Decision engine should handle NaN gracefully and reject Inf."""
         import numpy as np
 
-        # These should not raise exceptions
+        # NaN should not raise — returns a valid recommendation with neutral score
         result = get_intervention_recommendation(np.nan, features={})
         assert "type" in result
 
-        result = get_intervention_recommendation(np.inf, features={})
-        assert "type" in result
+        # Inf is an invalid score and must raise AssertionError
+        with pytest.raises(AssertionError):
+            get_intervention_recommendation(np.inf, features={})
 
     def test_negative_risk_score_clamped(self):
         """Risk scores below 0 should not be possible (assertion), but test behavior."""

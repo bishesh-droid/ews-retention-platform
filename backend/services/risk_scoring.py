@@ -181,6 +181,11 @@ class RiskScorer:
 
         for key in list(features.keys()):
             val = features[key]
+            # Skip non-numeric metadata values (dicts, lists) — these are structural
+            # fields like ghost_info, academic_flags, overdue_components and must not
+            # be clamped to a float range.
+            if isinstance(val, (dict, list)):
+                continue
             # Handle None or NaN values
             if val is None or (isinstance(val, float) and math.isnan(val)):
                 features[key] = 0.0

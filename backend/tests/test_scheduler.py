@@ -15,6 +15,8 @@ from backend.database.models.student import Student
 from backend.database.models.prediction import Prediction
 from backend.database.models.enrollment import Enrollment
 from backend.database.models.course import Course
+from backend.database.models.goals_and_risks import RiskSnapshot
+from backend.database.models.event import EngineeredFeatures
 from backend.services.infrastructure.scheduler import generate_daily_predictions
 
 
@@ -103,15 +105,25 @@ def seeded_test_db(db_session: Session):
     
     yield db_session
     
-    # Cleanup
+    # Cleanup — delete child rows first to avoid FK constraint failures.
+    # generate_daily_predictions() creates Prediction, RiskSnapshot, and
+    # EngineeredFeatures rows that reference these students, so they must be
+    # removed before the Student rows can be deleted.
+    test_ids = ["student1@test.edu", "student2@test.edu", "student3@test.edu"]
     db_session.query(Prediction).filter(
-        Prediction.student_id.in_(["student1@test.edu", "student2@test.edu", "student3@test.edu"])
+        Prediction.student_id.in_(test_ids)
+    ).delete(synchronize_session=False)
+    db_session.query(RiskSnapshot).filter(
+        RiskSnapshot.student_id.in_(test_ids)
+    ).delete(synchronize_session=False)
+    db_session.query(EngineeredFeatures).filter(
+        EngineeredFeatures.student_id.in_(test_ids)
     ).delete(synchronize_session=False)
     db_session.query(Enrollment).filter(
-        Enrollment.student_id.in_(["student1@test.edu", "student2@test.edu", "student3@test.edu"])
+        Enrollment.student_id.in_(test_ids)
     ).delete(synchronize_session=False)
     db_session.query(Student).filter(
-        Student.id.in_(["student1@test.edu", "student2@test.edu", "student3@test.edu"])
+        Student.id.in_(test_ids)
     ).delete(synchronize_session=False)
     db_session.commit()
 

@@ -203,11 +203,11 @@ async def lifespan(app: FastAPI):
             LimitGroup(
                 RATE_LIMIT_DEFAULT,
                 limiter._key_func,  # type: ignore[attr-defined]
-                None,  # scope
+                None,   # scope
                 False,  # per_method
-                None,  # methods
-                None,  # error_message
-                None,  # exempt_when
+                None,   # methods
+                None,   # error_message
+                None,   # exempt_when
                 False,  # override_defaults
             )
         ]

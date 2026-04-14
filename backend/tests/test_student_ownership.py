@@ -8,7 +8,7 @@ username differs from their institutional email.
 
 import pytest
 from fastapi import HTTPException
-from unittest.mock import MagicMock, patch
+from unittest.mock import MagicMock
 
 from backend.api.deps import ResourceOwnershipChecker
 from backend.core.constants import Role
@@ -29,7 +29,7 @@ class TestStudentOwnershipEmailMismatch:
         """
         Test that ownership check PASSES when student email matches user email,
         even if username is different.
-        
+
         Scenario: User registered with nickname as username but institutional
         email as email address.
         """
@@ -48,24 +48,23 @@ class TestStudentOwnershipEmailMismatch:
 
         # Mock the database query to return the student
         mock_db = MagicMock()
-        mock_db.execute.return_value.scalars.return_value.first.return_value = student
+        mock_db.query.return_value.filter.return_value.first.return_value = student
 
-        with patch('backend.api.deps.get_db', return_value=MagicMock(__enter__=MagicMock(return_value=mock_db), __exit__=MagicMock())):
-            checker = ResourceOwnershipChecker()
-            
-            # Create mock request with student_id in path params
-            mock_request = MagicMock()
-            mock_request.path_params = {"student_id": "student@bits.edu"}
+        checker = ResourceOwnershipChecker()
 
-            # Should NOT raise an exception - ownership is verified by email match
-            result = checker(mock_request, user)
-            assert result == user
+        # Create mock request with student_id in path params
+        mock_request = MagicMock()
+        mock_request.path_params = {"student_id": "student@bits.edu"}
+
+        # Should NOT raise an exception - ownership is verified by email match
+        result = checker(mock_request, user, mock_db)
+        assert result == user
 
     def test_ownership_check_fails_when_email_mismatch(self):
         """
         Test that ownership check FAILS when student email does not match
         user email and user is not staff.
-        
+
         Scenario: Different user tries to access another student's data.
         """
         # Create a user trying to access another student's data
@@ -83,21 +82,20 @@ class TestStudentOwnershipEmailMismatch:
 
         # Mock the database query to return the student
         mock_db = MagicMock()
-        mock_db.execute.return_value.scalars.return_value.first.return_value = student
+        mock_db.query.return_value.filter.return_value.first.return_value = student
 
-        with patch('backend.api.deps.get_db', return_value=MagicMock(__enter__=MagicMock(return_value=mock_db), __exit__=MagicMock())):
-            checker = ResourceOwnershipChecker()
-            
-            # Create mock request with student_id in path params
-            mock_request = MagicMock()
-            mock_request.path_params = {"student_id": "student@bits.edu"}
+        checker = ResourceOwnershipChecker()
 
-            # Should raise 403 Forbidden
-            with pytest.raises(HTTPException) as exc_info:
-                checker(mock_request, user)
-            
-            assert exc_info.value.status_code == 403
-            assert "Access denied" in exc_info.value.detail
+        # Create mock request with student_id in path params
+        mock_request = MagicMock()
+        mock_request.path_params = {"student_id": "student@bits.edu"}
+
+        # Should raise 403 Forbidden
+        with pytest.raises(HTTPException) as exc_info:
+            checker(mock_request, user, mock_db)
+
+        assert exc_info.value.status_code == 403
+        assert "Access denied" in exc_info.value.detail
 
     def test_ownership_check_fails_when_student_not_found(self):
         """
@@ -112,20 +110,19 @@ class TestStudentOwnershipEmailMismatch:
 
         # Mock the database query to return None (student not found)
         mock_db = MagicMock()
-        mock_db.execute.return_value.scalars.return_value.first.return_value = None
+        mock_db.query.return_value.filter.return_value.first.return_value = None
 
-        with patch('backend.api.deps.get_db', return_value=MagicMock(__enter__=MagicMock(return_value=mock_db), __exit__=MagicMock())):
-            checker = ResourceOwnershipChecker()
-            
-            mock_request = MagicMock()
-            mock_request.path_params = {"student_id": "nonexistent@bits.edu"}
+        checker = ResourceOwnershipChecker()
 
-            # Should raise 404 Not Found
-            with pytest.raises(HTTPException) as exc_info:
-                checker(mock_request, user)
-            
-            assert exc_info.value.status_code == 404
-            assert "Student not found" in exc_info.value.detail
+        mock_request = MagicMock()
+        mock_request.path_params = {"student_id": "nonexistent@bits.edu"}
+
+        # Should raise 404 Not Found
+        with pytest.raises(HTTPException) as exc_info:
+            checker(mock_request, user, mock_db)
+
+        assert exc_info.value.status_code == 404
+        assert "Student not found" in exc_info.value.detail
 
     def test_staff_can_access_any_student(self):
         """

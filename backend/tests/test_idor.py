@@ -13,9 +13,11 @@ These tests verify the require_resource_ownership dependency works correctly.
 import pytest
 from fastapi import HTTPException
 from fastapi.testclient import TestClient
+from unittest.mock import MagicMock
 
 from backend.api.deps import require_resource_ownership, ResourceOwnershipChecker
 from backend.database.models.user import User
+from backend.database.models.student import Student
 
 
 # -----------------------------------------------------------------------------
@@ -87,8 +89,13 @@ class TestResourceOwnershipChecker:
         checker = ResourceOwnershipChecker()
         request = mock_request({"student_id": "student1@example.com"})
 
+        mock_student = MagicMock(spec=Student)
+        mock_student.email = "student1@example.com"
+        mock_db = MagicMock()
+        mock_db.query.return_value.filter.return_value.first.return_value = mock_student
+
         # Should not raise any exception
-        result = checker(request=request, current_user=mock_student_user)
+        result = checker(request=request, current_user=mock_student_user, db=mock_db)
         assert result == mock_student_user
 
     def test_student_accessing_other_student_record_fails(self, mock_student_user, mock_request):
@@ -100,8 +107,13 @@ class TestResourceOwnershipChecker:
         checker = ResourceOwnershipChecker()
         request = mock_request({"student_id": "student2@example.com"})  # Different student
 
+        mock_student = MagicMock(spec=Student)
+        mock_student.email = "student2@example.com"
+        mock_db = MagicMock()
+        mock_db.query.return_value.filter.return_value.first.return_value = mock_student
+
         with pytest.raises(HTTPException) as exc_info:
-            checker(request=request, current_user=mock_student_user)
+            checker(request=request, current_user=mock_student_user, db=mock_db)
 
         assert exc_info.value.status_code == 403
         assert "Access denied" in exc_info.value.detail
@@ -155,14 +167,24 @@ class TestResourceOwnershipChecker:
         checker = ResourceOwnershipChecker()
 
         # Own record - should pass
+        mock_student_own = MagicMock(spec=Student)
+        mock_student_own.email = "test@example.com"
+        mock_db_own = MagicMock()
+        mock_db_own.query.return_value.filter.return_value.first.return_value = mock_student_own
+
         request_own = mock_request({"student_id": "test@example.com"})
-        result = checker(request=request_own, current_user=user)
+        result = checker(request=request_own, current_user=user, db=mock_db_own)
         assert result == user
 
         # Other record - should fail
+        mock_student_other = MagicMock(spec=Student)
+        mock_student_other.email = "other@example.com"
+        mock_db_other = MagicMock()
+        mock_db_other.query.return_value.filter.return_value.first.return_value = mock_student_other
+
         request_other = mock_request({"student_id": "other@example.com"})
         with pytest.raises(HTTPException) as exc_info:
-            checker(request=request_other, current_user=user)
+            checker(request=request_other, current_user=user, db=mock_db_other)
         assert exc_info.value.status_code == 403
 
     def test_retention_team_access_passes(self, mock_request):
