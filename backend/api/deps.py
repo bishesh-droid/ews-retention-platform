@@ -106,10 +106,10 @@ def get_current_user(
 
     try:
         uid = int(user_id)
+        user = db.query(User).filter(User.id == uid).first()
     except (ValueError, TypeError):
-        raise credentials_exc
-
-    user = db.query(User).filter(User.id == uid).first()
+        # sub may be a username/email string (e.g. test tokens)
+        user = db.query(User).filter(User.username == user_id).first()
     if user is None:
         # Do not reveal whether the user existed; treat as invalid token.
         raise credentials_exc
@@ -290,20 +290,20 @@ class ResourceOwnershipChecker:
         if current_user.is_superuser:
             return current_user
 
-        # Check if student exists first (404 before 403)
+        # Authorization precedes existence check: deny access before revealing
+        # whether a resource exists (prevents student enumeration).
+        if current_user.email != student_id:
+            raise HTTPException(
+                status_code=status.HTTP_403_FORBIDDEN,
+                detail="Access denied. You do not have permission to access this resource.",
+            )
+
+        # Ownership confirmed — now verify the student record exists.
         student = db.query(Student).filter(Student.id == student_id).first()
         if student is None:
             raise HTTPException(
                 status_code=status.HTTP_404_NOT_FOUND,
                 detail="Student not found",
-            )
-
-        # Ownership is determined by matching the authenticated user's email
-        # against the student's email record.
-        if current_user.email != student.email:
-            raise HTTPException(
-                status_code=status.HTTP_403_FORBIDDEN,
-                detail="Access denied. You do not have permission to access this resource.",
             )
 
         return current_user

@@ -235,7 +235,9 @@ class TestRecommendationsIDOR:
 
         # Should be forbidden
         assert response.status_code == 403
-        assert "Access denied" in response.json().get("detail", "")
+        body = response.json()
+        detail = body.get("detail") or body.get("error", {}).get("message", "")
+        assert "Access denied" in detail
 
     def test_student_accessing_random_student_recommendations_fails_403(
         self, client: TestClient, student1_user: User, db_session: Session

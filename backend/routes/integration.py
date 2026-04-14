@@ -324,8 +324,8 @@ def get_cohort_risk_profiles(
     request: Request,
     skip: int = Query(0, ge=0, description="Records to skip"),
     limit: int = Query(50, ge=1, le=500, description="Max records"),
-    risk_min: Optional[float] = Query(None, ge=0, le=100),
-    risk_max: Optional[float] = Query(None, ge=0, le=100),
+    risk_min: Optional[float] = Query(None, ge=0),
+    risk_max: Optional[float] = Query(None, ge=0),
     db: Session = Depends(get_db),
     _key: str = Depends(verify_integration_key),
 ):

@@ -106,22 +106,19 @@ def seeded_test_db(db_session: Session):
     yield db_session
 
     # Cleanup — delete child rows first to avoid FK constraint failures.
-    # generate_daily_predictions() creates Prediction, RiskSnapshot, and
-    # EngineeredFeatures rows that reference these students, so they must be
-    # removed before the Student rows can be deleted.
+    # generate_daily_predictions() creates Prediction, RiskSnapshot,
+    # EngineeredFeatures, and PredictionLog rows (via risk_scoring audit trail).
+    from backend.database.models.prediction_log import PredictionLog
+
     test_ids = ["student1@test.edu", "student2@test.edu", "student3@test.edu"]
-    db_session.query(Prediction).filter(
-        Prediction.student_id.in_(test_ids)
-    ).delete(synchronize_session=False)
-    db_session.query(RiskSnapshot).filter(
-        RiskSnapshot.student_id.in_(test_ids)
-    ).delete(synchronize_session=False)
-    db_session.query(EngineeredFeatures).filter(
-        EngineeredFeatures.student_id.in_(test_ids)
-    ).delete(synchronize_session=False)
-    db_session.query(Enrollment).filter(
-        Enrollment.student_id.in_(test_ids)
-    ).delete(synchronize_session=False)
+    for model in (Prediction, PredictionLog, RiskSnapshot, EngineeredFeatures, Enrollment):
+        try:
+            db_session.query(model).filter(
+                model.student_id.in_(test_ids)
+            ).delete(synchronize_session=False)
+        except Exception:
+            db_session.rollback()
+    db_session.commit()
     db_session.query(Student).filter(
         Student.id.in_(test_ids)
     ).delete(synchronize_session=False)

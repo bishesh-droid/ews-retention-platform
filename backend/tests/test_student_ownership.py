@@ -99,12 +99,16 @@ class TestStudentOwnershipEmailMismatch:
 
     def test_ownership_check_fails_when_student_not_found(self):
         """
-        Test that ownership check returns 404 when student_id does not exist.
+        Test that ownership check returns 404 when the student owns the ID
+        (email matches) but the record does not exist in the database.
+        Authorization precedes existence: a mismatched email yields 403, so
+        we must match email == student_id to reach the 404 branch.
         """
+        student_id = "nonexistent@bits.edu"
         user = MagicMock(spec=User)
         user.id = 1
         user.username = "nickname"
-        user.email = "student@bits.edu"
+        user.email = student_id  # ownership passes; record still missing
         user.role = Role.STUDENT
         user.is_superuser = False
 
@@ -115,7 +119,7 @@ class TestStudentOwnershipEmailMismatch:
         checker = ResourceOwnershipChecker()
 
         mock_request = MagicMock()
-        mock_request.path_params = {"student_id": "nonexistent@bits.edu"}
+        mock_request.path_params = {"student_id": student_id}
 
         # Should raise 404 Not Found
         with pytest.raises(HTTPException) as exc_info:

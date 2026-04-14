@@ -374,8 +374,11 @@ class TestTokenRevocation:
         ).first()
 
         assert revoked is not None
-        # Verify expiry matches (within 1 second tolerance)
-        db_exp = int(revoked.expires_at.timestamp())
+        # Verify expiry matches (within 1 second tolerance).
+        # expires_at is stored as a naive UTC datetime in SQLite; attach UTC
+        # before calling timestamp() so Python doesn't misinterpret it as local.
+        from datetime import timezone as _tz
+        db_exp = int(revoked.expires_at.replace(tzinfo=_tz.utc).timestamp())
         assert abs(db_exp - token_exp) <= 1, "DB expiry should match JWT exp claim"
 
     def test_cannot_revoke_same_token_twice(self, client: TestClient, test_user: User, db_session: Session):

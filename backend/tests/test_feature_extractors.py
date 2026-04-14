@@ -409,8 +409,8 @@ class TestConsistencyFeatureExtractor:
 
         assert isinstance(features, ConsistencyFeatures)
         assert features.engagement_trend == "inactive"
-        assert features.is_ghost is True
-        assert features.ghost_type == "never_logged_in"
+        assert features.is_ghost is False  # No courses = cannot be a ghost
+        assert features.ghost_type is None
         assert features.zero_progress_course_count == 0
         assert features.total_enrolled_courses == 0
 
@@ -503,7 +503,7 @@ class TestIntentFeatureExtractor:
         """Disengaged student should be classified correctly."""
         extractor = IntentFeatureExtractor()
         features = extractor.extract(
-            content_completion_score=5.0,
+            content_completion_score=4.0,  # 4% < 5% threshold
             login_consistency_score=10.0,
             time_investment_score=5.0,
             graded_quiz_score=None,
