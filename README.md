@@ -1,1170 +1,1805 @@
-# 🎓 Meridian EWS — Early Warning System for Student Retention
+# Meridian EWS Retention Platform
 
-[![Python](https://img.shields.io/badge/Python-3.12-blue)](https://www.python.org/)
-[![FastAPI](https://img.shields.io/badge/FastAPI-0.119.0-green)](https://fastapi.tiangolo.com/)
-[![React](https://img.shields.io/badge/React-18.2-61DAFB?logo=react)](https://reactjs.org/)
-[![License](https://img.shields.io/badge/License-MIT-yellow.svg)](LICENSE)
-[![Tests](https://img.shields.io/badge/tests-pytest-blue)](backend/tests/)
+Early Warning System for student retention — AI-driven risk prediction and intervention management for educational institutions.
 
-> **Intelligent Student Retention Platform** — A production-ready Early Warning System that ingests Brightspace LMS data, computes deterministic engagement-based risk scores (0-100), and routes prioritized intervention recommendations to academic advisors through an intelligent queue interface.
+## Table of Contents
 
----
+- [Overview](#overview)
+- [Architecture](#architecture)
+- [Project Structure](#project-structure)
+- [Installation](#installation)
+- [Configuration](#configuration)
+- [Usage](#usage)
+- [API Documentation](#api-documentation)
+- [Data Flow](#data-flow)
+- [Database Schema](#database-schema)
+- [Testing](#testing)
+- [Deployment](#deployment)
+- [Logging and Monitoring](#logging-and-monitoring)
+- [Security Considerations](#security-considerations)
+- [Performance Considerations](#performance-considerations)
+- [Limitations](#limitations)
+- [Roadmap](#roadmap)
+- [Troubleshooting](#troubleshooting)
+- [Contributing](#contributing)
 
-## 📖 Detailed Project Description
-
-### What This System Does
-
-**Meridian EWS** is a deterministic, rule-based student retention platform engineered for the BITS Pilani Digital operations team. The platform processes weekly Excel exports from Brightspace LMS, applies sophisticated behavioral feature engineering to compute granular 0–100 risk scores, and generates actionable intervention recommendations that advisors can review and act upon through a prioritized queue interface.
+## Overview
 
 ### Problem Statement
 
-Educational institutions face significant challenges in identifying at-risk students before they drop out:
-- **Reactive approaches**: Traditional systems identify struggling students only after exam failures
-- **Data silos**: LMS engagement data remains unutilized for early intervention
-- **Advisor overload**: Academic advisors lack prioritization tools to focus on highest-risk cases
-- **No systematic tracking**: Intervention outcomes are rarely measured or optimized
+Educational institutions lose students due to disengagement, academic struggles, and life circumstances. Traditional retention efforts are reactive and lack data-driven insights. This platform provides:
 
-### Real-World Relevance
-
-Student retention directly impacts institutional revenue and student outcomes. A 5% improvement in retention can translate to millions in preserved tuition revenue while ensuring students complete their educational goals. Meridian EWS provides:
-
-- **Early identification** of disengagement patterns (as early as Week 2)
-- **Prioritized intervention queues** based on risk severity
-- **Measurable outcome tracking** to optimize retention strategies
-- **FERPA-compliant data handling** for educational records
+- Early identification of at-risk students using engagement and academic signals
+- Automated intervention recommendations based on risk severity
+- Business intelligence for retention teams to measure ROI
+- FERPA-compliant audit logging for all student data access
 
 ### Target Users
 
-| Role | Primary Functions |
-|------|-------------------|
-| **Academic Advisors** | Review intervention queues, act on recommendations, log outcomes |
-| **Faculty Members** | View risk summaries for assigned students, receive alerts |
-| **Retention Team Leaders** | Monitor cohort-level trends, configure thresholds |
-| **Administrators** | Manage data ingestion, user access, system configuration |
+- **Faculty**: View student risk profiles, receive alerts, track intervention outcomes
+- **Retention Teams**: Manage intervention queues, analyze cohort trends, forecast revenue impact
+- **Administrators**: Configure system settings, manage user roles, review audit logs
+- **Students**: View personal risk factors, receive recommendations, track progress
 
-### Key Goals & Design Philosophy
+### Core Capabilities
 
-1. **Deterministic Transparency**: Rule-based scoring (not black-box ML) ensures explainable risk assessments
-2. **Privacy-First Architecture**: FERPA-compliant with pseudonymized identifiers in logs
-3. **Operational Resilience**: Graceful degradation when LLM or external services are unavailable
-4. **Actionable Intelligence**: Risk scores are meaningless without clear intervention pathways
-5. **Data-Driven Optimization**: Post-trimester calibration against actual outcomes
+- Rule-based risk scoring from 7 engagement signals (0-100 scale)
+- Calendar-aware risk adjustments based on academic deadlines
+- LLM-powered explanations and intervention suggestions (Gemini/Claude)
+- Automated daily prediction generation via scheduler
+- Business intelligence dashboards (retention forecasting, revenue at risk)
+- Multi-role authentication with JWT tokens and httpOnly refresh cookies
 
-**Important Design Decision:** This is a **rule-based scoring engine**, not a trained machine learning model. The risk scores are computed by a deterministic weighted formula across seven engagement features. There is no neural network, XGBoost classifier, or other ML model producing these scores. The optional LLM features (Gemini or Claude integration for natural-language risk explanations) are entirely separate from the core scoring pipeline and can be disabled without affecting risk calculations.
+### System Boundaries
 
----
+- **In Scope**: Student risk scoring, intervention management, analytics, reporting
+- **Out of Scope**: LMS integration (file-based ingestion only), student communication (manual outreach), gradebook functionality
 
----
+## Architecture
 
-## 🚀 Key Features
-
-### Core Platform Features
-
-| Feature | Description | Impact |
-|---------|-------------|--------|
-| **Automated Data Ingestion** | Weekly Excel upload from Brightspace LMS with idempotent upsert logic | Eliminates manual data entry, ensures data freshness |
-| **Deterministic Risk Scoring** | Weighted formula across 7 engagement dimensions producing 0-100 scores | Transparent, explainable risk assessment without ML black boxes |
-| **Calendar-Aware Scoring** | Deadline-proximity multipliers for 10 configured courses | Contextualizes risk based on upcoming assessment deadlines |
-| **Intervention Queue Management** | Prioritized advisor queues with risk-based sorting | Ensures advisors focus on highest-need students first |
-| **Outcome Tracking** | Logs intervention actions and results for efficacy analysis | Enables data-driven optimization of retention strategies |
-| **Multi-Role Access Control** | Role-based permissions (advisor, faculty, admin, retention_team) | Secure, principle-of-least-privilege access |
-
-### Advanced Capabilities
-
-- **Ghost Student Detection**: Identifies students with zero LMS logins within 7 days and triggers automated activation outreach
-- **Risk Spike Alerts**: Notifications when student risk scores increase by ≥15 points (configurable threshold)
-- **Intervention Cooldown Logic**: Prevents advisor spam by enforcing minimum days between interventions per student
-- **GDPR/FERPA Compliance Tools**: Built-in data export and erasure endpoints for subject access requests
-- **Post-Trimester Calibration**: Automated threshold recommendation based on actual exam outcomes vs. risk predictions
-
-### AI/LLM Features (Optional)
-
-| Feature | Provider | Description |
-|---------|----------|-------------|
-| **Risk Explanation Generation** | Gemini/Claude | Natural language summary of risk factors per student |
-| **Intervention Suggestions** | Gemini/Claude | AI-generated personalized outreach templates |
-| **Cohort Narrative Reports** | Gemini/Claude | Executive summaries for retention team leaders |
-| **What-If Analysis** | Gemini/Claude | Scenario simulation for advisor training |
-
-**Note:** All LLM features are **optional** and can be disabled via `ENABLE_LLM_FEATURES=false`. The core risk scoring operates entirely without external AI dependencies.
-
----
-
-## 🧠 System Architecture & Workflow
-
-### High-Level Data Flow
+### High-Level System Architecture
 
 ```
-┌─────────────────────────────────────────────────────────────────────────────────────────┐
-│                              EXTERNAL DATA SOURCES                                      │
-│  ┌─────────────────────┐  ┌─────────────────────┐  ┌─────────────────────┐              │
-│  │ Brightspace LMS     │  │ Exam Systems        │  │ Course Registry     │              │
-│  │ (Weekly Exports)    │  │ (Marks/Attendance)  │  │ (Deadlines/Metadata)│              │
-│  └──────────┬──────────┘  └──────────┬──────────┘  └──────────┬──────────┘              │
-└─────────────┼─────────────────────────┼─────────────────────────┼───────────────────────┘
-              │                         │                         │
-              ▼                         ▼                         ▼
-┌─────────────────────────────────────────────────────────────────────────────────────────┐
-│                              INGESTION PIPELINE (Async)                                 │
-│  ┌─────────────────────────────────────────────────────────────────────────────────┐    │
-│  │  POST /api/v1/admin/ingest  →  Excel Validation  →  StudentLoader/ExamLoader    │    │
-│  │                                   ↓                                             │    │
-│  │  ┌─────────────┐  ┌─────────────┐  ┌─────────────────┐  ┌─────────────────┐     │    │
-│  │  │Idempotent   │  │Auto-        │  │Outcome          │  │Intervention     │     │    │
-│  │  │Upsert       │  │Deactivation │  │Inference        │  │Backfill         │     │    │
-│  │  └─────────────┘  └─────────────┘  └─────────────────┘  └─────────────────┘     │    │
-│  └─────────────────────────────────────────────────────────────────────────────────┘    │
-└─────────────────────────────────────────────────────────────────────────────────────────┘
-                                          │
-                                          ▼
-┌─────────────────────────────────────────────────────────────────────────────────────────┐
-│                              DATA PERSISTENCE LAYER                                     │
-│  ┌────────────────┐ ┌────────────────┐ ┌────────────────┐ ┌────────────────────────┐    │
-│  │    students    │ │  enrollments   │ │  risk_snapshots│ │  intervention_logs     │    │
-│  │  (identity)    │ │  (courses)     │ │  (scores)      │ │  (actions/outcomes)    │    │
-│  └────────────────┘ └────────────────┘ └────────────────┘ └────────────────────────┘    │
-│  ┌────────────────┐ ┌────────────────┐ ┌────────────────┐ ┌────────────────────────┐    │
-│  │ graded_        │ │  exam_records  │ │engineered_     │ │  course_registry       │    │
-│  │ _components    │ │  (marks)       │ │_features       │ │  (metadata)            │    │
-│  └────────────────┘ └────────────────┘ └────────────────┘ └────────────────────────┘    │
-└─────────────────────────────────────────────────────────────────────────────────────────┘
-                                          │
-                                          ▼
-┌─────────────────────────────────────────────────────────────────────────────────────────┐
-│                           FEATURE ENGINEERING & SCORING                                 │
-│                                                                                         │
-│   ┌────────────────────────┐         ┌─────────────────────────────────────────┐        │
-│   │  Raw LMS Metrics       │         │  RiskScorer                             │        │
-│   │  • Login count         │────────▶│  • Normalization (0-100)                │        │
-│   │  • Content views       │         │  • Weighted aggregation                 │        │
-│   │  • Quiz attempts       │         │  • Calendar-aware adjustment (optional) │        │
-│   │  • Time spent          │         │  • Output: 0-100 risk score             │        │
-│   │  • Discussion posts    │         └─────────────────────────────────────────┘        │
-│   └────────────────────────┘                                                            │
-└─────────────────────────────────────────────────────────────────────────────────────────┘
-                                          │
-                                          ▼
-┌─────────────────────────────────────────────────────────────────────────────────────────┐
-│                           DECISION ENGINE & INTERVENTIONS                               │
-│                                                                                         │
-│   Risk Score + Pattern Analysis  →  get_intervention_recommendation()                   │
-│                                                                                         │
-│   Score Range    Pattern        Intervention Type         Priority                      │
-│   ─────────────────────────────────────────────────────────────                         │
-│   0-29           on_track       none                      Low                           │
-│   30-49          at_risk        gentle_reminder           Medium                        │
-│   50-69          struggling     mentor_outreach           High                          │
-│   70-89          disengaged     urgent                   Critical                       │
-│   90-100         ghost          activation_outreach      Critical                       │
-└─────────────────────────────────────────────────────────────────────────────────────────┘
-                                          │
-                                          ▼
-┌─────────────────────────────────────────────────────────────────────────────────────────┐
-│                              API LAYER (FastAPI + JWT)                                  │
-│                                                                                         │
-│   100+ REST Endpoints  │  Role-Based Access Control  │  Rate Limiting  │  Audit Log     │
-└─────────────────────────────────────────────────────────────────────────────────────────┘
-                                          │
-                                          ▼
-┌─────────────────────────────────────────────────────────────────────────────────────────┐
-│                              REACT FRONTEND DASHBOARD                                   │
-│                                                                                         │
-│   ┌──────────────┐  ┌──────────────┐  ┌──────────────┐  ┌──────────────┐                │
-│   │  Advisor     │  │   Student    │  │   Cohort     │  │   Admin      │                │
-│   │  Queue       │  │   Profile    │  │   Analytics  │  │   Panel      │                │
-│   └──────────────┘  └──────────────┘  └──────────────┘  └──────────────┘                │
-└─────────────────────────────────────────────────────────────────────────────────────────┘
++-------------------+     +------------------+     +-------------------+
+|   React SPA       |---->|  FastAPI Backend |---->|   SQLite/         |
+|   (Port 3000)     |     |  (Port 8000)     |     |   PostgreSQL      |
++-------------------+     +------------------+     +-------------------+
+                                |
+                                v
+                          +------------------+
+                          |   Redis Cache    |
+                          |   (Rate Limit)   |
+                          +------------------+
 ```
 
-### Component Responsibilities
+### Backend Architecture
 
-| Component | Technology | Responsibility |
-|-----------|------------|----------------|
-| **Ingestion Pipeline** | Python + Pandas + OpenPyXL | Async Excel processing, data validation, idempotent upserts |
-| **Feature Engineering** | Python + NumPy | Normalization, weighted aggregation, calendar-aware adjustments |
-| **Risk Scorer** | Rule-based engine | Deterministic 0-100 score computation |
-| **Decision Engine** | Rule-based router | Intervention type classification |
-| **API Gateway** | FastAPI + Uvicorn | REST endpoints, JWT auth, request validation |
-| **Database** | SQLAlchemy + Alembic | ORM models, migrations, SQLite/PostgreSQL support |
-| **Cache/Lock** | Redis | Distributed ingestion locks, rate limiting |
-| **Frontend** | React 18 + Bootstrap | Advisor dashboard, data visualization |
-| **Scheduler** | APScheduler | Daily prediction runs, weekly retention reports |
+**Framework**: FastAPI 0.119.0 with async/sync SQLAlchemy 2.0
 
-### Security Considerations
+**Layer Structure**:
+- **Routes** (`backend/routes/`): HTTP endpoint handlers, request/response serialization
+- **Services** (`backend/services/`): Business logic (risk scoring, feature engineering, LLM orchestration)
+- **Core** (`backend/core/`): Cross-cutting concerns (auth, security, logging, rate limiting)
+- **Middleware** (`backend/middleware/`): Request processing pipeline (security headers, validation, audit logging)
+- **Database** (`backend/database/`): ORM models, connection management, migrations
 
-- **Authentication**: JWT tokens with configurable expiry, refresh token rotation
-- **Authorization**: Role-based access control (RBAC) with ownership checks
-- **Data Privacy**: PII masking in logs, pseudonymized identifiers for LLM calls
-- **Input Validation**: Pydantic schemas for all API inputs
-- **Rate Limiting**: SlowAPI with per-endpoint burst/sustained limits
-- **Audit Trail**: FERPA-compliant access logging for all student data reads
+**Key Design Patterns**:
+- Dependency Injection for database sessions and authentication
+- Repository pattern for data access (student_repository.py)
+- Strategy pattern for LLM provider abstraction (Gemini/Claude)
+- Circuit breaker for external API calls (LLM timeouts)
 
----
+### Frontend Architecture
 
-## 🛠️ Tech Stack
+**Framework**: React 18.2 with Create React App
 
-### Frontend
-| Technology | Version | Purpose |
-|------------|---------|---------|
-| **React** | 18.2.0 | UI framework with functional components and hooks |
-| **React Bootstrap** | 2.10.10 | Component library for responsive design |
-| **React Router DOM** | 6.22.3 | Client-side routing and navigation |
-| **Chart.js / Recharts** | 4.4.2 / 3.7.0 | Data visualization for risk trends and cohort analytics |
-| **Framer Motion** | 12.31.0 | Animation library for smooth UI transitions |
-| **Axios** | 1.6.8 | HTTP client for API communication |
-| **React Icons** | 5.5.0 | Icon library |
+**State Management**:
+- Context API for authentication (AuthContext) and student data (StudentContext)
+- Axios interceptors for JWT token management and automatic refresh
 
-### Backend
-| Technology | Version | Purpose |
-|------------|---------|---------|
-| **Python** | 3.12 | Primary language |
-| **FastAPI** | 0.119.0 | High-performance async web framework |
-| **Uvicorn** | 0.38.0 | ASGI server |
-| **Pydantic** | 2.12.5 | Data validation and settings management |
-| **SQLAlchemy** | 2.0.45 | ORM for database operations |
-| **Alembic** | 1.18.4 | Database migration tool |
+**UI Libraries**:
+- React Router 6.22 for navigation
+- Bootstrap 5.3 for layout components
+- Chart.js 4.4 and Recharts 3.7 for data visualization
+- Framer Motion 12.31 for animations
 
-### Database & Cache
-| Technology | Version | Purpose |
-|------------|---------|---------|
-| **SQLite** | 3.35+ | Default development database |
-| **PostgreSQL** | 15+ | Production database (recommended) |
-| **psycopg2-binary** | 2.9+ | PostgreSQL adapter |
-| **Redis** | 7.x | Distributed locks, rate limiting cache |
-| **asyncpg** | 0.29.0 | Async PostgreSQL driver |
+**Build**: Webpack 5 via react-scripts 5.0.1
 
-### Data Processing
-| Technology | Version | Purpose |
-|------------|---------|---------|
-| **Pandas** | 2.3.3 | Excel data processing and manipulation |
-| **NumPy** | 2.3.5 | Numerical computations for feature engineering |
-| **OpenPyXL** | 3.1.5 | Excel file reading/writing |
-| **python-magic** | 0.4.27 | MIME type validation for uploads |
+### Data Layer
 
-### Security & Auth
-| Technology | Version | Purpose |
-|------------|---------|---------|
-| **PyJWT** | 2.12.0 | JWT token generation and validation |
-| **Passlib + bcrypt** | 1.7.4 / 5.0.0 | Password hashing |
-| **Cryptography** | 46.0.5 | Encryption utilities |
-| **SlowAPI** | 0.1.9 | Rate limiting middleware |
+**Primary Database**: SQLite (development) / PostgreSQL (production)
 
-### AI/ML Integrations (Optional)
-| Technology | Version | Purpose |
-|------------|---------|---------|
-| **Google Generative AI** | 0.8.0+ | Gemini API for risk explanations |
-| **Anthropic** | 0.34.0+ | Claude API for intervention suggestions |
-| **scikit-learn** | 1.8.0 | Threshold calibration (post-trimester analysis only) |
+**Schema Type**: Star schema with dimension and fact tables
 
-### DevOps & Deployment
-| Technology | Purpose |
-|------------|---------|
-| **Docker** | Containerization |
-| **APScheduler** | Background job scheduling |
-| **fpdf2** | PDF report generation |
-| **pytest** | Testing framework |
-| **mypy** | Static type checking |
+**Data Models**:
+- **Dimensions**: DimStudent, DimCourse
+- **Facts**: FactEngagement, FactAcademicPerformance, FactConsistency, FactIntentResponsiveness
+- **Operational**: Prediction, Intervention, RiskSnapshot, InterventionLog, AuditLog
 
----
+**Migration Tool**: Alembic 1.18.4
 
-## ⚙️ Installation & Setup Guide
+### Integration Points
+
+**External Services**:
+- Google Gemini API (LLM features)
+- Anthropic Claude API (LLM features)
+- Redis (distributed rate limiting, caching)
+
+**Data Ingestion**:
+- Excel file uploads (.xlsx) via admin interface
+- Scheduled ingestion from `backend/data/` directory
+- Row-level validation with quarantine for failed records
+
+### External Services
+
+| Service | Purpose | Required |
+|---------|---------|----------|
+| Redis | Rate limiting, distributed caching | Yes (production) |
+| Google Gemini | LLM explanations, suggestions | Optional |
+| Anthropic Claude | Alternative LLM provider | Optional |
+
+## Project Structure
+
+### Root Directory
+
+- `backend/` — FastAPI application code
+- `frontend/` — React single-page application
+- `data/` — Raw and processed data files
+- `data_ingestion/` — Standalone ETL pipeline modules
+- `docker/` — Dockerfiles and docker-compose configuration
+- `alembic/` — Database migration scripts
+- `setup.sh` — Development environment setup script
+- `.env.example` — Environment variable template
+- `requirements.txt` — Python dependencies
+- `SECURITY_AND_COMPLIANCE.md` — Security architecture documentation
+
+### /backend
+
+#### Core Application
+
+- `main.py` — FastAPI application entry point, middleware registration, lifespan events
+- `config/__init__.py` — Environment variable parsing, configuration constants
+- `api/deps.py` — Dependency injection helpers (auth, database sessions)
+
+#### Routes (API Endpoints)
+
+- `auth.py` — Login, logout, token refresh, user registration
+- `student_v1.py` — Student profile, goals, risk history (student-facing)
+- `faculty_v1.py` — At-risk student lists, alerts (faculty-facing)
+- `admin_v1.py` — User management, system configuration
+- `students.py` — Student CRUD operations
+- `predictions.py` — ML prediction endpoints (legacy)
+- `ml_routes.py` — Model training, batch predictions
+- `recommendations.py` — Intervention suggestions
+- `advisor.py` — AI academic advisor endpoints
+- `business.py` — Business intelligence metrics
+- `analytics.py` — Cohort analytics, trend analysis
+- `interventions.py` — Intervention CRUD
+- `decisions.py` — Intervention decision engine
+- `reports.py` — Report generation, PDF exports
+- `monitoring.py` — Health checks, scheduler status
+- `audit.py` — Audit log queries (FERPA compliance)
+
+#### Services
+
+- `risk_scoring.py` — Rule-based risk score calculation (7 signals)
+- `feature_engineering.py` — Feature extraction from raw engagement data
+- `ml_service.py` — ML model management, prediction orchestration
+- `analytics_service.py` — Cohort analysis, trend computation
+- `export_service.py` — PDF report generation
+- `calendar_scorer.py` — Calendar-aware risk adjustments
+- `decision_engine.py` — Intervention threshold logic
+
+##### AI Services (`services/ai/`)
+
+- `llm_orchestrator.py` — Unified LLM interface (Gemini/Claude)
+- `rag_engine.py` — Retrieval-augmented generation for student context
+- `advisor.py` — AI academic advisor logic
+- `hallucination_guard.py` — LLM output validation
+
+##### Feature Services (`services/features/`)
+
+- `academic.py` — Academic performance feature extraction
+- `engagement.py` — Engagement signal computation
+- `consistency.py` — Login/activity consistency metrics
+- `intent.py` — Dropout intent detection
+- `composer.py` — Feature composition orchestrator
+
+##### Infrastructure Services (`services/infrastructure/`)
+
+- `scheduler.py` — APScheduler-based background jobs (daily predictions, weekly retraining, GDPR purges)
+- `token_cleanup.py` — Revoked token purging
+- `recommender.py` — Intervention recommendation engine
+
+#### Database
+
+- `connection.py` — SQLAlchemy engine setup, session factories, PRAGMA configuration
+- `models/` — ORM model definitions:
+  - `student.py` — Student dimension table
+  - `user.py` — System users with RBAC roles
+  - `prediction.py` — Risk score predictions
+  - `intervention.py` — Intervention records
+  - `intervention_log.py` — Intervention action history
+  - `risk_snapshot.py` — Historical risk snapshots
+  - `audit.py` — FERPA audit logs
+  - `academic.py` — GradedComponent, ExamRecord
+  - `event.py` — RawEvent, EngineeredFeatures
+  - `canonical.py` — Star schema tables (DimStudent, FactEngagement, etc.)
+  - `revoked_token.py` — JWT token blocklist
+  - `prediction_log.py` — Prediction audit trail
+
+#### Middleware
+
+- `security_headers.py` — HSTS, CSP, X-Frame-Options, etc.
+- `security_logging.py` — Access logging, rate limit monitoring
+- `request_validation.py` — Input validation middleware
+- `request_id.py` — Request ID injection for log correlation
+
+#### Core Modules
+
+- `auth.py` — JWT token creation/validation, password hashing (bcrypt)
+- `security.py` — Input sanitization, prompt injection detection, encoding bypass protection
+- `rate_limiting.py` — SlowAPI integration, per-user rate limits
+- `logger.py` — Structured logging with PII masking
+- `audit_logger.py` — FERPA-compliant audit logging
+- `errors.py` — Centralized error handling
+
+#### Schemas (Pydantic Models)
+
+- `auth.py` — Authentication request/response schemas
+- `student.py` — Student data schemas
+- `prediction.py` — Prediction schemas with validation
+- `intervention.py` — Intervention schemas
+- `common.py` — Shared schemas with validators (GPA, attendance, student ID regex)
+
+#### Tests
+
+- `test_auth.py` — Authentication, token validation
+- `test_risk_scoring.py` — Risk score calculation
+- `test_integration_api.py` — End-to-end API tests
+- `test_idor.py` — IDOR vulnerability tests
+- `test_encoding_bypasses.py` — Input sanitization tests
+- `test_security_headers.py` — Security header validation
+- `test_scheduler.py` — Background job tests
+- `conftest.py` — Pytest fixtures, test database setup
+
+### /frontend
+
+#### Pages (`src/pages/`)
+
+- `Dashboard.jsx` — Main dashboard with KPI cards, risk tables
+- `Students.jsx` — Student list with filtering, sorting
+- `StudentProfile.jsx` — Individual student risk breakdown
+- `Analytics.jsx` — Cohort analytics, trend charts
+- `Interventions.jsx` — Intervention queue management
+- `Reports.jsx` — Report generation interface
+- `Login.jsx`, `Signup.jsx` — Authentication pages
+- `FacultyTools.jsx` — Faculty-facing views
+- `BusinessAnalytics.jsx` — Business intelligence dashboards
+
+#### Components (`src/components/`)
+
+- `ai/` — AI-powered components (AIRecommendationCard, RiskExplanation, WhatIfSimulator)
+- `analytics/` — Analytics visualizations (CohortChurnDiagnostics, CourseRiskAnalysis)
+- `business/` — Business metrics (RevenueForecast, InterventionROITimeline)
+- `common/` — Shared UI components (Logo, Skeleton, ChartExplainerTooltip)
+- `dashboard/` — Dashboard widgets (KpiCard, HighestRiskStudentsTable)
+- `interventions/` — Intervention components (InterventionCard, Recommendations)
+- `student/` — Student profile components (RiskBreakdownChart, SignalRadarChart)
+
+#### Context (`src/context/`)
+
+- `AuthContext.js` — JWT authentication state, token refresh logic
+- `StudentContext.js` — Student data state, pagination
+
+#### Services (`src/services/`)
+
+- `api.js` — Axios-based API client with interceptors
+
+### /data
+
+#### Raw Data (`raw/`)
+
+- `Engagement_Analysis.xlsx` — Primary engagement metrics (logins, content views, time spent)
+- `_Trimester-1 2025 Attendance Quiz-Assignment-Exam 5Jan2025.xlsx` — Quiz/exam attendance
+- `graded quiz 1 10 feb complete.xlsx` — Graded quiz scores
+- `Week 1-2 Student Engagement Analysis.xlsx` — Early engagement snapshot
+- `Learner usage week 3.xlsx`, `Learner usage week 5.xlsx` — Weekly usage reports
+- `B.S and M.Sc Summary Data*.xlsx` — Aggregate course-level data (not student-level)
+
+#### Archive (`archive/`)
+
+- Historical duplicate files moved after consolidation
+
+### /data_ingestion
+
+Standalone ETL pipeline (can run independently of backend):
+
+- `master_builder.py` — Main orchestrator for dataset building
+- `loader.py` — Excel file loading
+- `schema_mapper.py` — Column name normalization
+- `validator.py` — Schema validation
+- `normalizer.py` — Data type normalization
+- `merger.py` — Multi-file data merging
+- `dataset_cache.py` — Intermediate caching
+
+### /docker
+
+- `Dockerfile` — Multi-stage production build (Python 3.12 slim)
+- `Dockerfile.scheduler` — Scheduler service image
+- `docker-compose.yml` — Full stack orchestration (backend, frontend, redis, scheduler)
+- `.env.example` — Docker environment template
+
+### /alembic
+
+Database migration scripts:
+
+- `versions/001_*` through `versions/007_*` — Incremental schema changes
+- `env.py` — Alembic configuration
+
+## Installation
+
+### System Requirements
+
+- **OS**: Linux, macOS, Windows (WSL2 recommended)
+- **RAM**: 4GB minimum, 8GB recommended
+- **Disk**: 2GB free space
+- **Storage**: SSD recommended for database performance
 
 ### Prerequisites
 
-| Component | Version | Installation Notes |
-|-----------|---------|-------------------|
-| Python | 3.12.x | `pyenv install 3.12` or system package manager |
-| Node.js | 18+ | Required for frontend development only |
-| Redis | 7.x | `docker run -d -p 6379:6379 redis:alpine` |
-| SQLite | 3.35+ | Usually pre-installed on most systems |
-| PostgreSQL | 15+ | Optional, recommended for production |
+| Software | Version | Purpose |
+|----------|---------|---------|
+| Python | 3.12+ | Backend runtime |
+| Node.js | 18+ | Frontend build |
+| Redis | 7+ | Rate limiting (production) |
+| PostgreSQL | 14+ | Production database (optional) |
 
-### Step-by-Step Setup
-
-#### 1. Clone Repository
+### Backend Installation
 
 ```bash
-git clone https://github.com/your-org/ews-retention-platform.git
+# Clone repository
+git clone <repository-url>
 cd ews-retention-platform
-```
 
-#### 2. Python Environment Setup
-
-```bash
 # Create virtual environment
-python -m venv venv
+python3 -m venv venv
+source venv/bin/activate  # Linux/macOS
+# or: venv\Scripts\activate  # Windows
 
-# Activate (Linux/macOS)
-source venv/bin/activate
+# Install dependencies
+pip install -r requirements.txt
 
-# Activate (Windows)
-venv\Scripts\activate
+# Initialize database
+python -c "from backend.database.connection import init_db; init_db()"
 ```
 
-#### 3. Install Backend Dependencies
-
-```bash
-pip install -r requirements.txt -r requirements-dev.txt
-```
-
-#### 4. Install Frontend Dependencies (Optional)
+### Frontend Installation
 
 ```bash
 cd frontend
+
+# Install npm dependencies
 npm install
-cd ..
+
+# Start development server
+npm start
 ```
 
-#### 5. Environment Configuration
+### Redis Installation (Production)
 
 ```bash
-# Copy example environment file
+# macOS
+brew install redis
+brew services start redis
+
+# Ubuntu/Debian
+sudo apt-get install redis-server
+sudo systemctl start redis
+
+# Docker
+docker run -d -p 6379:6379 redis:7-alpine
+```
+
+### Environment Setup
+
+```bash
+# Copy environment template
 cp .env.example .env
 
-# Edit .env with required values
-nano .env  # or your preferred editor
+# Generate secret key
+python -c "import secrets; print(secrets.token_hex(32))"
+
+# Edit .env with generated values
 ```
 
-**Required Environment Variables:**
+### Database Setup
 
-| Variable | Value | How to Generate |
-|----------|-------|-----------------|
-| `SECRET_KEY` | 64-char hex string | `python -c "import secrets; print(secrets.token_hex(32))"` |
-| `GEMINI_MODEL` | `gemini-1.5-pro-002` | Use exact pinned version |
-
-**Optional but Recommended:**
-
-| Variable | Development | Production |
-|----------|-------------|------------|
-| `DATABASE_URL` | `sqlite:///./backend/data/meridian.db` | `postgresql://user:pass@host/db` |
-| `REDIS_URL` | `redis://localhost:6379` | Production Redis URL |
-| `GEMINI_API_KEY` | Optional (mock responses) | Required for LLM features |
-
-#### 6. Database Setup
-
+**SQLite (Development)**:
 ```bash
-# Run migrations
-alembic upgrade head
-
-# Seed development data (creates admin user)
-python -m backend.scripts.seed_dev_data
+# Database is created automatically on first run
+# Location: backend/data/sql_app.db
 ```
 
-**Default Dev Credentials:**
-- Username: `dev_admin`
-- Password: `changeme_local_only`
-- Roles: `admin`, `faculty`, `retention_team`
+**PostgreSQL (Production)**:
+```sql
+CREATE DATABASE ews_db;
+CREATE USER ews_user WITH PASSWORD 'secure-password';
+GRANT ALL PRIVILEGES ON DATABASE ews_db TO ews_user;
+```
 
-#### 7. Start Redis (if not using Docker)
+Update `DATABASE_URL` in `.env`:
+```
+DATABASE_URL=postgresql://ews_user:secure-password@localhost:5432/ews_db
+```
 
+## Configuration
+
+### Environment Variables
+
+All configuration is managed via environment variables. See `.env.example` for the complete list.
+
+#### Required Variables
+
+| Variable | Description | Example |
+|----------|-------------|---------|
+| `SECRET_KEY` | JWT signing key (min 32 chars) | `a1b2c3d4e5f6g7h8i9j0k1l2m3n4o5p6` |
+| `DATABASE_URL` | Database connection string | `sqlite:///./backend/data/sql_app.db` |
+| `REDIS_URL` | Redis connection URL | `redis://localhost:6379/0` |
+| `ENVIRONMENT` | Environment mode | `development` or `production` |
+
+#### Optional Variables
+
+| Variable | Default | Description |
+|----------|---------|-------------|
+| `API_HOST` | `0.0.0.0` | Server bind address |
+| `API_PORT` | `8000` | Server bind port |
+| `CORS_ORIGINS` | `http://localhost:3000` | Allowed CORS origins (comma-separated) |
+| `ACCESS_TOKEN_EXPIRE_MINUTES` | `60` | JWT access token lifetime |
+| `GEMINI_API_KEY` | — | Google Gemini API key |
+| `CLAUDE_API_KEY` | — | Anthropic Claude API key |
+| `LLM_PROVIDER` | `gemini` | LLM provider (`gemini` or `claude`) |
+| `LOG_LEVEL` | `INFO` | Logging verbosity |
+
+#### Risk Scoring Configuration
+
+| Variable | Default | Description |
+|----------|---------|-------------|
+| `RISK_THRESHOLD_HIGH` | `70.0` | High risk threshold (0-100) |
+| `RISK_THRESHOLD_MEDIUM` | `40.0` | Medium risk threshold (0-100) |
+| `WEIGHT_CONTENT_COMPLETION` | `0.30` | Content completion weight |
+| `WEIGHT_LOGIN_CONSISTENCY` | `0.20` | Login consistency weight |
+| `WEIGHT_QUIZ_ENGAGEMENT` | `0.20` | Quiz engagement weight |
+| `WEIGHT_ASSIGNMENT` | `0.15` | Assignment submission weight |
+| `WEIGHT_TIME_INVESTMENT` | `0.08` | Time investment weight |
+| `WEIGHT_DISCUSSION` | `0.02` | Discussion engagement weight |
+| `WEIGHT_SELF_DIRECTED_LEARNING` | `0.05` | Self-directed learning weight (risk reducer) |
+
+#### Intervention Thresholds
+
+| Variable | Default | Description |
+|----------|---------|-------------|
+| `THRESHOLD_NO_ACTION` | `30.0` | Below: no intervention |
+| `THRESHOLD_GENTLE` | `40.0` | 30-40: Gentle reminder (email) |
+| `THRESHOLD_MENTOR` | `60.0` | 40-60: Mentor outreach |
+| `THRESHOLD_URGENT` | `80.0` | 60-80: Escalated mentor |
+| | 80+: Urgent intervention (sales) |
+
+### Configuration Files
+
+**Backend**: All config via `backend/config/__init__.py` reading from environment
+
+**Frontend**: Environment variables via `REACT_APP_API_URL` or `VITE_API_BASE_URL`
+
+### Secrets Management
+
+**Never commit `.env` to version control.**
+
+Generate secure values:
 ```bash
-# Using Docker (recommended)
-docker run -d -p 6379:6379 --name redis redis:alpine
+# Secret key
+python -c "import secrets; print(secrets.token_hex(32))"
 
-# Or using system Redis
+# Integration API key hash
+python -c "import hashlib; print(hashlib.sha256(b'your-key').hexdigest())"
+```
+
+## Usage
+
+### Development Mode
+
+**Backend**:
+```bash
+source venv/bin/activate
+python -m uvicorn backend.main:app --reload --host 0.0.0.0 --port 8000
+```
+
+**Frontend**:
+```bash
+cd frontend
+npm start
+```
+
+**Redis** (required for rate limiting):
+```bash
 redis-server
 ```
 
-#### 8. Start Backend Server
+### Production Mode
 
+**Using Docker**:
 ```bash
-# Development (with auto-reload)
-uvicorn backend.main:app --reload --port 8000
-
-# Production (single worker required)
-uvicorn backend.main:app --host 0.0.0.0 --port 8000
+cd docker
+docker-compose up -d
 ```
 
-**⚠️ Critical:** The application must run as a **single uvicorn worker** due to the Redis distributed lock for ingestion. Multi-worker deployment requires additional coordination architecture.
-
-#### 9. Start Frontend (Optional)
-
+**Direct Deployment**:
 ```bash
+# Backend
+source venv/bin/activate
+uvicorn backend.main:app --host 0.0.0.0 --port 8000 --workers 4
+
+# Frontend (build static files)
 cd frontend
-npm start
+npm run build
+# Serve with nginx or similar
 ```
 
-Frontend available at `http://localhost:3000`
+### API Usage Examples
 
-#### 10. Verify Installation
-
+**Authentication**:
 ```bash
-# Run smoke tests
-bash scripts/smoke_test.sh
-
-# Or test API health
-curl http://localhost:8000/health
-```
-
----
-
-## 📊 Risk Score Interpretation
-
-### How the Score is Computed
-
-The 0–100 risk score is a **deterministic weighted aggregation** of seven engagement features:
-
-| Feature | Default Weight | Description | Data Source |
-|---------|----------------|-------------|-------------|
-| Content completion rate | 0.25 | Percentage of course content visited | Brightspace LMS |
-| Login consistency | 0.20 | Regularity of LMS logins (streak-based) | Brightspace LMS |
-| Quiz engagement | 0.20 | Quiz attempts and scores | Brightspace LMS |
-| Assignment submission | 0.15 | On-time submission rate | Brightspace LMS |
-| Time investment | 0.10 | Hours spent in LMS per week | Brightspace LMS |
-| Discussion participation | 0.10 | Forum posts and replies | Brightspace LMS |
-| Calendar proximity | variable | Days until next deadline (10 courses only) | Course Registry |
-
-**Weight Validation:** All weights must sum to 1.0 ± 0.01 (enforced at startup by `validate_ml_config()`).
-
-### Intervention Thresholds
-
-| Score Range | Intervention Type | Risk Band | Advisor Action |
-|-------------|-------------------|-----------|----------------|
-| 0–29 | No action | On track | Monitor only |
-| 30–49 | Gentle reminder | At risk | Automated email |
-| 50–69 | Mentor outreach | Struggling | Faculty contact |
-| 70–89 | Urgent intervention | Disengaged | Immediate advisor meeting |
-| 90–100 | Critical alert | Ghost | Activation outreach + escalation |
-
-**Configurable via:** `THRESHOLD_NO_ACTION`, `THRESHOLD_GENTLE`, `THRESHOLD_MENTOR`, `THRESHOLD_URGENT`
-
-### Engagement Patterns
-
-| Pattern | Trigger Condition | Typical Intervention |
-|---------|-------------------|---------------------|
-| **ghost** | Zero logins in past 7 days | Activation outreach |
-| **disengaged** | Login consistency score < 30 | Mentor check-in |
-| **struggling** | Quiz average < 40% AND content completion < 50% | Academic support |
-| **on_track** | Risk score < 30 AND all feature scores > 60 | Continue monitoring |
-
-### Important Caveats
-
-**⚠️ This is NOT a machine learning prediction.** The score is a deterministic weighted formula that has not yet been validated against historical dropout outcomes. The system uses rule-based thresholds, not a trained classifier.
-
-**Recommended Usage:**
-- Use as a **prioritization signal** for advisor attention
-- **NOT** as a definitive prediction of student withdrawal
-- Run `python -m backend.ml.training.calibrate` after each trimester to compute recommended thresholds based on actual exam outcomes
-
----
-
-## ▶️ Usage Guide
-
-### Running the Application
-
-#### Backend Only (API Mode)
-
-```bash
-# Terminal 1: Start Redis
-docker run -d -p 6379:6379 redis:alpine
-
-# Terminal 2: Start FastAPI server
-uvicorn backend.main:app --reload --port 8000
-
-# Access API documentation
-open http://localhost:8000/docs  # Interactive Swagger UI
-```
-
-#### Full-Stack (With Frontend)
-
-```bash
-# Terminal 1: Redis
-docker run -d -p 6379:6379 redis:alpine
-
-# Terminal 2: Backend
-uvicorn backend.main:app --reload --port 8000
-
-# Terminal 3: Frontend
-cd frontend
-npm start
-
-# Access application
-open http://localhost:3000  # React frontend
-```
-
-### Weekly Data Ingestion Workflow
-
-#### Step 1 — Export from Brightspace
-
-1. Navigate to **Course Admin → Reports → Learner Usage**
-2. Select date range: previous 7 days
-3. Include columns: Username, Org Defined ID, First Name, Last Name, Last Login, Content Visits, Quiz Attempts, Assignment Submissions, Discussion Posts, Time in Content
-4. Export as **Excel (.xlsx)**
-
-#### Step 2 — Upload via API
-
-```bash
-# Obtain admin token first
+# Login
 curl -X POST http://localhost:8000/api/v1/auth/login \
-  -H "Content-Type: application/json" \
-  -d '{"username":"dev_admin","password":"changeme_local_only"}'
+  -H "Content-Type: application/x-www-form-urlencoded" \
+  -d "username=admin&password=secret"
 
-# Upload Excel file
+# Response: {"access_token": "eyJ...", "token_type": "bearer"}
+```
+
+**Get Student List**:
+```bash
+curl -X GET "http://localhost:8000/api/v1/students/students?skip=0&limit=50" \
+  -H "Authorization: Bearer <access_token>"
+```
+
+**Get Single Student**:
+```bash
+curl -X GET http://localhost:8000/api/v1/students/students/student@example.com \
+  -H "Authorization: Bearer <access_token>"
+```
+
+**Trigger Data Ingestion**:
+```bash
 curl -X POST http://localhost:8000/api/v1/admin/ingest \
   -H "Authorization: Bearer <admin_token>" \
-  -H "Content-Type: multipart/form-data" \
-  -F "file=@/path/to/brightspace_export.xlsx" \
-  -F "semester_name=T1-2025" \
-  -F "week_number=5"
+  -F "file=@engagement_data.xlsx"
 ```
 
-Response:
-```json
-{
-  "task_id": "550e8400-e29b-41d4-a716-446655440000",
-  "status": "accepted",
-  "message": "Ingestion task queued"
-}
-```
-
-#### Step 3 — Check Task Status
-
+**Health Check**:
 ```bash
-curl http://localhost:8000/api/v1/admin/ingest/status/550e8400-e29b-41d4-a716-446655440000 \
-  -H "Authorization: Bearer <admin_token>"
+curl http://localhost:8000/health
+# Response: {"status": "healthy", "checks": {...}}
 ```
 
-Status values: `pending` → `running` → `success` | `partial` | `failed`
-
-#### Step 4 — Verify in Audit Log
-
-```bash
-curl http://localhost:8000/api/v1/admin/ingestion-runs \
-  -H "Authorization: Bearer <admin_token>"
-```
-
-### Example Workflows
-
-#### Advisor Daily Workflow
-
-1. **Log in** to React dashboard (`http://localhost:3000`)
-2. **Review intervention queue** sorted by risk score (highest first)
-3. **Click student** to view detailed risk profile and engagement metrics
-4. **Take action**: Call, email, or schedule meeting with student
-5. **Log outcome** in system for tracking efficacy
-
-#### Admin Configuration Workflow
-
-```bash
-# View current thresholds
-curl http://localhost:8000/api/v1/config/thresholds \
-  -H "Authorization: Bearer <admin_token>"
-
-# Update thresholds
-curl -X PUT http://localhost:8000/api/v1/config/thresholds \
-  -H "Authorization: Bearer <admin_token>" \
-  -H "Content-Type: application/json" \
-  -d '{
-    "threshold_no_action": 25.0,
-    "threshold_gentle": 45.0,
-    "threshold_mentor": 65.0,
-    "threshold_urgent": 85.0
-  }'
-
-# Run post-trimester calibration
-python -m backend.ml.training.calibrate
-```
-
----
-
-## 📂 Project Structure
-
-```
-ews-retention-platform/
-├── 📁 backend/                    # FastAPI backend application
-│   ├── 📁 api/                    # API versioning and routing
-│   ├── 📁 application/            # Application services
-│   ├── 📁 config/                 # Configuration management
-│   ├── 📁 controllers/            # Request controllers
-│   ├── 📁 core/                   # Core utilities and shared code
-│   ├── 📁 database/               # Database models and connections
-│   │   ├── 📁 models/             # SQLAlchemy ORM models
-│   │   └── 📁 migrations/         # Alembic migration scripts
-│   ├── 📁 domain/                 # Domain logic and entities
-│   ├── 📁 ingestion/              # Data ingestion pipeline
-│   │   ├── 📄 excel_loader.py    # Excel file processing
-│   │   ├── 📄 student_loader.py  # Student record upserts
-│   │   └── 📄 exam_loader.py     # Exam data ingestion
-│   ├── 📁 jobs/                   # Background scheduled jobs
-│   ├── 📁 middleware/             # FastAPI middleware
-│   ├── 📁 ml/                     # ML-related code (calibration)
-│   │   └── 📁 training/
-│   │       └── 📄 calibrate.py    # Threshold calibration tool
-│   ├── 📁 presentation/           # API presentation layer
-│   ├── 📁 routes/                 # FastAPI route definitions (25 modules)
-│   ├── 📁 schemas/                # Pydantic request/response schemas
-│   ├── 📁 scripts/                # Utility scripts
-│   ├── 📁 services/               # Business logic services (40 modules)
-│   ├── 📁 tests/                  # Pytest test suite
-│   └── 📄 main.py                 # Application entry point
-│
-├── 📁 frontend/                   # React frontend application
-│   ├── 📁 public/                 # Static assets
-│   ├── 📁 src/
-│   │   ├── 📁 components/         # React components
-│   │   ├── 📁 pages/              # Page-level components
-│   │   ├── 📁 services/           # API client services
-│   │   └── 📁 utils/              # Utility functions
-│   ├── 📄 package.json            # Node.js dependencies
-│   └── 📄 tailwind.config.js      # Tailwind CSS configuration
-│
-├── 📁 data/                       # Data files and exports
-├── 📁 alembic/                    # Database migrations
-├── 📁 docker/                     # Docker configuration
-├── 📁 docs/                       # Documentation
-│   ├── 📄 API_REFERENCE.md        # Detailed API docs
-│   ├── 📄 ARCHITECTURE.md         # Architecture decisions
-│   └── 📄 DEPLOYMENT.md           # Deployment guide
-│
-├── 📁 models/                     # Trained ML models (future use)
-├── 📁 prompts/                    # LLM prompt templates
-├── 📁 scripts/                    # Shell scripts
-│   └── 📄 smoke_test.sh           # Integration smoke tests
-│
-├── 📄 .env.example                # Environment template
-├── 📄 requirements.txt            # Python dependencies
-├── 📄 requirements-dev.txt        # Dev dependencies
-├── 📄 pytest.ini                # Pytest configuration
-├── 📄 mypy.ini                  # Type checking configuration
-├── 📄 SECURITY.md               # Security policy
-├── 📄 CODE_OF_CONDUCT.md        # Community guidelines
-└── 📄 README.md                 # This file
-```
-
-### Key Files Explained
-
-| Path | Purpose |
-|------|---------|
-| `backend/main.py` | FastAPI application factory, middleware registration |
-| `backend/routes/` | 25 route modules covering all API endpoints |
-| `backend/services/` | 40 service modules with business logic |
-| `backend/ingestion/` | Excel processing pipeline with validation |
-| `backend/database/models/` | SQLAlchemy ORM models |
-| `frontend/src/` | React components and pages |
-| `.env.example` | Comprehensive environment variable template |
-| `alembic/versions/` | Database migration history |
-
----
-
----
-
-## 🔐 Configuration & Environment Variables
-
-### Security Configuration
-
-| Variable | Type | Default | Required | Description |
-|----------|------|---------|----------|-------------|
-| `SECRET_KEY` | string | — | **Yes** | JWT signing key (min 32 chars) |
-| `ACCESS_TOKEN_EXPIRE_MINUTES` | int | 30 | No | JWT expiry time |
-| `REFRESH_TOKEN_EXPIRE_DAYS` | int | 7 | No | Refresh token expiry |
-| `INTEGRATION_API_KEY_HASH` | string | — | No | API key hash for external integrations |
-| `CORS_ORIGINS` | string | `http://localhost:3000` | No | Comma-separated allowed origins |
-
-### Database Configuration
-
-| Variable | Type | Default | Required | Description |
-|----------|------|---------|----------|-------------|
-| `DATABASE_URL` | string | `sqlite:///./data/meridian.db` | No | SQLAlchemy connection string |
-
-### Redis Configuration
-
-| Variable | Type | Default | Required | Description |
-|----------|------|---------|----------|-------------|
-| `REDIS_URL` | string | `redis://localhost:6379` | No | Redis connection for distributed lock |
-
-### Server Configuration
-
-| Variable | Type | Default | Required | Description |
-|----------|------|---------|----------|-------------|
-| `ENVIRONMENT` | string | `development` | No | `development` / `staging` / `production` |
-| `DEBUG` | bool | `false` | No | Enable debug logging |
-| `PORT` | int | 8000 | No | Server port |
-| `API_HOST` | string | `0.0.0.0` | No | FastAPI bind host |
-
-### Ingestion Configuration
-
-| Variable | Type | Default | Required | Description |
-|----------|------|---------|----------|-------------|
-| `TRIMESTER_START_DATE` | date | — | No | Academic trimester start (YYYY-MM-DD) |
-| `CURRENT_SEMESTER_NAME` | string | — | No | e.g. "T1-2025" |
-| `MAX_UPLOAD_SIZE_MB` | int | 50 | No | Excel file size limit |
-| `ENABLE_STUDENT_DEACTIVATION` | bool | `true` | No | Auto-deactivate missing students |
-| `ENGAGEMENT_DATA_FILE` | string | `Engagement_Analysis.xlsx` | No | Primary data filename |
-
-### Risk Scoring Configuration
-
-| Variable | Type | Default | Required | Description |
-|----------|------|---------|----------|-------------|
-| `THRESHOLD_NO_ACTION` | float | 29.0 | No | Max score for "on track" |
-| `THRESHOLD_GENTLE` | float | 49.0 | No | Max score for "gentle reminder" |
-| `THRESHOLD_MENTOR` | float | 69.0 | No | Max score for "mentor outreach" |
-| `THRESHOLD_URGENT` | float | 89.0 | No | Max score for "urgent" |
-| `RISK_SPIKE_THRESHOLD` | float | 15.0 | No | Min delta for "spike" pattern |
-| `INTERVENTION_COOLDOWN_DAYS` | int | 7 | No | Days between interventions |
-
-### Feature Weights (Must Sum to 1.0)
-
-| Variable | Type | Default | Description |
-|----------|------|---------|-------------|
-| `WEIGHT_CONTENT_COMPLETION` | float | 0.25 | Content visit rate weight |
-| `WEIGHT_LOGIN_CONSISTENCY` | float | 0.20 | Login regularity weight |
-| `WEIGHT_QUIZ_ENGAGEMENT` | float | 0.20 | Quiz performance weight |
-| `WEIGHT_ASSIGNMENT_SUBMISSION` | float | 0.15 | Assignment submission weight |
-| `WEIGHT_TIME_INVESTMENT` | float | 0.10 | Time spent weight |
-| `WEIGHT_DISCUSSION_PARTICIPATION` | float | 0.10 | Discussion forum weight |
-| `WEIGHT_SELF_DIRECTED_LEARNING` | float | 0.05 | Self-study indicator weight |
-
-### Calendar Scorer Configuration
-
-| Variable | Type | Default | Description |
-|----------|------|---------|-------------|
-| `CALENDAR_RISK_BLEND_WEIGHT` | float | 0.3 | Weight for calendar vs historical blend |
-| `ENABLE_CALENDAR_SCORER` | bool | `true` | Enable calendar-aware risk adjustment |
-
-### LLM/AI Configuration
-
-| Variable | Type | Default | Required | Description |
-|----------|------|---------|----------|-------------|
-| `LLM_PROVIDER` | string | `gemini` | No | Provider: `gemini` or `claude` |
-| `GEMINI_API_KEY` | string | — | No | Gemini API key |
-| `GEMINI_MODEL` | string | `gemini-1.5-pro-002` | **Yes** | Pinned model version |
-| `CLAUDE_API_KEY` | string | — | No | Claude API key |
-| `CLAUDE_MODEL` | string | `claude-3-5-sonnet-20241022` | No | Claude model name |
-| `LLM_TIMEOUT_SECONDS` | int | 30 | No | LLM request timeout |
-| `LLM_MAX_TOKENS` | int | 1024 | No | Max tokens in response |
-| `LLM_TEMPERATURE` | float | 0.3 | No | Sampling temperature |
-| `ENABLE_LLM_FEATURES` | bool | `true` | No | Master LLM feature toggle |
-
-### Logging & Monitoring
-
-| Variable | Type | Default | Description |
-|----------|------|---------|-------------|
-| `LOG_FILE` | string | `logs/meridian.log` | Log file path |
-| `LOG_LEVEL` | string | `INFO` | `DEBUG` / `INFO` / `WARNING` / `ERROR` |
-| `LOG_ROTATION_MAX_BYTES` | int | 52428800 | 50MB per file |
-| `LOG_ROTATION_BACKUP_COUNT` | int | 5 | Number of backup files |
-| `ALERT_WEBHOOK_URL` | string | — | Webhook for ingestion failure alerts |
-
-### Feature Flags
-
-| Variable | Type | Default | Description |
-|----------|------|---------|-------------|
-| `ENABLE_CALENDAR_SCORER` | bool | `true` | Enable calendar-based risk adjustments |
-| `ENABLE_LLM_FEATURES` | bool | `true` | Enable LLM-powered endpoints |
-| `ENABLE_STUDENT_DEACTIVATION` | bool | `true` | Enable auto-deactivation |
-
-### Business Metrics (for ROI Calculations)
-
-| Variable | Type | Default | Description |
-|----------|------|---------|-------------|
-| `AVERAGE_STUDENT_LTV` | float | 150000.0 | Lifetime value per student |
-| `TUITION_PER_SEMESTER` | float | 75000.0 | Semester tuition amount |
-| `INTERVENTION_COST_PER_STUDENT` | float | 500.0 | Average intervention cost |
-| `TARGET_RETENTION_RATE` | float | 0.90 | Target retention percentage |
-
----
-
-## 📡 API Documentation
+## API Documentation
 
 ### Authentication Endpoints
 
-| Method | Path | Auth | Role | Description |
-|--------|------|------|------|-------------|
-| `POST` | `/api/v1/auth/login` | No | — | Username/password login |
-| `POST` | `/api/v1/auth/refresh` | No | — | Refresh access token |
-| `GET` | `/api/v1/auth/me` | Yes | — | Current user profile |
+#### POST /api/v1/auth/login
 
-**Example Login Request:**
-```bash
-curl -X POST http://localhost:8000/api/v1/auth/login \
-  -H "Content-Type: application/json" \
-  -d '{
-    "username": "dev_admin",
-    "password": "changeme_local_only"
-  }'
+OAuth2 token endpoint.
+
+**Request**:
+```
+Content-Type: application/x-www-form-urlencoded
+username: <string>
+password: <string>
 ```
 
-**Example Response:**
+**Response (200)**:
 ```json
 {
   "access_token": "eyJhbGciOiJIUzI1NiIs...",
-  "refresh_token": "eyJhbGciOiJIUzI1NiIs...",
-  "token_type": "bearer",
-  "role": "admin"
+  "token_type": "bearer"
+}
+```
+
+**Response (401)**:
+```json
+{
+  "detail": "Incorrect username or password"
+}
+```
+
+#### POST /api/v1/auth/refresh
+
+Refresh access token using httpOnly cookie.
+
+**Response (200)**:
+```json
+{
+  "access_token": "eyJhbGciOiJIUzI1NiIs...",
+  "token_type": "bearer"
+}
+```
+
+#### POST /api/v1/auth/logout
+
+Revoke current token and clear refresh cookie.
+
+**Headers**: `Authorization: Bearer <token>`
+
+**Response (200)**:
+```json
+{
+  "message": "Successfully logged out"
+}
+```
+
+#### GET /api/v1/auth/me
+
+Get current user profile.
+
+**Headers**: `Authorization: Bearer <token>`
+
+**Response (200)**:
+```json
+{
+  "id": 1,
+  "username": "admin",
+  "email": "admin@example.com",
+  "role": "admin",
+  "is_active": true,
+  "is_superuser": false
 }
 ```
 
 ### Student Endpoints
 
-| Method | Path | Auth | Role | Description |
-|--------|------|------|------|-------------|
-| `GET` | `/api/v1/students` | Yes | staff | List students with pagination |
-| `GET` | `/api/v1/students/{id}` | Yes | staff | Student detail with risk profile |
-| `GET` | `/api/v1/students/{id}/weekly-summary` | Yes | staff | Weekly engagement summary |
-| `GET` | `/api/v1/students/{id}/risk-trend` | Yes | staff | Risk score history |
-| `GET` | `/api/v1/students/{id}/interventions` | Yes | staff | Intervention history |
+#### GET /api/v1/students/students
+
+Get paginated student list.
+
+**Query Parameters**:
+- `skip` (integer, default: 0) — Offset
+- `limit` (integer, default: 50) — Page size
+- `sort_by` (string, default: `risk_score`) — Sort field
+- `order` (string, default: `desc`) — Sort order (`asc` or `desc`)
+
+**Response (200)**:
+```json
+{
+  "success": true,
+  "message": "OK",
+  "data": {
+    "students": [
+      {
+        "id": "student@example.com",
+        "org_defined_id": "2025EB110001",
+        "first_name": "John",
+        "last_name": "Doe",
+        "risk_score": 75.5,
+        "engagement_score": 0.45
+      }
+    ],
+    "total": 150
+  }
+}
+```
+
+#### GET /api/v1/students/students/{student_id}
+
+Get detailed student profile.
+
+**Path Parameters**:
+- `student_id` (string) — Student email address
+
+**Response (200)**:
+```json
+{
+  "success": true,
+  "message": "OK",
+  "data": {
+    "id": "student@example.com",
+    "org_defined_id": "2025EB110001",
+    "first_name": "John",
+    "last_name": "Doe",
+    "predictions": [...],
+    "interventions": [...],
+    "risk_history": [...]
+  }
+}
+```
+
+### Risk Scoring Endpoints
+
+#### GET /api/v1/ml/predict/{student_id}
+
+Get ML-based risk prediction for a student.
+
+**Path Parameters**:
+- `student_id` (string) — Student email
+
+**Response (200)**:
+```json
+{
+  "success": true,
+  "message": "Prediction generated",
+  "data": {
+    "risk_score": 75.5,
+    "engagement_score": 0.45,
+    "retention_likelihood": "low",
+    "model_version": "rule-based-v1.0",
+    "top_risk_factors": ["Content Completion", "Login Consistency"]
+  }
+}
+```
 
 ### Intervention Endpoints
 
-| Method | Path | Auth | Role | Description |
-|--------|------|------|------|-------------|
-| `GET` | `/api/v1/interventions` | Yes | staff | List interventions |
-| `POST` | `/api/v1/interventions` | Yes | staff | Create intervention |
-| `PUT` | `/api/v1/interventions/{id}` | Yes | staff | Update intervention |
-| `DELETE` | `/api/v1/interventions/{id}` | Yes | admin | Delete intervention |
-| `POST` | `/api/v1/interventions/{id}/act` | Yes | advisor | Mark acted upon |
-| `POST` | `/api/v1/interventions/{id}/dismiss` | Yes | advisor | Dismiss recommendation |
-| `GET` | `/api/v1/interventions/pending` | Yes | advisor | Pending queue by priority |
+#### GET /api/v1/interventions
 
-### Admin - Ingestion Endpoints
+Get all interventions with filtering.
 
-| Method | Path | Auth | Role | Description |
-|--------|------|------|------|-------------|
-| `POST` | `/api/v1/admin/ingest` | Yes | admin | Upload Excel file |
-| `GET` | `/api/v1/admin/ingest/status/{task_id}` | Yes | admin | Check task status |
-| `GET` | `/api/v1/admin/ingestion-runs` | Yes | admin | List ingestion history |
-| `POST` | `/api/v1/admin/run-predictions` | Yes | admin | Trigger risk scoring |
+**Query Parameters**:
+- `skip`, `limit` — Pagination
+- `status` — Filter by status (pending, completed, etc.)
+- `assigned_faculty` — Filter by assignee
+- `student_id` — Filter by student
 
-### Admin - Data Management
+**Response (200)**:
+```json
+{
+  "success": true,
+  "data": {
+    "interventions": [...],
+    "total": 25
+  }
+}
+```
 
-| Method | Path | Auth | Role | Description |
-|--------|------|------|------|-------------|
-| `GET` | `/api/v1/admin/students` | Yes | admin | All students (including inactive) |
-| `POST` | `/api/v1/admin/students/{id}/reactivate` | Yes | admin | Reactivate student |
-| `DELETE` | `/api/v1/admin/students/{org_id}/erase` | Yes | admin | GDPR erasure |
-| `GET` | `/api/v1/admin/students/{org_id}/data-export` | Yes | admin | GDPR export |
+#### POST /api/v1/interventions
 
-### Admin - Configuration
+Create new intervention.
 
-| Method | Path | Auth | Role | Description |
-|--------|------|------|------|-------------|
-| `GET` | `/api/v1/config/thresholds` | Yes | admin | Get current thresholds |
-| `PUT` | `/api/v1/config/thresholds` | Yes | admin | Update thresholds |
-| `GET` | `/api/v1/config/feature-weights` | Yes | admin | Get feature weights |
-| `PUT` | `/api/v1/config/feature-weights` | Yes | admin | Update weights |
-| `GET` | `/api/v1/admin/audit-log` | Yes | admin | FERPA audit trail |
+**Request Body**:
+```json
+{
+  "student_org_id": "2025EB110001",
+  "intervention_type": "mentor_outreach",
+  "priority": "high",
+  "assigned_faculty_id": 5,
+  "notes": "Student has missed 3 consecutive quizzes"
+}
+```
 
-### LLM / AI Endpoints (Optional)
+### Analytics Endpoints
 
-| Method | Path | Auth | Role | Description |
-|--------|------|------|------|-------------|
-| `POST` | `/api/v1/llm/risk-explanation` | Yes | staff | LLM risk summary |
-| `POST` | `/api/v1/llm/intervention-suggestions` | Yes | staff | LLM intervention ideas |
-| `POST` | `/api/v1/llm/report-narrative` | Yes | staff | LLM report generation |
-| `POST` | `/api/v1/llm/what-if` | Yes | staff | LLM scenario simulation |
-| `GET` | `/api/v1/llm/status` | Yes | — | LLM service health |
+#### GET /api/v1/students/analytics/risk-trends
 
-### Health & Monitoring
+Get cohort risk trends over time.
 
-| Method | Path | Auth | Description |
-|--------|------|------|-------------|
-| `GET` | `/health` | No | Service health check |
-| `GET` | `/api/v1/health/detailed` | Yes (admin) | Detailed health with ingestion staleness |
+**Query Parameters**:
+- `weeks` (integer, default: 8) — Number of weeks to include
 
-### Full API Schema
+**Response (200)**:
+```json
+{
+  "success": true,
+  "data": {
+    "trends": [
+      {"week": 1, "avg_risk": 45.2},
+      {"week": 2, "avg_risk": 42.8}
+    ]
+  }
+}
+```
 
-Interactive API documentation available at:
-- **Swagger UI:** `http://localhost:8000/docs`
-- **ReDoc:** `http://localhost:8000/redoc`
-- **OpenAPI JSON:** `http://localhost:8000/openapi.json`
+#### GET /api/v1/business/metrics/retention
 
----
+Get retention metrics for business dashboards.
 
-## 🧪 Testing
+**Response (200)**:
+```json
+{
+  "success": true,
+  "data": {
+    "retention_rate": 0.87,
+    "high_risk_count": 45,
+    "gap_to_target": 0.03
+  }
+}
+```
+
+### Admin Endpoints
+
+#### POST /api/v1/admin/ingest
+
+Trigger data ingestion.
+
+**Request**: Multipart form with optional file upload
+
+**Response (202)**:
+```json
+{
+  "task_id": "abc123",
+  "message": "Ingestion started"
+}
+```
+
+#### GET /api/v1/audit-log
+
+Query FERPA audit logs.
+
+**Query Parameters**:
+- `user_id`, `action`, `resource_type`, `resource_id` — Filters
+- `start_date`, `end_date` — Date range
+- `limit`, `offset` — Pagination
+
+**Response (200)**:
+```json
+{
+  "success": true,
+  "data": {
+    "logs": [
+      {
+        "id": 1,
+        "user_id": 5,
+        "action": "READ",
+        "resource_type": "student",
+        "resource_id": "student@example.com",
+        "timestamp": "2026-04-14T10:30:00Z"
+      }
+    ],
+    "total": 1500
+  }
+}
+```
+
+### System Endpoints
+
+#### GET /health
+
+Health check endpoint.
+
+**Response (200)**:
+```json
+{
+  "status": "healthy",
+  "checks": {
+    "database": true,
+    "redis": true,
+    "ml_pipeline": true
+  }
+}
+```
+
+## Data Flow
+
+### Data Ingestion Flow
+
+```
+1. Excel files placed in backend/data/raw/
+   |
+   v
+2. Admin uploads via /admin/ingest endpoint
+   |
+   v
+3. Validation layer (row_validators.py)
+   - Column count validation
+   - Required field presence
+   - Numeric bounds checking
+   - Email format validation
+   |
+   v
+4. [Pass] -> Transform -> Star Schema DB
+   [Fail] -> Quarantine -> Error Log
+   |
+   v
+5. Feature Engineering (FeatureEngineer.calculate_all_features)
+   |
+   v
+6. Risk Scoring (RiskScorer.calculate_risk_score)
+   |
+   v
+7. Prediction stored in predictions table
+```
+
+### Risk Scoring Flow
+
+```
+1. Scheduler triggers at 03:00 UTC daily
+   |
+   v
+2. FeatureEngineer calculates 7 signal scores:
+   - content_completion_score (30%)
+   - login_consistency_score (20%)
+   - quiz_engagement_score (20%)
+   - assignment_score (15%)
+   - time_investment_score (8%)
+   - discussion_engagement_score (2%)
+   - self_directed_learning_score (5%, inverted)
+   |
+   v
+3. RiskScorer computes weighted engagement
+   |
+   v
+4. Base risk = 100 - weighted_engagement
+   |
+   v
+5. Calendar adjustment applied (40% weight)
+   |
+   v
+6. Academic flags override (dropout_intent, ufm_flagged, etc.)
+   |
+   v
+7. Final score stored (0-100 scale, 1 decimal)
+   |
+   v
+8. PredictionLog entry created for audit
+```
+
+### Intervention Decision Flow
+
+```
+1. Risk score retrieved for student
+   |
+   v
+2. Check ghost student flags -> activation outreach
+   |
+   v
+3. Check academic flags:
+   - dropout_intent -> retention emergency
+   - ufm_flagged -> academic integrity
+   - health_support_needed -> welfare referral
+   |
+   v
+4. Pattern-based routing:
+   - "struggling" -> academic support
+   - "disengaged" -> re-engagement campaign
+   |
+   v
+5. Threshold-based intervention:
+   - < 30: No action
+   - 30-40: Gentle reminder
+   - 40-60: Mentor outreach
+   - 60-80: Escalated mentor
+   - 80+: Urgent intervention
+   |
+   v
+6. Intervention record created
+   |
+   v
+7. Assigned to faculty/sales team queue
+```
+
+### Authentication Flow
+
+```
+1. User submits credentials to /auth/login
+   |
+   v
+2. Server validates against hashed_password (bcrypt)
+   |
+   v
+3. JWT access token created (15-60 min expiry)
+   - Claims: sub, role, exp, iat, iss, aud, jti, nbf
+   |
+   v
+4. Refresh token created (7 day expiry)
+   |
+   v
+5. Refresh token stored in httpOnly cookie
+   |
+   v
+6. Access token returned to client (memory storage)
+   |
+   v
+7. Client attaches Authorization header to requests
+   |
+   v
+8. On 401, client calls /auth/refresh
+   |
+   v
+9. New access token issued, cookie rotated
+```
+
+## Database Schema
+
+### Core Tables
+
+#### students
+```sql
+CREATE TABLE students (
+    id VARCHAR PRIMARY KEY,              -- Email address
+    org_defined_id VARCHAR UNIQUE,       -- BITS ID (e.g., 2025EB110001)
+    first_name VARCHAR,
+    last_name VARCHAR,
+    old_new_student VARCHAR,             -- 'old' or 'new'
+    is_active BOOLEAN DEFAULT TRUE,
+    parent_department_name VARCHAR,
+    parent_department_code VARCHAR,
+    deactivated_at DATETIME,
+    deactivation_reason VARCHAR(128)
+);
+```
+
+#### users
+```sql
+CREATE TABLE users (
+    id INTEGER PRIMARY KEY,
+    username VARCHAR UNIQUE NOT NULL,
+    email VARCHAR UNIQUE NOT NULL,
+    hashed_password VARCHAR NOT NULL,
+    role VARCHAR NOT NULL,               -- student, faculty, admin, retention team
+    department VARCHAR,
+    is_active BOOLEAN DEFAULT TRUE,
+    is_superuser BOOLEAN DEFAULT FALSE,
+    created_at DATETIME DEFAULT NOW(),
+    preferences JSON
+);
+```
+
+#### predictions
+```sql
+CREATE TABLE predictions (
+    id INTEGER PRIMARY KEY,
+    student_id VARCHAR NOT NULL REFERENCES students(id),
+    risk_score FLOAT NOT NULL,           -- 0-100 scale
+    engagement_score FLOAT NOT NULL,     -- 0-1 scale
+    retention_likelihood VARCHAR,        -- high, medium, low
+    attendance FLOAT,
+    assignments FLOAT,
+    grades FLOAT,
+    academic_signal_score FLOAT,
+    engagement_signal_score FLOAT,
+    consistency_signal_score FLOAT,
+    intent_signal_score FLOAT,
+    responsiveness_signal_score FLOAT,
+    model_version VARCHAR,
+    prediction_timestamp DATETIME NOT NULL,
+    top_risk_factors VARCHAR
+);
+```
+
+#### risk_snapshots
+```sql
+CREATE TABLE risk_snapshots (
+    id INTEGER PRIMARY KEY,
+    student_id VARCHAR NOT NULL REFERENCES students(id),
+    risk_score FLOAT NOT NULL,
+    engagement_score FLOAT,
+    week_number INTEGER,
+    semester_name VARCHAR,
+    timestamp DATETIME
+);
+```
+
+#### interventions
+```sql
+CREATE TABLE interventions (
+    id INTEGER PRIMARY KEY,
+    student_org_id VARCHAR NOT NULL,
+    intervention_type VARCHAR,
+    priority VARCHAR,
+    status VARCHAR,
+    assigned_faculty_id INTEGER,
+    notes TEXT,
+    created_at DATETIME,
+    completed_at DATETIME
+);
+```
+
+#### intervention_logs
+```sql
+CREATE TABLE intervention_logs (
+    id INTEGER PRIMARY KEY,
+    student_org_id VARCHAR NOT NULL,
+    intervention_id INTEGER,
+    action_type VARCHAR,
+    channel VARCHAR,
+    outcome VARCHAR,
+    recommended_at DATETIME,
+    completed_at DATETIME,
+    ai_reasoning TEXT
+);
+```
+
+#### audit_logs
+```sql
+CREATE TABLE audit_logs (
+    id INTEGER PRIMARY KEY,
+    user_id INTEGER NOT NULL,
+    user_role VARCHAR,
+    action_type VARCHAR,                 -- READ, WRITE, DELETE
+    resource_type VARCHAR,
+    resource_id VARCHAR,
+    ip_address VARCHAR,
+    request_id VARCHAR,
+    timestamp DATETIME,
+    details JSON
+);
+```
+
+### Star Schema Tables
+
+#### dim_student
+```sql
+CREATE TABLE dim_student (
+    student_key INTEGER PRIMARY KEY,
+    student_id VARCHAR UNIQUE,
+    org_defined_id VARCHAR,
+    first_name VARCHAR,
+    last_name VARCHAR,
+    department VARCHAR,
+    is_active BOOLEAN,
+    effective_from DATETIME,
+    effective_to DATETIME
+);
+```
+
+#### fact_engagement
+```sql
+CREATE TABLE fact_engagement (
+    fact_key INTEGER PRIMARY KEY,
+    student_key INTEGER,
+    course_key INTEGER,
+    date_key INTEGER,
+    login_count INTEGER,
+    content_views INTEGER,
+    time_spent_seconds INTEGER,
+    discussion_posts INTEGER,
+    quiz_attempts INTEGER
+);
+```
+
+#### fact_academic_performance
+```sql
+CREATE TABLE fact_academic_performance (
+    fact_key INTEGER PRIMARY KEY,
+    student_key INTEGER,
+    course_key INTEGER,
+    date_key INTEGER,
+    component_type VARCHAR,
+    score FLOAT,
+    max_score FLOAT,
+    submission_status VARCHAR
+);
+```
+
+### Indexes
+
+```sql
+-- Student queries
+CREATE INDEX ix_student_department ON students(parent_department_name);
+CREATE INDEX ix_student_org_id ON students(org_defined_id);
+CREATE INDEX ix_student_is_active ON students(is_active);
+CREATE INDEX ix_student_dept_active ON students(parent_department_name, is_active);
+
+-- Prediction queries
+CREATE INDEX ix_prediction_student ON predictions(student_id);
+CREATE INDEX ix_prediction_risk_score ON predictions(risk_score);
+CREATE INDEX ix_prediction_timestamp ON predictions(prediction_timestamp);
+
+-- Risk snapshots
+CREATE INDEX ix_risk_snapshot_student ON risk_snapshots(student_id);
+CREATE INDEX ix_risk_snapshot_week ON risk_snapshots(week_number);
+
+-- Audit logs
+CREATE INDEX ix_audit_user ON audit_logs(user_id);
+CREATE INDEX ix_audit_resource ON audit_logs(resource_type, resource_id);
+CREATE INDEX ix_audit_timestamp ON audit_logs(timestamp);
+```
+
+## Testing
 
 ### Running Tests
 
 ```bash
-# Full test suite
-pytest backend/tests/ -v
+# Activate virtual environment
+source venv/bin/activate
 
-# Specific test modules
-pytest backend/tests/test_intervention_chain.py -v
-pytest backend/tests/test_critical_paths.py -v
-pytest backend/tests/test_department_assignment.py -v
+# Run all tests
+pytest backend/tests -v
 
-# With coverage report
-pytest backend/tests/ --cov=backend --cov-report=html
+# Run specific test file
+pytest backend/tests/test_auth.py -v
 
-# Type checking
-mypy backend/
+# Run with coverage
+pytest backend/tests --cov=backend --cov-report=html
 
-# Smoke tests (requires running server)
-bash scripts/smoke_test.sh
+# Run security tests
+pytest backend/tests/test_encoding_bypasses.py -v
+pytest backend/tests/test_security_headers.py -v
 ```
 
 ### Test Structure
 
-| Test Category | Location | Coverage |
-|-------------|----------|----------|
-| Unit Tests | `backend/tests/unit/` | Services, utilities |
-| Integration Tests | `backend/tests/integration/` | API endpoints, auth flows |
-| Security Tests | `backend/tests/security/` | JWT, RBAC, rate limiting |
-| ML Tests | `backend/tests/ml/` | Scoring, calibration |
+```
+backend/tests/
+├── conftest.py              # Pytest fixtures, test DB setup
+├── test_auth.py             # Authentication, token validation
+├── test_idor.py             # IDOR vulnerability tests
+├── test_encoding_bypasses.py # Input sanitization tests
+├── test_security_headers.py # Security header validation
+├── test_risk_scoring.py     # Risk score calculation
+├── test_integration_api.py  # End-to-end API tests
+├── test_scheduler.py        # Background job tests
+├── test_monitoring.py       # Health check tests
+└── features/                # Feature extractor tests
+    ├── test_academic_extractor.py
+    ├── test_engagement_extractor.py
+    ├── test_consistency_extractor.py
+    └── test_intent_extractor.py
+```
 
-### Threshold Calibration Testing
+### Test Configuration
 
-Run after each trimester to validate risk thresholds:
+- **Database**: In-memory SQLite for isolation
+- **SECRET_KEY**: Test-specific value (`test-secret-key-not-for-production-x7f9k2m`)
+- **TESTING=true**: Enables test mode in config
+- **INTEGRATION_API_KEY_HASH**: Pre-configured for integration tests
 
+### Coverage Notes
+
+As of current implementation:
+- Authentication: Full coverage
+- Risk scoring: Full coverage
+- Input sanitization: Full coverage
+- API integration: Partial coverage
+- LLM features: Limited coverage (requires API keys)
+
+### Missing Tests
+
+- End-to-end frontend tests
+- Load testing for concurrent users
+- Chaos engineering tests (Redis failure, DB failure)
+
+## Deployment
+
+### Production Deployment Steps
+
+1. **Prepare Environment**:
+   ```bash
+   # Set production environment variables
+   export ENVIRONMENT=production
+   export SECRET_KEY=<generate-secure-key>
+   export DATABASE_URL=postgresql://user:pass@host/db
+   export REDIS_URL=redis://redis-host:6379/0
+   export CORS_ORIGINS=https://your-domain.com
+   ```
+
+2. **Database Migration**:
+   ```bash
+   alembic upgrade head
+   ```
+
+3. **Start Services**:
+   ```bash
+   # Using docker-compose
+   cd docker
+   docker-compose up -d
+
+   # Or directly
+   uvicorn backend.main:app --host 0.0.0.0 --port 8000 --workers 4
+   ```
+
+### Docker Deployment
+
+**Build Images**:
 ```bash
-python -m backend.ml.training.calibrate
+cd docker
+docker-compose build
 ```
 
-**When to run:**
-- After T1/T2/T3 exam results are ingested
-- Before configuring thresholds for next trimester
-- When risk score distribution seems misaligned with actual outcomes
-
-**Sample Output:**
-```
-Recommended thresholds:
-  THRESHOLD_NO_ACTION: 28.5
-  THRESHOLD_GENTLE: 48.2
-  THRESHOLD_MENTOR: 68.7
-  THRESHOLD_URGENT: 88.3
-
-Recommended weights:
-  WEIGHT_CONTENT_COMPLETION: 0.27
-  ...
-```
-
----
-
-## ⚠️ Known Issues & Limitations
-
-### Current Constraints
-
-1. **Rule-Based Scoring Only**
-   - The risk formula has not been validated against historical dropout outcomes
-   - Run `backend/ml/training/calibrate.py` after each trimester to calibrate thresholds
-   - **Mitigation:** Post-trimester analysis provides recommended adjustments
-
-2. **Limited Calendar-Aware Courses**
-   - CalendarAwareScorer only covers 10 specifically configured courses
-   - All other courses receive no calendar-based risk adjustment
-   - **Mitigation:** Course registry can be extended via admin API
-
-3. **Development Database Limitations**
-   - Default SQLite has single-writer constraints
-   - Not suitable for production with >500 concurrent users
-   - **Mitigation:** PostgreSQL migration path is fully supported
-
-4. **Single-Worker Deployment Constraint**
-   - Asyncio/Redis ingestion lock requires single-process deployment
-   - Multi-worker scaling requires additional coordination architecture
-   - **Mitigation:** Documented in `docs/adr/ADR-002.md`
-
-5. **LLM Data Processing Agreement Required**
-   - LLM features require signed DPA with provider before production use
-   - **Mitigation:** All LLM features can be disabled; core system works without them
-
-6. **Frontend Authentication**
-   - React frontend uses hardcoded demo credentials in development
-   - **Mitigation:** Production requires full JWT integration (documented)
-
-### Troubleshooting Common Issues
-
-| Symptom | Root Cause | Fix |
-|---------|-----------|-----|
-| All students show 0% content completion | Ingestion failed | Check `GET /api/v1/admin/ingestion-runs`, verify Excel columns |
-| Empty student list by risk range | No risk snapshots | Run `POST /api/v1/admin/run-predictions` or wait for scheduled job |
-| Ingestion task stuck at "pending" | Redis lock contention | Clear lock: `redis-cli DEL "ews_ingestion_lock"` |
-| All students showing "urgent" | Thresholds misconfigured | Run calibration script, update `.env` |
-| LLM 500 errors | API key/model issue | Check `GEMINI_API_KEY`, verify pinned model version |
-
----
-
-## 🔮 Future Improvements & Roadmap
-
-### Near-Term (Next 3 Months)
-
-#### Feature Enhancements
-- [ ] **Mobile Advisor App**: React Native companion for on-the-go intervention logging
-- [ ] **Bulk Intervention Actions**: Select multiple students for simultaneous outreach
-- [ ] **Custom Alert Rules**: User-configurable notification triggers beyond default thresholds
-- [ ] **Multi-Semester Trend Analysis**: Longitudinal student risk tracking across trimesters
-
-#### Performance Optimizations
-- [ ] **Database Query Optimization**: Add composite indexes for common query patterns
-- [ ] **Redis Caching Layer**: Cache risk snapshots for dashboard loading
-- [ ] **Async Prediction Pipeline**: Move risk scoring to background workers
-
-### Medium-Term (3-6 Months)
-
-#### Scalability Improvements
-- [ ] **Multi-Worker Architecture**: Implement coordinated distributed locking for horizontal scaling
-- [ ] **Read Replicas**: Support PostgreSQL read replicas for reporting queries
-- [ ] **CDN Integration**: Serve static frontend assets via CDN
-
-#### Security Enhancements
-- [ ] **OAuth 2.0 / SSO**: Integrate with institutional identity providers
-- [ ] **Row-Level Security**: Database-level enforcement of student data access
-- [ ] **Audit Log Streaming**: Real-time audit log streaming to SIEM
-
-#### AI/ML Evolution
-- [ ] **Trained ML Model**: Optional XGBoost classifier trained on historical outcomes
-- [ ] **Feature Importance Analysis**: Explain which factors drive risk per student
-- [ ] **Predictive Intervention Timing**: ML-suggested optimal outreach moments
-
-### Long-Term (6-12 Months)
-
-#### Platform Expansion
-- [ ] **LMS Integration API**: Direct Brightspace/D2L API integration (no Excel)
-- [ ] **Third-Party Integrations**: Zoom attendance, library system data
-- [ ] **Parent/Guardian Portal**: Optional family visibility into student engagement
-- [ ] **Chatbot Advisor**: LLM-powered conversational interface for students
-
-#### Advanced Analytics
-- [ ] **Cohort Comparison**: Benchmark retention across programs/years
-- [ ] **Intervention Efficacy Dashboard**: A/B testing framework for outreach methods
-- [ ] **Dropout Prediction**: Early warning 4-6 weeks in advance
-- [ ] **Revenue Impact Modeling**: ROI calculator for retention investments
-
-### Technical Debt
-- [ ] **Complete Bounded Context Migration**: Finish refactor from `app/routes` to domain packages
-- [ ] **Async Database Layer**: Fully async SQLAlchemy operations
-- [ ] **API Versioning**: Implement v2 API with improved pagination and filtering
-
----
-
-## 🤝 Contributing Guidelines
-
-We welcome contributions from the community! Please follow these guidelines:
-
-### Getting Started
-
-1. **Fork the repository** and create your branch from `main`
-2. **Set up your development environment** following the Installation Guide
-3. **Run tests** to ensure baseline functionality: `pytest backend/tests/ -v`
-
-### Branch Naming Convention
-
-| Prefix | Use Case | Example |
-|--------|----------|---------|
-| `feature/` | New features | `feature/calendar-scoring-v2` |
-| `fix/` | Bug fixes | `fix/ingestion-timeout` |
-| `chore/` | Maintenance | `chore/update-dependencies` |
-| `docs/` | Documentation | `docs/api-examples` |
-
-### Code Quality Standards
-
-Before submitting a PR:
-
+**Run Stack**:
 ```bash
-# Run all tests
-pytest backend/tests/ -v --tb=short
-
-# Type checking
-mypy backend/
-
-# Security scan
-bandit -r backend/
-
-# Linting
-flake8 backend/ --count --statistics
-
-# Smoke tests (if server running)
-bash scripts/smoke_test.sh
-
-# Verify no secrets leaked
-git-secrets --scan
+docker-compose up -d
 ```
 
-### Database Migrations
-
-Any model changes must include a migration:
-
+**View Logs**:
 ```bash
-# Generate migration
-alembic revision --autogenerate -m "Add X to Y"
+docker-compose logs -f backend
+docker-compose logs -f frontend
+```
 
-# Review and edit generated file to ensure downgrade() is complete
+### CI/CD
 
-# Test migration
+No CI/CD pipeline currently configured. Recommended setup:
+
+1. **GitHub Actions** for:
+   - Run tests on PR
+   - Build Docker images on merge
+   - Deploy to staging/production
+
+2. **Pre-deployment Checks**:
+   - Security scan (bandit, safety)
+   - Dependency audit (pip-audit)
+   - Database migration dry-run
+
+### Environment Separation
+
+| Environment | Database | Redis | LLM | Purpose |
+|-------------|----------|-------|-----|---------|
+| Development | SQLite (local) | localhost:6379 | Optional | Local development |
+| Staging | PostgreSQL | Staging Redis | Test keys | QA testing |
+| Production | PostgreSQL (HA) | Redis Cluster | Production keys | Live users |
+
+### Scaling Considerations
+
+**Current Limitations**:
+- Single-process design (async lock for prediction jobs)
+- SQLite not suitable for concurrent writes
+- No horizontal scaling for backend
+
+**Recommendations**:
+- Use PostgreSQL for production
+- Deploy behind load balancer with sticky sessions
+- Redis cluster for distributed rate limiting
+- Consider Celery for background job distribution
+
+## Logging and Monitoring
+
+### Logging System
+
+**Logger**: Python logging with structured output
+
+**Log File**: `backend/backend.log` (configurable via `LOG_FILE`)
+
+**Log Levels**:
+- `DEBUG` — Detailed debugging information
+- `INFO` — General operational messages
+- `WARNING` — Warning conditions (non-blocking)
+- `ERROR` — Error conditions (blocking)
+- `CRITICAL` — Critical failures (service impact)
+
+### Log Format
+
+```json
+{
+  "timestamp": "2026-04-14T10:30:00Z",
+  "level": "INFO",
+  "message": "Request completed: GET /students - Status: 200",
+  "request_id": "abc-123-def",
+  "user_id": 5,
+  "duration_ms": 45
+}
+```
+
+### PII Masking
+
+All logs automatically mask sensitive data:
+- Email addresses: `stu***@ex***.com`
+- Student IDs: `STU***789`
+- JWT tokens: `[REDACTED_JWT]`
+- Phone numbers: `[REDACTED_PHONE]`
+
+### Error Tracking
+
+**Current**: File-based logging only
+
+**Recommended**:
+- Sentry integration for error aggregation
+- Alerting on ERROR/CRITICAL logs
+- Dashboard for error rates
+
+### Observability
+
+**Health Endpoints**:
+- `GET /health` — Overall system health
+- `GET /api/v1/monitoring/scheduler` — Scheduler status
+
+**Metrics to Monitor**:
+- Request latency (p95, p99)
+- Error rate by endpoint
+- Redis connection pool usage
+- Database query latency
+- Prediction job duration
+
+## Security Considerations
+
+### Authentication
+
+**Method**: JWT (JSON Web Tokens) with bcrypt password hashing
+
+**Token Structure**:
+- Access token: 15-60 minute expiry, stored in memory
+- Refresh token: 7 day expiry, httpOnly cookie
+- Claims: sub, role, exp, iat, iss, aud, jti, nbf
+
+**Security Features**:
+- Token revocation blocklist (RevokedToken table)
+- Automatic token rotation on refresh
+- Signature validation with SECRET_KEY
+- Audience and issuer validation
+
+### Authorization
+
+**Method**: Role-Based Access Control (RBAC)
+
+**Roles**:
+- `student` — Own data only
+- `faculty` — All student data, interventions
+- `admin` — Full system access, user management
+- `retention team` — Intervention management, analytics
+
+**Superuser**: `is_superuser=True` bypasses all role checks
+
+### Input Validation
+
+**Layers**:
+1. **Pydantic schemas** — Type validation, field constraints
+2. **SecurityManager.sanitize_input()** — HTML sanitization with bleach
+3. **Encoding detection** — URL, Unicode, HTML entity decoding
+4. **Control character stripping** — Null bytes, newlines
+5. **Prompt injection detection** — LLM-specific patterns
+
+**Validators**:
+- GPA: 0.0-4.0 range
+- Attendance: 0-100 range
+- Student ID: Alphanumeric, 4-20 chars, regex `^[A-Za-z0-9_-]{4,20}$`
+
+### Rate Limiting
+
+**Implementation**: SlowAPI with Redis backend
+
+**Limits**:
+| Endpoint | Limit | Window |
+|----------|-------|--------|
+| Login | 5 | per minute |
+| Data Ingestion | 10 | per hour |
+| LLM (per user) | 5 | per minute |
+| LLM (per user) | 20 | per hour |
+| Default | 200 | per minute |
+
+**Response on Limit**:
+```http
+HTTP/1.1 429 Too Many Requests
+Retry-After: 60
+Content-Type: application/json
+
+{
+  "detail": "Rate limit exceeded",
+  "retry_after": 60
+}
+```
+
+### Secrets Management
+
+**Storage**: Environment variables only (never in code)
+
+**Generation**:
+```bash
+# Secret key
+python -c "import secrets; print(secrets.token_hex(32))"
+
+# Integration API key hash
+python -c "import hashlib; print(hashlib.sha256(b'your-key').hexdigest())"
+```
+
+**Validation**: Startup validation rejects weak/placeholder values in production
+
+### Known Vulnerabilities
+
+**Addressed**:
+- XSS: Content Security Policy, input sanitization
+- CSRF: JWT tokens, httpOnly cookies
+- IDOR: Resource ownership checker, role-based access
+- SQL Injection: SQLAlchemy ORM with parameterized queries
+- Prompt Injection: LLM input sanitization, guardrails
+
+**Under Review**:
+- Multi-worker deployment requires distributed lock (ARCH-2)
+- Token cleanup job needed for revoked_tokens table growth
+
+## Performance Considerations
+
+### Bottlenecks
+
+1. **SQLite Concurrency**: Single-writer limitation
+   - Mitigation: Use PostgreSQL in production
+
+2. **Prediction Job Lock**: Async lock prevents overlapping runs
+   - Impact: Single-worker deployment only
+   - Fix: Redis distributed lock for multi-worker
+
+3. **LLM API Latency**: 30-second timeout
+   - Mitigation: Caching, fallback responses
+
+### Caching
+
+**Redis Cache**:
+- Rate limit counters
+- LLM response cache (TTL: 300 seconds)
+- Feature computation cache (planned)
+
+### Optimization Strategies
+
+**Database**:
+- Keyset pagination (O(n) vs O(n^2))
+- Composite indexes for common queries
+- Connection pooling (SQLAlchemy)
+
+**Application**:
+- Async endpoints for I/O-bound operations
+- Batch processing for bulk operations
+- Lazy loading for relationships
+
+### Scalability Notes
+
+**Current Capacity**:
+- ~1000 students per instance
+- ~100 concurrent users
+- Daily prediction generation: 5-10 minutes for 500 students
+
+**Scaling Path**:
+1. PostgreSQL with read replicas
+2. Redis cluster for distributed caching
+3. Celery for background job distribution
+4. Horizontal backend scaling behind load balancer
+
+## Limitations
+
+### Technical Limitations
+
+1. **ML Model**: Rule-based scoring only (no trained ML model)
+   - XGBoost training pipeline not implemented
+   - Weights manually configured
+
+2. **Data Ingestion**: File-based only (no LMS API integration)
+   - Requires manual Excel uploads
+   - No real-time sync
+
+3. **Single-Process Design**: Async lock for prediction jobs
+   - Multi-worker deployment requires Redis distributed lock
+
+4. **SQLite Default**: Not suitable for production concurrency
+   - PostgreSQL migration required for scale
+
+### Functional Limitations
+
+1. **Intervention Tracking**: Manual outcome logging
+   - No automated follow-up scheduling
+   - No communication integration (email, WhatsApp)
+
+2. **Student Portal**: Limited functionality
+   - Read-only access to risk data
+   - No self-service intervention requests
+
+3. **Reporting**: Basic PDF generation
+   - No scheduled report delivery
+   - Limited export formats
+
+### Known Issues
+
+- Ghost student detection relies on zero engagement threshold
+- Calendar risk scorer may produce edge cases at trimester boundaries
+- LLM features require manual API key configuration
+
+## Roadmap
+
+### Phase 1: Core Improvements
+
+- [ ] PostgreSQL migration guide
+- [ ] Multi-worker deployment with Redis distributed locks
+- [ ] LMS API integration (Canvas, Moodle, Blackboard)
+- [ ] Automated email interventions
+
+### Phase 2: ML Enhancement
+
+- [ ] XGBoost training pipeline
+- [ ] Model versioning and A/B testing
+- [ ] Feature importance tracking
+- [ ] Automated model retraining
+
+### Phase 3: Advanced Features
+
+- [ ] Student self-service portal
+- [ ] Communication platform integration
+- [ ] Early alert system for faculty
+- [ ] Retention campaign management
+
+### Phase 4: Enterprise Features
+
+- [ ] Multi-tenancy support
+- [ ] SSO integration (SAML, OIDC)
+- [ ] Advanced analytics (cohort segmentation)
+- [ ] API rate limiting per organization
+
+## Troubleshooting
+
+### Common Errors
+
+#### "Redis is not reachable"
+
+**Cause**: Redis service not running or incorrect `REDIS_URL`
+
+**Fix**:
+```bash
+# Check Redis status
+redis-cli ping  # Should return PONG
+
+# Start Redis
+redis-server
+
+# Or with Docker
+docker run -d -p 6379:6379 redis:7-alpine
+```
+
+#### "DATABASE_URL environment variable is required"
+
+**Cause**: Missing database configuration
+
+**Fix**:
+```bash
+# Add to .env
+DATABASE_URL=sqlite:///./backend/data/sql_app.db
+
+# Or for PostgreSQL
+DATABASE_URL=postgresql://user:pass@localhost:5432/ews_db
+```
+
+#### "SECRET_KEY environment variable is not set"
+
+**Cause**: Missing or weak secret key
+
+**Fix**:
+```bash
+# Generate secure key
+python -c "import secrets; print(secrets.token_hex(32))"
+
+# Add to .env (min 32 characters)
+SECRET_KEY=<generated-key>
+```
+
+#### "Token has been revoked"
+
+**Cause**: User logged out, token added to blocklist
+
+**Fix**: Re-authenticate by logging in again
+
+#### "Rate limit exceeded"
+
+**Cause**: Too many requests in time window
+
+**Fix**: Wait for retry period or increase limits in config
+
+#### "Student not found" (404)
+
+**Cause**: Student ID not in database or IDOR protection
+
+**Fix**: Verify student exists and user has access permissions
+
+### Database Issues
+
+#### "database is locked" (SQLite)
+
+**Cause**: Concurrent write attempts
+
+**Fix**:
+- Reduce concurrent writes
+- Migrate to PostgreSQL
+- Increase timeout in connection string
+
+#### Migration failures
+
+**Cause**: Schema drift or incomplete migrations
+
+**Fix**:
+```bash
+# Check current version
+alembic current
+
+# Upgrade to latest
 alembic upgrade head
-alembic downgrade -1  # Verify reversibility
+
+# If stuck, reset (development only)
+alembic downgrade base
 alembic upgrade head
+```
+
+### Frontend Issues
+
+#### "Network Error" in browser console
+
+**Cause**: Backend not running or CORS misconfiguration
+
+**Fix**:
+```bash
+# Start backend
+python -m uvicorn backend.main:app --reload
+
+# Check CORS_ORIGINS in .env
+CORS_ORIGINS=http://localhost:3000,http://localhost:5173
+```
+
+#### Blank page after build
+
+**Cause**: Incorrect `REACT_APP_API_URL` or missing environment
+
+**Fix**:
+```bash
+# Set correct API URL
+export REACT_APP_API_URL=http://your-backend:8000/api/v1
+
+# Rebuild
+npm run build
+```
+
+## Contributing
+
+### Code Style
+
+**Python**:
+- Follow PEP 8
+- Type hints required for function signatures
+- Docstrings for public APIs
+- Maximum line length: 100 characters
+
+**JavaScript/React**:
+- ESLint rules in `frontend/package.json`
+- Functional components with hooks
+- PropTypes or TypeScript for type safety
+
+### Branching Strategy
+
+```
+main          # Production-ready code
+  ├── develop         # Integration branch
+  │     ├── feature/* # New features
+  │     ├── bugfix/*  # Bug fixes
+  │     └── hotfix/*  # Production hotfixes
+```
+
+### Commit Message Format
+
+```
+<type>(<scope>): <subject>
+
+<body>
+
+<footer>
+```
+
+**Types**:
+- `feat`: New feature
+- `fix`: Bug fix
+- `docs`: Documentation changes
+- `style`: Code style changes (formatting)
+- `refactor`: Code refactoring
+- `test`: Test additions/changes
+- `chore`: Build/config changes
+
+**Example**:
+```
+feat(risk-scoring): add calendar-aware risk adjustment
+
+- Implement calendar_scorer module
+- Blend feature-based and calendar-based scores
+- Add CALENDAR_RISK_BLEND_WEIGHT config
+
+Fixes: #123
 ```
 
 ### Pull Request Process
 
-1. **Update documentation** for any changed functionality
-2. **Add tests** for new features or bug fixes
-3. **Ensure CI passes** (tests, type checks, security scan)
-4. **Request review** from at least one maintainer
-5. **Squash commits** before merge for clean history
+1. Create feature branch from `develop`
+2. Implement changes with tests
+3. Run test suite: `pytest backend/tests -v`
+4. Update documentation
+5. Submit PR to `develop`
+6. Address review comments
+7. Merge after approval
 
-### Code of Conduct
+### Security Review
 
-Please read our [CODE_OF_CONDUCT.md](CODE_OF_CONDUCT.md) for community standards.
+All PRs must pass:
+- Encoding bypass tests
+- Security header tests
+- IDOR vulnerability tests
+- Input validation tests
 
----
+## License
 
-## 📜 License
-
-This project is licensed under the **MIT License** — see the [LICENSE](LICENSE) file for details.
-
-```
-MIT License
-
-Copyright (c) 2026 BITS Pilani Digital
-
-Permission is hereby granted, free of charge, to any person obtaining a copy
-of this software and associated documentation files (the "Software"), to deal
-in the Software without restriction, including without limitation the rights
-to use, copy, modify, merge, publish, distribute, sublicense, and/or sell
-copies of the Software, and to permit persons to whom the Software is
-furnished to do so, subject to the following conditions:
-
-The above copyright notice and this permission notice shall be included in all
-copies or substantial portions of the Software.
-```
-
----
-
-## 👨‍💻 Authors & Acknowledgements
-
-### Core Team
-
-| Role | Name | Contribution |
-|------|------|--------------|
-| **Lead Architect** | BITS Pilani Digital Engineering Team | System design, risk scoring engine |
-| **Backend Engineering** | Backend Development Team | FastAPI implementation, data pipeline |
-| **Frontend Engineering** | Frontend Development Team | React dashboard, data visualization |
-| **DevOps** | Infrastructure Team | Docker, deployment automation |
-
-### Special Thanks
-
-- **Brightspace/D2L** for LMS data export capabilities
-- **Google Gemini & Anthropic Claude** teams for LLM API access
-- **FastAPI & SQLAlchemy** communities for excellent documentation
-- All beta testers and early adopters who provided feedback
-
-### Third-Party Libraries
-
-This project stands on the shoulders of open-source giants:
-- FastAPI for the web framework
-- React for the frontend
-- SQLAlchemy & Alembic for database management
-- Pandas & NumPy for data processing
-- Chart.js & Recharts for visualization
-
----
-
-## 📞 Support & Contact
-
-For questions, bug reports, or feature requests:
-
-- **GitHub Issues**: [Open an issue](../../issues)
-- **Documentation**: See [`docs/`](./docs/) directory
-  - [`API_REFERENCE.md`](./docs/API_REFERENCE.md) - Detailed API documentation
-  - [`ARCHITECTURE.md`](./docs/ARCHITECTURE.md) - Architecture Decision Records
-  - [`DEPLOYMENT.md`](./docs/DEPLOYMENT.md) - Production deployment guide
-- **Security Issues**: See [SECURITY.md](SECURITY.md) for vulnerability reporting
-
----
-
-**Version:** 2.1.0  
-**Last Updated:** April 2026  
-**Maintained by:** BITS Pilani Digital Engineering Team
-
+Proprietary software. All rights reserved.
