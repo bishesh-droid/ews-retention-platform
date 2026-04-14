@@ -40,8 +40,8 @@ def cleanup_test_users(db_session: Session):
     """Cleanup fixture to remove test users and students after tests."""
     from backend.database.models.student import Student
     from backend.database.models.enrollment import Enrollment
-    from backend.database.models.graded_component import GradedComponent
-    from backend.database.models.exam_record import ExamRecord
+    from backend.database.models.academic import GradedComponent
+    from backend.database.models.academic import ExamRecord
 
     yield
     # Cleanup related student data first

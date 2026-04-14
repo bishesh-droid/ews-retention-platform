@@ -243,19 +243,19 @@ def _build_risk_profile_from_cached_data(
 
     # Build signal breakdowns from features
     academic_signals = {
-        "content_completion_score": round(float(features.get("content_completion_score", 0)), 2),
-        "graded_quiz_score": round(float(features.get("graded_quiz_score", 0)), 2),
-        "graded_assignment_score": round(float(features.get("graded_assignment_score", 0)), 2),
-        "exam_score": round(float(features.get("exam_score", 0)), 2),
-        "exam_attendance_rate": round(float(features.get("exam_attendance_rate", 0)), 2),
+        "content_completion_score": round(float(features.get("content_completion_score") or 0), 2),
+        "graded_quiz_score": round(float(features.get("graded_quiz_score") or 0), 2),
+        "graded_assignment_score": round(float(features.get("graded_assignment_score") or 0), 2),
+        "exam_score": round(float(features.get("exam_score") or 0), 2),
+        "exam_attendance_rate": round(float(features.get("exam_attendance_rate") or 0), 2),
     }
 
     engagement_signals = {
-        "quiz_engagement_score": round(float(features.get("quiz_engagement_score", 0)), 2),
-        "discussion_engagement_score": round(float(features.get("discussion_engagement_score", 0)), 2),
-        "assignment_score": round(float(features.get("assignment_score", 0)), 2),
-        "login_consistency_score": round(float(features.get("login_consistency_score", 0)), 2),
-        "time_investment_score": round(float(features.get("time_investment_score", 0)), 2),
+        "quiz_engagement_score": round(float(features.get("quiz_engagement_score") or 0), 2),
+        "discussion_engagement_score": round(float(features.get("discussion_engagement_score") or 0), 2),
+        "assignment_score": round(float(features.get("assignment_score") or 0), 2),
+        "login_consistency_score": round(float(features.get("login_consistency_score") or 0), 2),
+        "time_investment_score": round(float(features.get("time_investment_score") or 0), 2),
     }
 
     # Consistency signals

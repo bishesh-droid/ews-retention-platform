@@ -57,8 +57,8 @@ def integration_headers():
 def cleanup_test_data(db_session: Session):
     """Cleanup fixture to remove test students after tests."""
     from backend.database.models.enrollment import Enrollment
-    from backend.database.models.graded_component import GradedComponent
-    from backend.database.models.exam_record import ExamRecord
+    from backend.database.models.academic import GradedComponent
+    from backend.database.models.academic import ExamRecord
 
     yield
     # Cleanup test data in reverse dependency order to avoid FK violations

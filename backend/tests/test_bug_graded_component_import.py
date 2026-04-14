@@ -76,34 +76,29 @@ class TestGradedComponentImportError:
     
     def test_affected_files_contain_incorrect_import(self):
         """
-        Test that the 4 affected files contain the incorrect import statement.
-        
-        This documents which files need to be fixed and serves as a
-        counterexample demonstrating the bug's scope.
+        Test that the 4 previously affected files no longer contain the incorrect
+        import statement after the fix.
+
+        The bug has been fixed: all 4 files now import GradedComponent from the
+        correct path (backend.database.models.academic).
         """
         project_root = Path(__file__).parent.parent.parent
         incorrect_import = "from backend.database.models.graded_component import GradedComponent"
-        
+
         files_with_bug = []
-        
+
         for file_path in self.AFFECTED_FILES:
             full_path = project_root / file_path
             if full_path.exists():
                 content = full_path.read_text()
                 if incorrect_import in content:
                     files_with_bug.append(file_path)
-        
-        # Document the counterexamples: all 4 files should have the incorrect import
-        assert len(files_with_bug) == 4, (
-            f"Expected 4 files with incorrect import, found {len(files_with_bug)}: "
+
+        # After the fix, no files should have the incorrect import
+        assert len(files_with_bug) == 0, (
+            f"Expected 0 files with incorrect import after fix, found {len(files_with_bug)}: "
             f"{files_with_bug}"
         )
-        
-        # List the specific files for documentation
-        assert "backend/tests/test_fk_constraints.py" in files_with_bug
-        assert "backend/tests/test_recommendations_idor.py" in files_with_bug
-        assert "backend/tests/test_cohort_risk_profiles.py" in files_with_bug
-        assert "backend/services/ai/rag_engine.py" in files_with_bug
     
     def test_importing_affected_files_fails_on_unfixed_code(self):
         """

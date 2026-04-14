@@ -12,7 +12,7 @@ from sqlalchemy.orm import Session
 from datetime import datetime
 from backend.database import Student
 from backend.database.models.goals_and_risks import RiskSnapshot
-from backend.database.models.graded_component import GradedComponent
+from backend.database.models.academic import GradedComponent
 import statistics
 
 

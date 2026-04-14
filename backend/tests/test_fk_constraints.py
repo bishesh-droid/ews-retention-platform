@@ -197,7 +197,7 @@ class TestForeignKeyConstraints:
         
         Graded components are linked to students via FK constraint.
         """
-        from backend.database.models.graded_component import GradedComponent
+        from backend.database.models.academic import GradedComponent
         
         # Attempt to create graded component with non-existent student
         invalid_component = GradedComponent(
@@ -222,7 +222,7 @@ class TestForeignKeyConstraints:
         
         Exam records are linked to students via FK constraint.
         """
-        from backend.database.models.exam_record import ExamRecord
+        from backend.database.models.academic import ExamRecord
         
         # Attempt to create exam record with non-existent student
         invalid_record = ExamRecord(
