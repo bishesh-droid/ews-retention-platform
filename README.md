@@ -20,6 +20,24 @@ Early Warning System for student retention — AI-driven risk prediction and int
 - [Performance Considerations](#performance-considerations)
 - [Limitations](#limitations)
 - [Roadmap](#roadmap)
+- [System Design Principles](#system-design-principles)
+- [Dependency Overview](#dependency-overview)
+- [API Versioning Strategy](#api-versioning-strategy)
+- [Error Handling Strategy](#error-handling-strategy)
+- [Background Job Lifecycle](#background-job-lifecycle)
+- [LLM Fallback Strategy](#llm-fallback-strategy)
+- [Caching Strategy Details](#caching-strategy-details)
+- [Concurrency Model](#concurrency-model)
+- [Database Transaction Strategy](#database-transaction-strategy)
+- [Data Consistency Guarantees](#data-consistency-guarantees)
+- [Failure Recovery Strategy](#failure-recovery-strategy)
+- [Observability and Metrics Strategy](#observability-and-metrics-strategy)
+- [Alerting Strategy](#alerting-strategy)
+- [Health Check Internals](#health-check-internals)
+- [CI/CD Pipeline](#cicd-pipeline)
+- [Known Technical Debt](#known-technical-debt)
+- [Operational Runbook](#operational-runbook)
+- [Developer Onboarding Guide](#developer-onboarding-guide)
 - [Troubleshooting](#troubleshooting)
 - [Contributing](#contributing)
 
@@ -2015,6 +2033,1337 @@ python -c "import hashlib; print(hashlib.sha256(b'your-key').hexdigest())"
 - [ ] SSO integration (SAML, OIDC)
 - [ ] Advanced analytics (cohort segmentation)
 - [ ] API rate limiting per organization
+
+## System Design Principles
+
+### Core Principles
+
+**1. Separation of Concerns**
+- Routes handle HTTP concerns only (validation, serialization, status codes)
+- Services contain business logic (risk scoring, feature engineering)
+- Core modules provide cross-cutting concerns (auth, security, logging)
+- Middleware processes requests uniformly before reaching routes
+
+**2. Defense in Depth**
+- Input validation at multiple layers (Pydantic, middleware, service layer)
+- Authentication at route level, authorization at service level
+- Rate limiting at middleware, resource quotas at service level
+- Audit logging for all data access regardless of role
+
+**3. Fail Secure**
+- Authentication failures default to denied access
+- Rate limit exceeded returns 429 without leaking system state
+- Database errors return generic messages (details logged server-side)
+- LLM service failures fall back to rule-based responses
+
+**4. Least Privilege**
+- RBAC with four distinct roles (student, faculty, admin, retention_team)
+- Token scope limited to specific claims (sub, role, exp)
+- Database connections use minimal required permissions
+- Service accounts isolated from user authentication flow
+
+**5. Observability by Design**
+- Request ID propagation through all layers
+- Structured logging with consistent field naming
+- PII masking at logging boundary (not scattered through code)
+- Health checks expose internal state without exposing sensitive data
+
+### Architectural Boundaries
+
+| Layer | Responsibility | Forbidden Operations |
+|-------|---------------|---------------------|
+| Routes | HTTP handling, input validation | Direct database queries |
+| Services | Business logic, orchestration | HTTP-specific operations |
+| Core | Cross-cutting utilities | Business rule enforcement |
+| Middleware | Request/response processing | Database state changes |
+| Database | Persistence, constraints | Business calculations |
+
+## Dependency Overview
+
+### Python Dependencies
+
+**Core Framework (Web)**
+- `fastapi==0.119.0` — ASGI web framework
+- `uvicorn==0.38.0` — ASGI server
+- `starlette==0.48.0` — ASGI toolkit (FastAPI dependency)
+- `python-multipart==0.0.22` — Form/multipart parsing
+
+**Database**
+- `SQLAlchemy==2.0.45` — ORM and SQL toolkit
+- `alembic==1.18.4` — Database migrations
+- `psycopg2-binary>=2.9` — PostgreSQL adapter
+- `asyncpg>=0.29.0` — Async PostgreSQL driver
+- `aiosqlite==0.21.0` — Async SQLite driver
+- `greenlet==3.3.2` — SQLAlchemy greenlet support
+
+**Data Processing**
+- `pandas==2.3.3` — Data manipulation
+- `numpy==2.3.5` — Numerical computing
+- `openpyxl==3.1.5` — Excel file handling
+- `chardet==5.2.0` — Character encoding detection
+
+**Machine Learning**
+- `scikit-learn==1.8.0` — ML utilities (calibration only)
+- `joblib==1.5.2` — Model serialization
+
+**Security**
+- `pydantic==2.12.5` — Data validation
+- `pydantic_core==2.41.5` — Pydantic core
+- `passlib==1.7.4` — Password hashing
+- `bcrypt==5.0.0` — bcrypt implementation
+- `PyJWT==2.12.0` — JWT handling
+- `cryptography==46.0.5` — Cryptographic operations
+- `python-magic==0.4.27` — File type detection
+- `bleach==6.1.0` — HTML sanitization
+- `email-validator==2.2.0` — Email validation
+- `slowapi==0.1.9` — Rate limiting
+
+**Caching and Queuing**
+- `redis==4.6.0` — Redis client
+
+**Scheduling**
+- `APScheduler==3.11.2` — Job scheduling
+
+**PDF Generation**
+- `fpdf2==2.8.6` — PDF generation
+
+**Configuration**
+- `python-dotenv==1.2.1` — Environment variables
+
+**Optional (LLM)**
+- `google-generativeai>=0.8.0` — Gemini API (optional)
+- `anthropic>=0.34.0` — Claude API (optional)
+
+### Node.js Dependencies
+
+**Core Framework**
+- `react==18.2.0` — UI framework
+- `react-dom==18.2.0` — React DOM renderer
+- `react-scripts==5.0.1` — Build toolchain
+
+**Routing and State**
+- `react-router-dom==6.22.3` — Client-side routing
+- `axios==1.6.8` — HTTP client
+
+**UI Components**
+- `bootstrap==5.3.8` — CSS framework
+- `react-bootstrap==2.10.10` — React Bootstrap components
+- `react-icons==5.5.0` — Icon library
+
+**Data Visualization**
+- `chart.js==4.4.2` — Chart library
+- `react-chartjs-2==5.2.0` — React Chart.js wrapper
+- `recharts==3.7.0` — React chart library
+
+**Animation**
+- `framer-motion==12.31.0` — Animation library
+- `react-intersection-observer==10.0.2` — Intersection observer hook
+
+**Performance**
+- `react-window==2.2.5` — Virtualized lists
+- `react-window-infinite-loader==2.0.1` — Infinite scroll
+
+**Testing**
+- `@testing-library/jest-dom==5.17.0` — Jest DOM matchers
+- `@testing-library/react==13.4.0` — React testing utilities
+- `@testing-library/user-event==13.5.0` — User event simulation
+- `web-vitals==2.1.4` — Performance metrics
+
+### External Services
+
+| Service | Version | Purpose | Network Requirements |
+|---------|---------|---------|-------------------|
+| Redis | 7.x | Rate limiting, caching | Port 6379 TCP |
+| PostgreSQL | 14+ | Production database | Port 5432 TCP |
+| Google Gemini API | v1beta | LLM features | HTTPS outbound |
+| Anthropic Claude API | v1 | LLM features | HTTPS outbound |
+
+## API Versioning Strategy
+
+### Current Version
+
+API version: `v1`
+
+Base path: `/api/v1/`
+
+### Versioning Approach
+
+**URL Path Versioning**
+- Versions embedded in URL path (not headers or query params)
+- Example: `/api/v1/students`, `/api/v2/students`
+
+**Breaking Changes Definition**
+- Removing or renaming fields in response schemas
+- Changing field types in request/response
+- Removing endpoints
+- Changing authentication requirements
+- Altering rate limit behavior
+
+**Non-Breaking Changes**
+- Adding new optional fields
+- Adding new endpoints
+- Expanding enum values
+- Increasing rate limits
+- Performance improvements
+
+### Version Lifecycle
+
+| Version | Status | Support End Date |
+|---------|--------|-----------------|
+| v1 | Current | TBD |
+
+### Deprecation Process
+
+1. New version announced 6 months before deprecation
+2. Deprecated versions return `Sunset` header with end-of-life date
+3. 30-day grace period after deprecation date
+4. Final shutdown returns 410 Gone with migration documentation
+
+### Backwards Compatibility
+
+- Response schemas use `Optional[]` for new fields
+- Request schemas accept unknown fields (Pydantic `extra='ignore'`)
+- Enum values include `UNKNOWN` fallback
+- Date formats follow ISO 8601 (YYYY-MM-DDTHH:MM:SSZ)
+
+## Error Handling Strategy
+
+### Error Hierarchy
+
+```
+Exception
+├── HTTPException (FastAPI)
+│   ├── 400 Bad Request (validation errors)
+│   ├── 401 Unauthorized (authentication)
+│   ├── 403 Forbidden (authorization)
+│   ├── 404 Not Found
+│   ├── 409 Conflict (duplicate resource)
+│   ├── 422 Unprocessable Entity
+│   ├── 429 Too Many Requests
+│   └── 500 Internal Server Error
+├── SecurityException
+│   ├── InputValidationError
+│   ├── EncodingBypassError
+│   └── PromptInjectionError
+├── DatabaseException
+│   ├── IntegrityError
+│   └── ConnectionError
+└── ServiceException
+    ├── LLMServiceError
+    ├── RateLimitExceeded
+    └── FeatureExtractionError
+```
+
+### Error Response Format
+
+```json
+{
+  "success": false,
+  "error": {
+    "code": "VALIDATION_ERROR",
+    "message": "Field 'risk_score' must be between 0 and 100",
+    "field": "risk_score",
+    "request_id": "abc-123-def"
+  }
+}
+```
+
+### Error Handling Layers
+
+**1. Middleware Layer**
+- Catches unhandled exceptions
+- Returns generic 500 for unexpected errors
+- Logs full stack trace with request_id
+
+**2. Route Layer**
+- Converts service exceptions to HTTP responses
+- Adds request_id to error response
+- Validates error response schema
+
+**3. Service Layer**
+- Raises domain-specific exceptions
+- Includes context for debugging
+- No HTTP-specific logic
+
+**4. Database Layer**
+- SQLAlchemy exceptions converted to DatabaseException
+- IntegrityError includes constraint name
+- ConnectionError triggers retry logic
+
+### Retry Strategy
+
+| Operation | Max Retries | Backoff | Exceptions Retried |
+|-----------|-------------|---------|-------------------|
+| Database read | 3 | Exponential (1s, 2s, 4s) | ConnectionError, Timeout |
+| Database write | 2 | Exponential (1s, 2s) | ConnectionError |
+| LLM API call | 2 | Fixed 5s | Timeout, RateLimit |
+| Redis operation | 3 | Exponential | ConnectionError |
+
+### Error Logging
+
+- ERROR level: 5xx errors, unhandled exceptions
+- WARNING level: 4xx errors (except 401/403)
+- INFO level: 401/403 (security monitoring)
+- DEBUG level: Full request/response (development only)
+
+## Background Job Lifecycle
+
+### Job Types
+
+**1. Scheduled Jobs (APScheduler)**
+
+| Job | Schedule | Duration | Priority |
+|-----|----------|----------|----------|
+| Daily Risk Scoring | 03:00 UTC | 5-10 min | High |
+| Weekly Model Retraining | Sunday 02:00 UTC | 30-60 min | Medium |
+| Token Cleanup | Daily 04:00 UTC | < 1 min | Low |
+| GDPR Data Purge | 1st of month 01:00 UTC | Variable | Low |
+
+**2. Triggered Jobs**
+
+| Job | Trigger | Async/Sync |
+|-----|---------|-----------|
+| Data Ingestion | Admin upload | Async |
+| Batch Prediction | API call | Async |
+| PDF Report Generation | User request | Async |
+| LLM Caching | API response | Sync |
+
+### Job State Machine
+
+```
+PENDING -> RUNNING -> COMPLETED
+   |          |
+   v          v
+FAILED    TIMEOUT -> FAILED
+```
+
+### Concurrency Control
+
+**Async Locks (asyncio.Lock)**
+- Prediction job: Single instance across all workers
+- Token cleanup: Single instance
+- Data ingestion: Per-file lock (allows parallel files)
+
+**Lock Timeouts**
+- Prediction job: 2 hours
+- Data ingestion: 30 minutes per file
+- Token cleanup: 10 minutes
+
+### Job Monitoring
+
+**Scheduler Status Endpoint**
+```
+GET /api/v1/monitoring/scheduler
+
+Response:
+{
+  "status": "running",
+  "jobs": [
+    {
+      "id": "daily_risk_scoring",
+      "next_run": "2026-04-15T03:00:00Z",
+      "last_run": "2026-04-14T03:00:00Z",
+      "last_status": "completed"
+    }
+  ]
+}
+```
+
+**Job Logging**
+- Job start: INFO level with job_id, trigger_time
+- Job progress: DEBUG level with batch numbers
+- Job completion: INFO level with duration, record counts
+- Job failure: ERROR level with exception, retry count
+
+### Failure Handling
+
+**Retry Policy**
+- Max 3 retries for transient failures
+- Exponential backoff between retries
+- Dead letter queue for permanent failures (logged to database)
+
+**Circuit Breaker**
+- LLM API: Open after 5 failures, close after 60s
+- Database: Open after 3 connection failures, close after 30s
+
+## LLM Fallback Strategy
+
+### Primary Provider: Google Gemini
+
+**Configuration**
+- Model: `gemini-1.5-flash`
+- Timeout: 30 seconds
+- Max tokens: 2048
+- Temperature: 0.7
+
+### Fallback Provider: Anthropic Claude
+
+**Trigger Conditions**
+- Gemini API returns 5xx error
+- Gemini response timeout
+- Gemini rate limit exceeded (429)
+- HallucinationGuard flags Gemini response
+
+**Configuration**
+- Model: `claude-3-haiku-20240307`
+- Timeout: 30 seconds
+- Max tokens: 2048
+- Temperature: 0.7
+
+### Final Fallback: Rule-Based Response
+
+**Trigger Conditions**
+- Both LLM providers fail
+- Both responses fail hallucination check
+- LLM features disabled (no API keys)
+
+**Implementation**
+- Static response templates based on risk score ranges
+- Pre-defined intervention suggestions by category
+- No personalization (generic recommendations)
+
+### Response Caching
+
+**Cache Key**: Hash of (student_features + prompt_template_version)
+**TTL**: 300 seconds (5 minutes)
+**Storage**: Redis
+
+**Cache Bypass**
+- Debug mode enabled
+- Explicit `cache=false` parameter
+- Student features changed significantly (>20% delta)
+
+### Error Handling
+
+| Error | Retry | Fallback | Log Level |
+|-------|-------|----------|-----------|
+| Timeout | Yes (1) | Next provider | WARNING |
+| Rate limit | Yes (2, 5s) | Next provider | WARNING |
+| 5xx error | Yes (2) | Next provider | ERROR |
+| 4xx error | No | Next provider | ERROR |
+| Hallucination | No | Next provider | WARNING |
+
+## Caching Strategy Details
+
+### Cache Layers
+
+**1. Redis Cache (Distributed)**
+
+| Data Type | TTL | Invalidation | Key Pattern |
+|-----------|-----|--------------|-------------|
+| LLM responses | 300s | Feature change | `llm:{hash}` |
+| Rate limit counters | 60s | Window expiry | `ratelimit:{user}:{endpoint}` |
+| Feature vectors | 600s | New prediction | `features:{student_id}` |
+| Student lists | 120s | Data ingestion | `students:list:{params}` |
+
+**2. Application Cache (In-Memory)**
+
+| Data Type | TTL | Scope |
+|-----------|-----|-------|
+| Configuration | 60s | Process |
+| Database metadata | 300s | Process |
+| Compiled schemas | None | Process |
+
+**3. Database Query Cache (SQLAlchemy)**
+
+- Enabled for: Read-only lookup tables
+- Disabled for: Student data, predictions, audit logs
+- Expiration: 300 seconds
+
+### Cache Invalidation
+
+**Event-Based Invalidation**
+- Data ingestion: Invalidate student list caches
+- New prediction: Invalidate feature caches for student
+- Configuration change: Invalidate config cache
+
+**Time-Based Invalidation**
+- All caches have explicit TTL (no infinite caching)
+- Short TTL for volatile data (rate limits)
+- Long TTL for stable data (reference tables)
+
+### Cache Warming
+
+**Startup Warming**
+- Load active student list into cache
+- Pre-compute common filter combinations
+- Warm LLM cache with common queries
+
+**Scheduled Warming**
+- Every 4 hours for reference data
+- After data ingestion completion
+
+### Cache Monitoring
+
+**Metrics**
+- Hit rate by cache type
+- Miss rate by cache type
+- Average TTL remaining on hits
+- Eviction rate
+
+**Health Check**
+- Redis connectivity verified in `/health`
+- Cache latency < 10ms (p95)
+
+## Concurrency Model
+
+### Async/Sync Strategy
+
+**Async Operations (async/await)**
+- HTTP request handling (FastAPI)
+- Database queries (async SQLAlchemy with asyncpg)
+- External API calls (LLM, webhooks)
+- WebSocket connections (if implemented)
+
+**Sync Operations**
+- File I/O (data ingestion)
+- CPU-intensive calculations (feature engineering)
+- PDF generation
+- Background job execution (APScheduler)
+
+### Database Concurrency
+
+**SQLite (Development)**
+- Single writer, multiple readers
+- WAL mode enabled (PRAGMA journal_mode=WAL)
+- Timeout: 30 seconds
+- Check same thread disabled
+
+**PostgreSQL (Production)**
+- Connection pooling via SQLAlchemy
+- Pool size: 10 connections
+- Max overflow: 20 connections
+- Pool timeout: 30 seconds
+- Pool recycle: 3600 seconds
+
+### Request Concurrency
+
+**Uvicorn Workers**
+- Development: 1 worker (reload enabled)
+- Production: 4 workers (configurable via `--workers`)
+
+**Async Lock Usage**
+- Prediction job lock: Prevents overlapping scheduled runs
+- Ingestion file lock: Allows parallel processing of different files
+- Token cleanup lock: Prevents concurrent cleanup jobs
+
+### Thread Safety
+
+**Thread-Local Storage**
+- Database sessions (SQLAlchemy scoped sessions)
+- Request context (Flask-style g object)
+
+**Shared State**
+- Redis connection pool (thread-safe)
+- Configuration singleton (read-only after startup)
+- Logger instances (thread-safe)
+
+### Race Condition Prevention
+
+**Database**
+- Unique constraints prevent duplicate inserts
+- Optimistic locking for concurrent updates
+- Advisory locks for long-running operations
+
+**Application**
+- Async locks for singleton operations
+- Atomic Redis operations for counters
+- Immutable feature vectors (new versions on change)
+
+## Database Transaction Strategy
+
+### Transaction Boundaries
+
+**Route-Level Transactions**
+- Each HTTP request wrapped in transaction
+- Automatic rollback on unhandled exception
+- Commit on successful response
+
+**Service-Level Transactions**
+- Explicit transaction boundaries for multi-step operations
+- Nested transactions via SQLAlchemy savepoints
+
+**Background Job Transactions**
+- Each job step independently transactional
+- Partial failure allowed (logged, continues)
+
+### Isolation Levels
+
+| Operation | Isolation Level | Rationale |
+|-----------|-----------------|-----------|
+| Student read | READ COMMITTED | Allow concurrent updates |
+| Prediction write | READ COMMITTED | Standard consistency |
+| Audit log write | READ UNCOMMITTED | Performance, loss acceptable |
+| Data ingestion | SERIALIZABLE | Prevent duplicates |
+| Risk score update | REPEATABLE READ | Prevent lost updates |
+
+### Connection Management
+
+**Request Lifecycle**
+- Connection acquired at request start
+- Transaction begun at first query
+- Commit at response generation
+- Connection released to pool
+
+**Background Jobs**
+- Short-lived connections per batch
+- Connection closed between batches
+- Pool overflow handling for large jobs
+
+### Retry Logic
+
+**Retryable Errors**
+- Deadlock detected
+- Serialization failure
+- Connection timeout
+
+**Retry Configuration**
+- Max retries: 3
+- Backoff: Exponential (100ms, 200ms, 400ms)
+- Jitter: Random 0-50ms
+
+## Data Consistency Guarantees
+
+### Consistency Levels
+
+**Strong Consistency**
+- Student identity (email, org_id)
+- User authentication (password hash, role)
+- Audit logs (immutable once written)
+
+**Eventual Consistency**
+- Risk scores (may lag behind raw data)
+- Feature vectors (cached for 10 minutes)
+- Aggregated analytics (computed periodically)
+
+**Best-Effort**
+- LLM-generated content (cached for 5 minutes)
+- Real-time dashboards (30-second refresh)
+
+### Consistency Mechanisms
+
+**Database Constraints**
+- Foreign key constraints with cascade rules
+- Unique constraints on email, org_defined_id
+- Check constraints on score ranges (0-100)
+
+**Application Enforcement**
+- Risk score calculation idempotent (same input = same output)
+- Feature extraction deterministic (no randomness)
+- Prediction timestamps immutable
+
+**Reconciliation**
+- Daily consistency check job (03:30 UTC)
+- Detects orphaned records (predictions without students)
+- Fixes inconsistencies via soft delete or data correction
+
+### CAP Tradeoffs
+
+**Primary Database (PostgreSQL)**
+- CP system (Consistency + Partition tolerance)
+- Synchronous replication for critical data
+- Async replication for analytics replicas
+
+**Redis Cache**
+- AP system (Availability + Partition tolerance)
+- Eventual consistency with database
+- Cache misses trigger database read (consistent)
+
+### Data Integrity Checks
+
+**Scheduled Validation**
+- Orphaned prediction records
+- Students without risk snapshots
+- Interventions without student references
+- Audit logs with missing user references
+
+**On-Demand Validation**
+- Data ingestion validation (row-level)
+- Risk score bounds checking (0-100)
+- Referential integrity before deletion
+
+## Failure Recovery Strategy
+
+### Failure Modes
+
+**1. Database Failure**
+
+**Detection**
+- Health check fails after 3 consecutive errors
+- Connection pool exhausted
+- Query timeout exceeded
+
+**Recovery**
+- Failover to read replica (if configured)
+- Queue writes for later replay (Redis)
+- Return 503 Service Unavailable with Retry-After header
+
+**2. Redis Failure**
+
+**Detection**
+- Connection timeout
+- Command execution error
+
+**Recovery**
+- Rate limiting disabled (fallback to in-memory)
+- Caching disabled (direct database access)
+- Return 200 OK with warning header
+
+**3. LLM Service Failure**
+
+**Detection**
+- API timeout (30s)
+- 5xx error response
+- Rate limit exceeded
+
+**Recovery**
+- Fallback to alternative provider
+- Final fallback to rule-based responses
+- Queue for retry if all providers fail
+
+**4. Background Job Failure**
+
+**Detection**
+- Exception thrown during execution
+- Timeout exceeded
+- Lock acquisition failed
+
+**Recovery**
+- Automatic retry (3 attempts)
+- Exponential backoff between retries
+- Dead letter logging for permanent failures
+
+### Disaster Recovery
+
+**RTO (Recovery Time Objective)**: 4 hours
+**RPO (Recovery Point Objective)**: 1 hour
+
+**Backup Strategy**
+- Database: Daily full backup, hourly incremental
+- Configuration: Version controlled (Git)
+- Logs: 30-day retention, compressed
+
+**Restoration Procedure**
+1. Restore database from latest backup
+2. Replay queued transactions from Redis
+3. Verify data integrity with consistency checks
+4. Gradual traffic ramp-up
+
+### Circuit Breaker Pattern
+
+| Service | Failure Threshold | Recovery Time | Half-Open Requests |
+|---------|------------------|---------------|-------------------|
+| LLM API | 5 errors | 60s | 1 test request |
+| Database | 3 errors | 30s | 1 test query |
+| Redis | 3 errors | 15s | 1 test command |
+
+## Observability and Metrics Strategy
+
+### Metric Categories
+
+**1. Infrastructure Metrics**
+
+| Metric | Collection Method | Alert Threshold |
+|--------|------------------|-----------------|
+| CPU usage | Docker stats | > 80% for 5 min |
+| Memory usage | Docker stats | > 85% for 5 min |
+| Disk I/O | Host metrics | > 1000 IOPS sustained |
+| Network latency | Ping | > 100ms |
+
+**2. Application Metrics**
+
+| Metric | Collection Method | Retention |
+|--------|------------------|-----------|
+| Request latency | Middleware | 30 days |
+| Error rate | Error handler | 90 days |
+| Active users | Auth middleware | 30 days |
+| Prediction count | Scheduler job | 1 year |
+
+**3. Business Metrics**
+
+| Metric | Source | Dashboard |
+|--------|--------|-----------|
+| Students at risk | Database | Daily |
+| Intervention completion | Database | Weekly |
+| Retention rate | Analytics service | Monthly |
+| Revenue at risk | Business service | Monthly |
+
+### Metric Collection
+
+**Structured Logging**
+- All metrics emitted as structured logs
+- Consistent field naming (snake_case)
+- Timestamps in UTC (ISO 8601)
+
+**Log Levels for Metrics**
+- INFO: Business events (prediction generated, intervention created)
+- DEBUG: Performance metrics (query timing, cache hits)
+- WARNING: Anomalous behavior (slow queries, high error rates)
+
+### Distributed Tracing
+
+**Request ID Propagation**
+- Generated at entry point (nginx or FastAPI)
+- Passed to all downstream services
+- Included in all log entries
+- Returned to client in response header
+
+**Trace Context**
+- Trace ID: Unique per request
+- Span ID: Unique per operation within request
+- Parent Span ID: Hierarchical relationship
+
+### Metric Storage
+
+**Short-term (7 days)**
+- Application logs
+- Raw request logs
+- Debug metrics
+
+**Medium-term (30 days)**
+- Aggregated performance metrics
+- Error summaries
+- User activity
+
+**Long-term (1 year)**
+- Business KPIs
+- Audit logs (compliance)
+- Prediction history
+
+## Alerting Strategy
+
+### Alert Levels
+
+**P0 (Critical)**
+- Database unavailable
+- All LLM providers down
+- Authentication system failure
+- Data corruption detected
+
+**P1 (High)**
+- Error rate > 10%
+- Response latency > 5s (p95)
+- Redis unavailable
+- Single LLM provider down
+
+**P2 (Medium)**
+- Error rate > 5%
+- Response latency > 2s (p95)
+- Background job failures
+- Disk space > 80%
+
+**P3 (Low)**
+- Error rate > 1%
+- Unusual traffic patterns
+- Certificate expiration < 30 days
+- Dependency update available
+
+### Alert Channels
+
+| Level | Email | Pager | Slack | Dashboard |
+|-------|-------|-------|-------|-----------|
+| P0 | Yes | Yes | Yes | Yes |
+| P1 | Yes | No | Yes | Yes |
+| P2 | Yes | No | No | Yes |
+| P3 | No | No | No | Yes |
+
+### Alert Routing
+
+**On-Call Rotation**
+- Primary: Platform team lead
+- Secondary: Backend engineer
+- Escalation: Engineering manager (after 15 min)
+
+**Business Hours vs Off-Hours**
+- P0-P1: Alert 24/7
+- P2: Alert business hours only
+- P3: Dashboard only, weekly digest
+
+### Alert Fatigue Prevention
+
+**Grouping**
+- Similar alerts grouped within 5-minute window
+- Single notification for related failures
+
+**Suppression**
+- Maintenance windows disable non-critical alerts
+- Dependent service failure suppresses downstream alerts
+
+**Acknowledgment**
+- Alerts require manual acknowledgment
+- Auto-escalate if not acknowledged in 15 minutes
+
+## Health Check Internals
+
+### Health Check Endpoint
+
+```
+GET /health
+
+Response (healthy):
+{
+  "status": "healthy",
+  "timestamp": "2026-04-14T10:30:00Z",
+  "version": "1.0.0",
+  "checks": {
+    "database": {
+      "status": "pass",
+      "response_time_ms": 15,
+      "last_success": "2026-04-14T10:29:55Z"
+    },
+    "redis": {
+      "status": "pass",
+      "response_time_ms": 5,
+      "last_success": "2026-04-14T10:29:58Z"
+    },
+    "ml_pipeline": {
+      "status": "pass",
+      "last_prediction": "2026-04-14T03:00:00Z",
+      "predictions_today": 500
+    }
+  }
+}
+
+Response (degraded):
+{
+  "status": "degraded",
+  "checks": {
+    "database": {"status": "pass"},
+    "redis": {"status": "fail", "error": "Connection timeout"},
+    "ml_pipeline": {"status": "pass"}
+  }
+}
+
+Response (unhealthy):
+{
+  "status": "unhealthy",
+  "checks": {
+    "database": {"status": "fail", "error": "Connection refused"},
+    "redis": {"status": "pass"},
+    "ml_pipeline": {"status": "unknown"}
+  }
+}
+```
+
+### Health Check Implementation
+
+**Database Check**
+- Query: `SELECT 1`
+- Timeout: 5 seconds
+- Failure threshold: 3 consecutive failures
+
+**Redis Check**
+- Command: `PING`
+- Timeout: 2 seconds
+- Failure threshold: 3 consecutive failures
+
+**ML Pipeline Check**
+- Verify last prediction timestamp < 25 hours ago
+- Verify prediction count matches student count
+- Check for failed predictions in last 24 hours
+
+### Health Check Usage
+
+**Load Balancer**
+- Interval: 10 seconds
+- Timeout: 5 seconds
+- Unhealthy threshold: 2 failures
+- Healthy threshold: 2 successes
+
+**Kubernetes (if applicable)**
+- Liveness probe: `/health` (restart if unhealthy)
+- Readiness probe: `/health` (remove from service if not ready)
+- Startup probe: Allow 60s for initialization
+
+**Monitoring**
+- Health status logged every minute
+- Status changes trigger immediate alert
+- Historical health data retained 30 days
+
+## CI/CD Pipeline
+
+### Pipeline Overview
+
+```
+Push/PR -> Lint -> Test -> Security Scan -> Build -> Deploy
+```
+
+### GitHub Actions Workflow
+
+**Trigger Events**
+- Push to `main` or `develop`
+- Pull request to `main` or `develop`
+
+**Jobs**
+
+**1. test-backend**
+- Runs on: ubuntu-latest
+- Python versions: 3.11, 3.12
+- Steps:
+  - Checkout code
+  - Set up Python
+  - Cache pip dependencies
+  - Install requirements.txt and requirements-dev.txt
+  - Lint with flake8
+  - Type check with mypy
+  - Run pytest with coverage
+  - Upload coverage to Codecov
+
+**2. test-frontend**
+- Runs on: ubuntu-latest
+- Node versions: 18.x, 20.x
+- Steps:
+  - Checkout code
+  - Set up Node.js
+  - Cache npm dependencies
+  - Install dependencies (npm ci)
+  - Run ESLint
+  - Build (npm run build)
+  - Run tests (npm test)
+
+**3. security-scan**
+- Runs on: ubuntu-latest
+- Steps:
+  - Checkout code
+  - Run Bandit security scan
+  - Check for hardcoded secrets (detect-secrets)
+
+**4. docker-build**
+- Runs on: ubuntu-latest
+- Steps:
+  - Checkout code
+  - Set up Docker Buildx
+  - Build Docker images (docker-compose build)
+  - Validate docker-compose configuration
+
+**5. all-checks-pass**
+- Depends on: test-backend, test-frontend, security-scan, docker-build
+- Runs on: ubuntu-latest
+- Purpose: Gate for merge requirements
+
+### Quality Gates
+
+**Required Checks for Merge**
+- Backend tests pass (Python 3.11 and 3.12)
+- Frontend tests pass (Node 18.x and 20.x)
+- Security scan passes
+- Docker build succeeds
+- Codecov coverage upload succeeds
+
+**Linting Rules**
+- Python: flake8 with max line length 127
+- JavaScript: ESLint with react-app configuration
+
+**Type Checking**
+- Python: mypy with SQLAlchemy plugin
+- JavaScript: PropTypes (no TypeScript in current codebase)
+
+### Deployment Environments
+
+| Environment | Branch | Trigger | Approval |
+|-------------|--------|---------|----------|
+| Development | any | Manual | None |
+| Staging | develop | Auto on merge | None |
+| Production | main | Auto on merge | Required (1 reviewer) |
+
+### Rollback Strategy
+
+**Automatic Rollback**
+- Health check failure after deployment
+- Error rate > 10% for 5 minutes
+- P0 alert triggered
+
+**Manual Rollback**
+- Previous Docker image available
+- Database migrations reversible (downgrade script)
+- Redis cache can be cleared
+
+## Known Technical Debt
+
+### Critical (Address in next quarter)
+
+| Item | Location | Impact | Mitigation |
+|------|----------|--------|------------|
+| ARCH-2: Distributed lock needed | `services/infrastructure/scheduler.py` | Multi-worker deployments unsafe | Async lock sufficient for single-worker |
+| Token cleanup job | `services/infrastructure/token_cleanup.py` | revoked_tokens table growth | Scheduled cleanup runs daily |
+| SQLite in production | `database/connection.py` | Concurrency limitations | PostgreSQL migration path documented |
+
+### High (Address within 6 months)
+
+| Item | Location | Impact | Mitigation |
+|------|----------|--------|------------|
+| No trained ML model | `services/ml_service.py` | Rule-based only | XGBoost pipeline in roadmap |
+| No LMS API integration | `data_ingestion/` | Manual file uploads only | Excel ingestion robust |
+| Single-process prediction | `services/infrastructure/scheduler.py` | Scaling bottleneck | Batch processing within job |
+| No horizontal scaling | `docker/docker-compose.yml` | Single backend instance | Vertical scaling available |
+
+### Medium (Address within 12 months)
+
+| Item | Location | Impact | Mitigation |
+|------|----------|--------|------------|
+| Ghost student detection | `services/risk_scoring.py` | Relies on zero engagement threshold | Manual review for edge cases |
+| Calendar scorer edge cases | `services/calendar_scorer.py` | Trimester boundary issues | Test coverage for boundary dates |
+| LLM requires manual config | `services/ai/llm_orchestrator.py` | Optional feature disabled by default | Rule-based fallback always available |
+| No automated email | `services/infrastructure/recommender.py` | Manual outreach only | Intervention queue tracks assignments |
+
+### Low (Nice to have)
+
+| Item | Location | Impact | Mitigation |
+|------|----------|--------|------------|
+| Limited frontend tests | `frontend/` | Manual QA required | Critical paths covered |
+| Basic PDF generation | `services/export_service.py` | Limited formatting | FPDF2 sufficient for reports |
+| No scheduled reports | `routes/reports.py` | On-demand only | Admin can trigger manually |
+
+### Debt Tracking
+
+**Location**: GitHub Issues with label `technical-debt`
+**Review**: Monthly technical debt review meeting
+**Prioritization**: Based on business impact and engineering bandwidth
+
+## Operational Runbook
+
+### Daily Operations
+
+**Health Check (09:00 UTC)**
+1. Check `/health` endpoint
+2. Verify scheduler status at `/api/v1/monitoring/scheduler`
+3. Review error logs for P0/P1 alerts
+4. Check disk space on database and log volumes
+
+**Log Review (End of business day)**
+1. Review ERROR and CRITICAL logs
+2. Check for unusual patterns
+3. Investigate any 5xx errors
+4. Document findings in operations log
+
+### Weekly Operations
+
+**Sunday 02:00 UTC: Weekly Model Retraining**
+- Monitor job completion
+- Verify model metrics improved
+- Check for training failures
+
+**Monday Morning: Weekly Review**
+1. Review weekend alerts
+2. Check prediction generation ran successfully
+3. Verify data ingestion completed (if scheduled)
+4. Review capacity trends
+
+### Monthly Operations
+
+**1st of Month (01:00 UTC): GDPR Data Purge**
+- Monitor purge job completion
+- Verify retention policy compliance
+- Check audit log for purge operations
+
+**Monthly Maintenance Window**
+- Dependency updates (security patches)
+- Database maintenance (VACUUM, reindex)
+- Log rotation and archival
+- Certificate renewal check
+
+### Incident Response
+
+**Incident Classification**
+- SEV1: System down, all users affected (P0 alerts)
+- SEV2: Degraded performance, partial functionality (P1 alerts)
+- SEV3: Minor issue, workarounds available (P2 alerts)
+- SEV4: No user impact, preventive (P3 alerts)
+
+**Response Procedures**
+
+**SEV1 Response**
+1. Acknowledge alert within 5 minutes
+2. Assess scope (all users vs subset)
+3. Check dependent services (database, Redis)
+4. If database down: Check connection pool, restart if needed
+5. If Redis down: Restart container, verify cache rebuild
+6. Communicate status to stakeholders
+7. Post-incident review within 24 hours
+
+**SEV2 Response**
+1. Acknowledge alert within 15 minutes
+2. Identify degraded component
+3. Check recent deployments (rollback candidate)
+4. Check error logs for patterns
+5. Apply known fixes from runbook
+6. Escalate to SEV1 if not resolved in 30 minutes
+
+### Database Operations
+
+**Backup Verification (Weekly)**
+1. Check backup completion logs
+2. Verify backup file integrity
+3. Test restore procedure on staging
+
+**Connection Pool Monitoring**
+- Check `connections_active` metric
+- Alert if > 80% of pool exhausted
+- Alert if connection wait time > 1s
+
+### Redis Operations
+
+**Memory Monitoring**
+- Check memory usage trend
+- Alert if > 80% of max memory
+- Eviction policy: allkeys-lru
+
+**Replication Monitoring (if clustered)**
+- Check replication lag < 1s
+- Verify replica sync status
+
+### Log Management
+
+**Log Rotation**
+- Application logs: Daily rotation, 30-day retention
+- Access logs: Daily rotation, 90-day retention
+- Audit logs: No rotation, 7-year retention (compliance)
+
+**Log Analysis**
+- Daily: Review ERROR and CRITICAL
+- Weekly: Trend analysis
+- Monthly: Capacity planning insights
+
+## Developer Onboarding Guide
+
+### Pre-requisites Checklist
+
+**System Setup**
+- [ ] Python 3.12+ installed
+- [ ] Node.js 18+ installed
+- [ ] Git configured with SSH keys
+- [ ] Docker installed (optional but recommended)
+- [ ] IDE with Python and JavaScript support
+- [ ] Access to repository
+
+**Accounts and Access**
+- [ ] GitHub access to repository
+- [ ] Local development environment variables (`.env`)
+- [ ] Test API keys (optional for LLM features)
+
+### Day 1: Environment Setup
+
+**Morning (4 hours)**
+1. Clone repository
+2. Create Python virtual environment
+3. Install backend dependencies (`pip install -r requirements.txt`)
+4. Install frontend dependencies (`cd frontend && npm install`)
+5. Copy `.env.example` to `.env` and configure
+6. Initialize database (`python -c "from backend.database.connection import init_db; init_db()"`)
+7. Seed test data if available
+
+**Afternoon (4 hours)**
+1. Start backend (`uvicorn backend.main:app --reload`)
+2. Start frontend (`cd frontend && npm start`)
+3. Verify application loads at `http://localhost:3000`
+4. Login with test credentials
+5. Explore UI and verify API connectivity
+
+### Day 2: Codebase Orientation
+
+**Backend Tour (4 hours)**
+1. Review `backend/main.py` (application entry point)
+2. Explore `backend/routes/` (API endpoints)
+3. Understand `backend/services/` (business logic)
+4. Review `backend/core/` (security, auth, logging)
+5. Study `backend/middleware/` (request processing)
+6. Examine `backend/database/models/` (data layer)
+
+**Frontend Tour (4 hours)**
+1. Review `frontend/src/App.js` (routing)
+2. Explore `frontend/src/pages/` (main views)
+3. Understand `frontend/src/components/` (UI components)
+4. Study `frontend/src/context/` (state management)
+5. Review `frontend/src/services/api.js` (API client)
+
+### Day 3: Testing and Development Workflow
+
+**Testing (4 hours)**
+1. Run backend tests (`pytest backend/tests -v`)
+2. Understand test structure and fixtures
+3. Review security tests (`test_idor.py`, `test_encoding_bypasses.py`)
+4. Run frontend tests (`cd frontend && npm test`)
+
+**Development Workflow (4 hours)**
+1. Create feature branch (`git checkout -b feature/my-feature`)
+2. Make small change (add log message or comment)
+3. Run pre-commit checks (flake8, mypy)
+4. Run tests
+5. Commit with conventional commit format
+6. Push branch
+7. Create pull request (for practice, close after)
+
+### Week 1: First Tasks
+
+**Recommended First Issues**
+1. Add logging to a service method
+2. Update error message for clarity
+3. Add unit test for edge case
+4. Update documentation comment
+5. Fix minor linting issue
+
+**Guidelines**
+- Pair with senior developer for first few PRs
+- Ask questions in team chat
+- Document any confusing code discovered
+- Suggest improvements to this onboarding guide
+
+### Development Best Practices
+
+**Code Style**
+- Python: Follow PEP 8, use type hints, max line length 100
+- JavaScript: Follow ESLint rules, use functional components
+- Commits: Use conventional commit format
+
+**Testing**
+- Write tests for new features
+- Run tests before committing
+- Update tests when changing behavior
+- Security tests required for auth changes
+
+**Security**
+- Never commit secrets
+- Sanitize all user input
+- Follow RBAC for new endpoints
+- Add audit logging for data access
+
+**Performance**
+- Use async for I/O operations
+- Batch database operations when possible
+- Cache expensive computations
+- Profile slow endpoints
+
+### Common Development Issues
+
+**Issue: Database locked (SQLite)**
+- Solution: Stop all processes, restart backend only
+- Prevention: Use PostgreSQL for concurrent development
+
+**Issue: Frontend not connecting to backend**
+- Solution: Check `REACT_APP_API_URL` in environment
+- Verify backend running on correct port
+
+**Issue: Tests failing locally**
+- Solution: Ensure `TESTING=true` environment variable
+- Check for port conflicts
+
+**Issue: Import errors**
+- Solution: Verify virtual environment activated
+- Check PYTHONPATH includes project root
+
+### Resources
+
+**Documentation**
+- API docs: Run backend and visit `/docs` (Swagger UI)
+- Architecture: See `docs/ARCHITECTURE.md`
+- Database: See `docs/DATABASE_INTEGRITY_STRATEGY.md`
+- Deployment: See `docs/DEPLOYMENT.md`
+
+**Getting Help**
+- Technical questions: Ask in development chat
+- Architecture questions: Schedule time with tech lead
+- Bug reports: Create GitHub issue with reproduction steps
+- Feature requests: Create GitHub issue with use case
 
 ## Troubleshooting
 
