@@ -1,8 +1,10 @@
 """
+013_add_student_dept_active_index.py
+-------------------------------------
 Add composite index for faculty-scoped student queries
 
-Revision ID: 006
-Revises: 005_add_unique_constraints
+Revision ID: 013
+Revises: 012
 Create Date: 2026-04-10
 
 This migration adds:
@@ -15,8 +17,8 @@ Used by every faculty-scoped student list query.
 from alembic import op
 
 # revision identifiers
-revision = '006'
-down_revision = '005_add_unique_constraints'
+revision = '013'
+down_revision = '012'
 branch_labels = None
 depends_on = None
 

@@ -1,8 +1,10 @@
 """
+012_add_unique_constraints.py
+-----------------------------
 Add unique constraints for InterventionLog and RiskSnapshot
 
-Revision ID: 005
-Revises: 004_add_week_number_to_risk_snapshots
+Revision ID: 012
+Revises: 011
 Create Date: 2026-04-10
 
 This migration adds:
@@ -15,8 +17,8 @@ These constraints prevent duplicate entries and enable proper upsert behavior.
 from alembic import op
 
 # revision identifiers
-revision = '005'
-down_revision = '004_add_week_number_to_risk_snapshots'
+revision = '012'
+down_revision = '011'
 branch_labels = None
 depends_on = None
 

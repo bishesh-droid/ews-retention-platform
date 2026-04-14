@@ -59,7 +59,7 @@ async def _load_prompt_template(prompt_name: str, use_hardened: bool = True) -> 
         return await loop.run_in_executor(_executor, f.read)
 
 
-async def get_ai_advice(
+async def get_ai_advice(  # noqa: C901
     student_id: str,
     prompt_name: str,
     db: AsyncSession,

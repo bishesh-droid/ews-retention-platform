@@ -1,7 +1,7 @@
 from fastapi import APIRouter, Depends, Query, HTTPException, Response, Request
 from sqlalchemy.orm import Session
 from sqlalchemy.ext.asyncio import AsyncSession
-from sqlalchemy import select
+from sqlalchemy import select, and_
 from typing import List, Optional
 from datetime import datetime, timezone
 import logging
@@ -179,7 +179,7 @@ def update_course_registry(
 
 
 @router.get("/intervention-effectiveness", response_model=APIResponse)
-def get_intervention_effectiveness(
+def get_intervention_effectiveness(  # noqa: C901
     current_user: deps.User = Depends(deps.require_role([Role.ADMIN])),
     db: Session = Depends(deps.get_db),
     semester: Optional[str] = None,
@@ -191,32 +191,59 @@ def get_intervention_effectiveness(
     Get intervention effectiveness summary (Admin only).
 
     Returns metrics on recommendation review rates, acted-on rates, and outcomes.
+
+    OPTIMIZED: Moved all aggregation from Python to SQL using GROUP BY, COUNT, AVG.
+    - Before: Loaded all logs into memory, then aggregated in Python (O(N) memory + CPU)
+    - After: Single SQL query with conditional aggregation (O(1) memory, database-optimized)
     """
     from backend.database.models.intervention_log import InterventionLog
+    from sqlalchemy import case, func
 
-    query = db.query(InterventionLog)
+    # Build base query with filters
+    base_query = db.query(InterventionLog)
 
     if semester:
-        query = query.filter(InterventionLog.semester_name == semester)
+        base_query = base_query.filter(InterventionLog.semester_name == semester)
     if week_from:
-        query = query.filter(InterventionLog.week_number >= week_from)
+        base_query = base_query.filter(InterventionLog.week_number >= week_from)
     if week_to:
-        query = query.filter(InterventionLog.week_number <= week_to)
+        base_query = base_query.filter(InterventionLog.week_number <= week_to)
 
     # Join with Student for program filtering
     if program is not None:
-        # Validate and sanitize program filter (SEC-8)
         program_clean = program.strip()
         if len(program_clean) > 100:
             raise HTTPException(400, "program filter value too long")
-        # SQLAlchemy's .ilike() is parameterized — the pattern is bound as a parameter,
-        # not injected into the SQL string. Length check prevents log flooding and ReDoS.
-        query = query.join(Student, InterventionLog.student_org_id == Student.org_defined_id)
-        query = query.filter(Student.parent_department_name.ilike(f"%{program_clean}%"))
+        base_query = base_query.join(Student, InterventionLog.student_org_id == Student.org_defined_id)
+        base_query = base_query.filter(Student.parent_department_name.ilike(f"%{program_clean}%"))
 
-    all_logs = query.all()
+    # OPTIMIZATION: Single SQL query with conditional aggregation
+    # All metrics computed at database level using GROUP BY and conditional COUNT/SUM/AVG
+    result = base_query.with_entities(
+        # Overall counts using conditional aggregation
+        func.count().label("total"),
+        func.sum(case((InterventionLog.reviewed.is_(True), 1), else_=0)).label("reviewed"),
+        func.sum(case((InterventionLog.acted_on.is_(True), 1), else_=0)).label("acted_on"),
+        func.sum(case((InterventionLog.acted_on.is_(False), 1), else_=0)).label("dismissed"),
+        func.sum(case((InterventionLog.acted_on.is_(None), 1), else_=0)).label("pending"),
+        # Outcome counts
+        func.sum(case((InterventionLog.outcome == "improved", 1), else_=0)).label("outcome_improved"),
+        func.sum(case((InterventionLog.outcome == "unchanged", 1), else_=0)).label("outcome_unchanged"),
+        func.sum(case((InterventionLog.outcome == "worsened", 1), else_=0)).label("outcome_worsened"),
+        func.sum(case((InterventionLog.outcome == "pending", 1), else_=0)).label("outcome_pending"),
+        # Average delta for acted interventions with outcomes
+        func.avg(
+            case(
+                (
+                    and_(InterventionLog.acted_on.is_(True), InterventionLog.outcome_delta.isnot(None)),
+                    InterventionLog.outcome_delta
+                ),
+                else_=None
+            )
+        ).label("avg_delta"),
+    ).first()
 
-    if not all_logs:
+    if not result or result.total == 0:
         return {
             "total_recommendations": 0,
             "reviewed": 0,
@@ -232,63 +259,56 @@ def get_intervention_effectiveness(
             "by_engagement_pattern": {},
         }
 
-    total = len(all_logs)
-    reviewed = sum(1 for log in all_logs if log.reviewed)
-    acted_on = sum(1 for log in all_logs if log.acted_on is True)
-    dismissed = sum(1 for log in all_logs if log.acted_on is False)
-    pending = sum(1 for log in all_logs if log.acted_on is None)
+    total = int(result.total)
+    reviewed = int(result.reviewed or 0)
+    acted_on = int(result.acted_on or 0)
+    dismissed = int(result.dismissed or 0)
+    pending = int(result.pending or 0)
 
-    outcomes = {"improved": 0, "unchanged": 0, "worsened": 0, "pending": 0}
-    total_delta = 0.0
-    acted_with_outcome = 0
+    outcomes = {
+        "improved": int(result.outcome_improved or 0),
+        "unchanged": int(result.outcome_unchanged or 0),
+        "worsened": int(result.outcome_worsened or 0),
+        "pending": int(result.outcome_pending or 0),
+    }
 
-    for log in all_logs:
-        if log.outcome:
-            outcomes[log.outcome] = outcomes.get(log.outcome, 0) + 1
-        if log.acted_on and log.outcome_delta is not None:
-            total_delta += log.outcome_delta
-            acted_with_outcome += 1
-
+    # OPTIMIZATION: Group-by queries for breakdowns (still SQL-level aggregation)
     # By intervention type
-    type_stats = {}
-    for log in all_logs:
-        itype = log.intervention_type or "unknown"
-        if itype not in type_stats:
-            type_stats[itype] = {"count": 0, "acted": 0, "improved": 0}
-        type_stats[itype]["count"] += 1
-        if log.acted_on:
-            type_stats[itype]["acted"] += 1
-        if log.outcome == "improved":
-            type_stats[itype]["improved"] += 1
+    type_query = base_query.with_entities(
+        InterventionLog.intervention_type,
+        func.count().label("count"),
+        func.sum(case((InterventionLog.acted_on.is_(True), 1), else_=0)).label("acted"),
+        func.sum(case((InterventionLog.outcome == "improved", 1), else_=0)).label("improved"),
+    ).group_by(InterventionLog.intervention_type).all()
 
     by_type = {}
-    for itype, stats in type_stats.items():
+    for row in type_query:
+        itype = row.intervention_type or "unknown"
         by_type[itype] = {
-            "count": stats["count"],
-            "acted_rate": round(stats["acted"] / stats["count"], 3) if stats["count"] > 0 else 0,
-            "improvement_rate": round(stats["improved"] / stats["acted"], 3) if stats["acted"] > 0 else 0,
+            "count": int(row.count),
+            "acted_rate": round(int(row.acted) / int(row.count), 3) if row.count > 0 else 0,
+            "improvement_rate": round(int(row.improved) / int(row.acted), 3) if row.acted > 0 else 0,
         }
 
     # By engagement pattern
-    pattern_stats = {}
-    for log in all_logs:
-        pattern = log.engagement_pattern or "unknown"
-        if pattern not in pattern_stats:
-            pattern_stats[pattern] = {"count": 0, "improved": 0}
-        pattern_stats[pattern]["count"] += 1
-        if log.outcome == "improved":
-            pattern_stats[pattern]["improved"] += 1
+    pattern_query = base_query.with_entities(
+        InterventionLog.engagement_pattern,
+        func.count().label("count"),
+        func.sum(case((InterventionLog.outcome == "improved", 1), else_=0)).label("improved"),
+        func.sum(case((and_(InterventionLog.acted_on.is_(True), InterventionLog.engagement_pattern == InterventionLog.engagement_pattern), 1), else_=0)).label("acted"),
+    ).group_by(InterventionLog.engagement_pattern).all()
 
     by_pattern = {}
-    for pattern, stats in pattern_stats.items():
-        acted_count = sum(1 for log in all_logs if log.engagement_pattern == pattern and log.acted_on)
+    for row in pattern_query:
+        pattern = row.engagement_pattern or "unknown"
+        acted_count = int(row.acted or 0)
         by_pattern[pattern] = {
-            "count": stats["count"],
-            "improvement_rate": round(stats["improved"] / acted_count, 3) if acted_count > 0 else 0,
+            "count": int(row.count),
+            "improvement_rate": round(int(row.improved) / acted_count, 3) if acted_count > 0 else 0,
         }
 
     improved_among_acted = outcomes["improved"] if acted_on > 0 else 0
-    avg_delta = total_delta / acted_with_outcome if acted_with_outcome > 0 else 0
+    avg_delta = float(result.avg_delta) if result.avg_delta is not None else 0.0
 
     return {
         "total_recommendations": total,

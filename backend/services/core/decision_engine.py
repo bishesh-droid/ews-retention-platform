@@ -374,7 +374,8 @@ Dear {student_name},
 
 We've noticed some changes in your engagement and would like to offer you additional support.
 
-A dedicated mentor from our faculty team will be reaching out to you shortly to discuss how we can help you succeed in your courses.
+A dedicated mentor from our faculty team will be reaching out to you shortly
+to discuss how we can help you succeed in your courses.
 
 Please check your email and phone for a call from your assigned mentor.
 

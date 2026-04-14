@@ -5,7 +5,6 @@ from pathlib import Path
 import sys
 
 import pytest
-import pytest_asyncio
 from fastapi import FastAPI
 from fastapi.testclient import TestClient
 

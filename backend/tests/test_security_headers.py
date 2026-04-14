@@ -11,6 +11,7 @@ These tests ensure protection against:
 - Referrer leakage
 """
 
+
 class TestSecurityHeaders:
     """Tests for security headers on HTTP responses."""
 

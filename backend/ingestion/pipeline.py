@@ -72,7 +72,7 @@ class EWSDataPipeline:
         finally:
             self.db.close()
 
-    def ingest_student_roster(self):
+    def ingest_student_roster(self):  # noqa: C901
         """Load student dimension from enrollment files"""
         # Primary file: Trimester 1 attendance file (has Total_Enrolled sheet)
         file_path = self.data_dir / "_Trimester-1 2025 Attendance Quiz-Assignment-Exam 5Jan2025.xlsx"
@@ -165,7 +165,7 @@ class EWSDataPipeline:
 
         self.logger.info(f"  ✓ Loaded {len(courses)} courses")
 
-    def ingest_attendance(self):
+    def ingest_attendance(self):  # noqa: C901
         """Load attendance records from Live Summary sheets"""
         files_processed = 0
         records_added = 0

@@ -1,6 +1,6 @@
 from sqlalchemy import Column, Integer, String, Float, ForeignKey, DateTime, Index, UniqueConstraint
 from sqlalchemy.orm import relationship
-from datetime import datetime
+from datetime import datetime, timezone
 from ..connection import Base  # Corrected import for Base
 
 
@@ -28,7 +28,7 @@ class RiskSnapshot(Base):
     engagement_score = Column(Float)
     week_number = Column(Integer, nullable=True)  # trimester week (see config.TRIMESTER_START_DATE)
     semester_name = Column(String(64), nullable=True)  # e.g. "Trimester 2"
-    timestamp = Column(DateTime, default=datetime.utcnow, index=True)
+    timestamp = Column(DateTime, default=lambda: datetime.now(timezone.utc), index=True)
 
     student = relationship("Student", back_populates="risk_history")
 
@@ -42,7 +42,7 @@ class Goal(Base):
     title = Column(String)
     target_value = Column(Float)
     current_value = Column(Float, default=0.0)
-    start_date = Column(DateTime, default=datetime.utcnow)
+    start_date = Column(DateTime, default=lambda: datetime.now(timezone.utc))
     end_date = Column(DateTime)
     status = Column(String, default="active")  # active, completed, failed
 

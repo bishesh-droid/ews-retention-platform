@@ -52,8 +52,6 @@ def _patch_slowapi_error_handler():
     from starlette.requests import Request
     from starlette.responses import Response, JSONResponse
 
-    original_handler = slowapi.extension._rate_limit_exceeded_handler
-
     def _safe_rate_limit_handler(request: Request, exc: Exception) -> Response:
         import slowapi.errors
         # Only handle RateLimitExceeded as a 429 response
@@ -163,7 +161,7 @@ def check_db_connection() -> bool:
 
 
 @asynccontextmanager
-async def lifespan(app: FastAPI):
+async def lifespan(app: FastAPI):  # noqa: C901
     """Startup and shutdown sequence."""
     sys_logger.info("Starting EWS Retention Platform API...")
 
@@ -230,32 +228,25 @@ async def lifespan(app: FastAPI):
 
     # Run XLSX ingestion off the event loop so startup is non-blocking.
     # If ingestion fails the server still starts — it just won't have data.
+    # NOTE: ingest_all_data uses sync Session internally (SQLAlchemy ORM operations),
+    # so we run it in a thread pool via asyncio.to_thread() to avoid blocking.
+    # ingest_all_data manages its own transaction (commit/rollback internally).
     async def _run_startup_ingestion():
+        from backend.services.core.data_ingestion import ingest_all_data
+        db = SessionLocal()
         try:
-            from backend.services.core.data_ingestion import ingest_all_data
-            db = SessionLocal()
-            try:
-                await ingest_all_data(db, triggered_by="startup")
-                # Services flush; commit here to finalize the transaction.
-                db.commit()
-                sys_logger.info("Startup data ingestion complete.")
-            except Exception:
-                db.rollback()
-                raise
-            finally:
-                db.close()
-        except Exception:
-            sys_logger.exception("Startup ingestion failed — application running with stale data")
+            # Run sync ingestion in thread pool to avoid blocking event loop
+            await asyncio.to_thread(ingest_all_data, db, "startup")
+            sys_logger.info("Startup data ingestion complete.")
+        except Exception as e:
+            # ingest_all_data already rolls back on failure
+            # Log with full stack trace for debugging
+            sys_logger.error(f"Startup ingestion failed: {e}", exc_info=True)
             # Do not re-raise — allow server to start even if initial ingestion fails
+        finally:
+            db.close()
 
     _startup_task = asyncio.create_task(_run_startup_ingestion())
-
-    # Add done callback to log any unexpected failure
-    def _on_startup_ingestion_done(task: asyncio.Task):
-        if task.cancelled():
-            sys_logger.warning("Startup ingestion was cancelled")
-        elif task.exception():
-            sys_logger.exception("Startup ingestion raised an unhandled exception", exc_info=task.exception())
 
     _startup_task.add_done_callback(_on_startup_ingestion_done)
 

@@ -246,6 +246,76 @@ class TestIDORIntegration:
         """
         # This would require authentication setup
 
+    def test_recommendations_student_own_data_allowed(self, client: TestClient, student_token):
+        """
+        Integration Test: Student accessing own recommendations should succeed (200).
+
+        Test: GET /recommendations/{own_student_id}
+        Expected: 200 OK with recommendations
+        """
+        response = client.get(
+            "/api/v1/recommendations/STU001",
+            headers={"Authorization": f"Bearer {student_token}"}
+        )
+        assert response.status_code == 200
+        assert "data" in response.json()
+
+    def test_recommendations_student_other_data_forbidden(self, client: TestClient, student_token):
+        """
+        Integration Test: Student accessing another student's recommendations should fail (403).
+
+        Test: GET /recommendations/{other_student_id}
+        Expected: 403 Forbidden - "Access denied"
+        """
+        response = client.get(
+            "/api/v1/recommendations/STU002",  # Different student
+            headers={"Authorization": f"Bearer {student_token}"}
+        )
+        assert response.status_code == 403
+        assert "Access denied" in response.json().get("detail", "")
+
+    def test_recommendations_admin_any_data_allowed(self, client: TestClient, admin_token):
+        """
+        Integration Test: Admin accessing any student's recommendations should succeed (200).
+
+        Test: GET /recommendations/{any_student_id}
+        Expected: 200 OK with recommendations
+        """
+        response = client.get(
+            "/api/v1/recommendations/STU001",
+            headers={"Authorization": f"Bearer {admin_token}"}
+        )
+        assert response.status_code == 200
+        assert "data" in response.json()
+
+    def test_recommendations_faculty_any_data_allowed(self, client: TestClient, faculty_token):
+        """
+        Integration Test: Faculty accessing any student's recommendations should succeed (200).
+
+        Test: GET /recommendations/{any_student_id}
+        Expected: 200 OK with recommendations
+        """
+        response = client.get(
+            "/api/v1/recommendations/STU001",
+            headers={"Authorization": f"Bearer {faculty_token}"}
+        )
+        assert response.status_code == 200
+        assert "data" in response.json()
+
+    def test_recommendations_retention_team_any_data_allowed(self, client: TestClient, retention_token):
+        """
+        Integration Test: Retention team accessing any student's recommendations should succeed (200).
+
+        Test: GET /recommendations/{any_student_id}
+        Expected: 200 OK with recommendations
+        """
+        response = client.get(
+            "/api/v1/recommendations/STU001",
+            headers={"Authorization": f"Bearer {retention_token}"}
+        )
+        assert response.status_code == 200
+        assert "data" in response.json()
+
 
 # -----------------------------------------------------------------------------
 # FERPA Compliance Documentation

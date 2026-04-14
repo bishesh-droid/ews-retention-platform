@@ -216,7 +216,7 @@ def sanitize_student_features(features_df: pd.DataFrame) -> pd.DataFrame:
     return sanitized_df
 
 
-def validate_risk_score_dict(result: Dict[str, Any]) -> bool:
+def validate_risk_score_dict(result: Dict[str, Any]) -> bool:  # noqa: C901
     """
     Validate an entire risk prediction result dictionary.
 
@@ -366,3 +366,56 @@ def validate_student_data(student_data: Union[pd.DataFrame, Dict[str, Any]]) -> 
         return False
 
     return True
+
+
+def assert_risk_score_0_100(risk_score: float, context: str = "risk_score") -> None:
+    """
+    Assert that a risk score is on the 0-100 scale (DB-5 compliant).
+
+    Raises ValueError if the score appears to be on 0-1 scale (potential double-scaling bug).
+    Heuristic: values <= 1.0 are suspicious since typical risk scores cluster 20-90.
+
+    Args:
+        risk_score: The risk score to validate
+        context: Context string for error message (e.g., "explain_risk_score input")
+
+    Raises:
+        ValueError: If risk_score is not in valid 0-100 range
+
+    Examples:
+        >>> assert_risk_score_0_100(75.0)  # OK
+        >>> assert_risk_score_0_100(0.75)  # Raises ValueError - looks like 0-1 scale
+        >>> assert_risk_score_0_100(150.0)  # Raises ValueError - out of range
+    """
+    # Check for out-of-range values
+    if risk_score < 0.0 or risk_score > 100.0:
+        raise ValueError(
+            f"{context}: risk_score={risk_score} is out of valid range [0, 100]. "
+            f"Got {risk_score}"
+        )
+
+    # Heuristic: values <= 1.0 are suspicious (likely 0-1 scale bug)
+    # Exception: 0.0 is a valid low-risk score
+    if 0.0 < risk_score <= 1.0:
+        raise ValueError(
+            f"{context}: risk_score={risk_score} appears to be on 0-1 scale. "
+            "DB-5 requires 0-100 scale. Multiply by 100 before passing."
+        )
+
+
+def assert_signal_score_0_1(signal_score: float, context: str = "signal_score") -> None:
+    """
+    Assert that a signal score is on the 0-1 probability scale.
+
+    Args:
+        signal_score: The signal score to validate
+        context: Context string for error message
+
+    Raises:
+        ValueError: If signal_score is not in valid 0-1 range
+    """
+    if signal_score < 0.0 or signal_score > 1.0:
+        raise ValueError(
+            f"{context}: signal_score={signal_score} is out of valid range [0, 1]. "
+            f"Signal scores must be probabilities."
+        )

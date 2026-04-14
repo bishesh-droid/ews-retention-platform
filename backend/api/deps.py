@@ -90,7 +90,7 @@ def get_current_user(
         token_jti: Optional[str] = payload.get("jti")
         if user_id is None:
             raise credentials_exc
-        
+
         # Check if token has been revoked (SEC-4)
         if token_jti is not None:
             revoked = db.query(RevokedToken).filter(RevokedToken.jti == token_jti).first()

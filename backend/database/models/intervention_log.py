@@ -4,7 +4,7 @@ Intervention Log Model
 Tracks intervention recommendations, advisor actions, and outcome measurements.
 """
 
-from datetime import datetime
+from datetime import datetime, timezone
 from sqlalchemy import Column, Integer, String, Float, Boolean, ForeignKey, Text, DateTime, UniqueConstraint
 from backend.database.connection import Base
 
@@ -24,7 +24,7 @@ class InterventionLog(Base):
 
     id = Column(Integer, primary_key=True)
     student_org_id = Column(String(64), ForeignKey("students.org_defined_id"), nullable=False, index=True)
-    recommended_at = Column(DateTime, default=datetime.utcnow, index=True)
+    recommended_at = Column(DateTime, default=lambda: datetime.now(timezone.utc), index=True)
     intervention_type = Column(String(64))  # "gentle_reminder"|"mentor_outreach"|"urgent"|etc.
     engagement_pattern = Column(String(32), nullable=True)
     risk_score_at_recommendation = Column(Float)

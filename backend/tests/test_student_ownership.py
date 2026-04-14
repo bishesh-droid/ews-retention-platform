@@ -19,7 +19,7 @@ from backend.database.models.student import Student
 class TestStudentOwnershipEmailMismatch:
     """
     Test that student ownership is verified by email match, not username.
-    
+
     SEC-7: Fixed ownership check to use email comparison instead of
     username comparison, allowing students with nicknames as usernames
     to access their own data.
@@ -138,7 +138,7 @@ class TestStudentOwnershipEmailMismatch:
             user.is_superuser = False
 
             checker = ResourceOwnershipChecker()
-            
+
             mock_request = MagicMock()
             mock_request.path_params = {"student_id": "any_student@bits.edu"}
 
@@ -158,7 +158,7 @@ class TestStudentOwnershipEmailMismatch:
         user.is_superuser = True
 
         checker = ResourceOwnershipChecker()
-        
+
         mock_request = MagicMock()
         mock_request.path_params = {"student_id": "any_student@bits.edu"}
 

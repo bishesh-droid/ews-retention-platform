@@ -44,7 +44,7 @@ if not _discrepancy_logger.handlers:
 CONTRADICTION_THRESHOLD = 0.30  # If |ml_prob - rule_score| > this, flag discrepancy
 
 
-def _rule_based_score(features: Dict[str, Any]) -> float:
+def _rule_based_score(features: Dict[str, Any]) -> float:  # noqa: C901
     """
     Compute a 0-1 rule-based risk score from canonical features.
     Uses the SAME feature keys as the ML model to ensure consistency.

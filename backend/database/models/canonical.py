@@ -6,7 +6,7 @@ These represent the canonical data model used by the ingestion pipeline.
 """
 
 from sqlalchemy import Column, Integer, String, Float, Date, DateTime, Boolean, ForeignKey
-from datetime import datetime
+from datetime import datetime, timezone
 from backend.database.connection import Base
 
 
@@ -23,8 +23,8 @@ class DimStudent(Base):
     trimester = Column(Integer)
     enrollment_status = Column(String(20), index=True)
     is_new_student = Column(Boolean)
-    created_at = Column(DateTime, default=datetime.utcnow)
-    updated_at = Column(DateTime, default=datetime.utcnow, onupdate=datetime.utcnow)
+    created_at = Column(DateTime, default=lambda: datetime.now(timezone.utc))
+    updated_at = Column(DateTime, default=lambda: datetime.now(timezone.utc), onupdate=lambda: datetime.now(timezone.utc))
 
 
 class DimCourse(Base):
@@ -38,7 +38,7 @@ class DimCourse(Base):
     trimester = Column(String(20))
     program = Column(String(10))
     faculty_name = Column(String(255))
-    created_at = Column(DateTime, default=datetime.utcnow)
+    created_at = Column(DateTime, default=lambda: datetime.now(timezone.utc))
 
 
 class FactAcademicPerformance(Base):
@@ -60,7 +60,7 @@ class FactAcademicPerformance(Base):
     late_submission = Column(Boolean)
     data_snapshot_date = Column(Date, index=True)  # Temporal versioning
     source_file = Column(String(255))
-    created_at = Column(DateTime, default=datetime.utcnow)
+    created_at = Column(DateTime, default=lambda: datetime.now(timezone.utc))
 
 
 class FactEngagement(Base):
@@ -91,7 +91,7 @@ class FactEngagement(Base):
 
     data_snapshot_date = Column(Date, index=True)
     source_file = Column(String(255))
-    created_at = Column(DateTime, default=datetime.utcnow)
+    created_at = Column(DateTime, default=lambda: datetime.now(timezone.utc))
 
 
 class FactConsistency(Base):
@@ -121,7 +121,7 @@ class FactConsistency(Base):
     week_over_week_change = Column(Float)
 
     data_snapshot_date = Column(Date, index=True)
-    created_at = Column(DateTime, default=datetime.utcnow)
+    created_at = Column(DateTime, default=lambda: datetime.now(timezone.utc))
 
 
 class FactIntentResponsiveness(Base):
@@ -157,7 +157,7 @@ class FactIntentResponsiveness(Base):
     zero_participation_weeks = Column(Integer)
 
     data_snapshot_date = Column(Date)
-    created_at = Column(DateTime, default=datetime.utcnow)
+    created_at = Column(DateTime, default=lambda: datetime.now(timezone.utc))
 
 
 class DataLineage(Base):
@@ -173,5 +173,5 @@ class DataLineage(Base):
     records_updated = Column(Integer)
     records_skipped = Column(Integer)
     error_count = Column(Integer)
-    processing_timestamp = Column(DateTime, default=datetime.utcnow)
+    processing_timestamp = Column(DateTime, default=lambda: datetime.now(timezone.utc))
     processing_duration_seconds = Column(Integer)

@@ -20,7 +20,7 @@ Mixed-scale bugs (storing both 0-1 and 0-100) have been fixed.
 Always validate risk scores are within [0.0, 100.0] before storing.
 """
 
-from sqlalchemy import Column, Integer, String, Float, ForeignKey, DateTime
+from sqlalchemy import Column, Integer, String, Float, ForeignKey, DateTime, CheckConstraint
 from sqlalchemy.orm import relationship
 from datetime import datetime, timezone
 from backend.database.connection import Base
@@ -30,6 +30,10 @@ class Prediction(Base):
     """
     Prediction model storing ML model outputs including risk scores,
     signal breakdowns, and prediction metadata.
+
+    Database Integrity:
+    - risk_score is NOT NULL and constrained to [0.0, 100.0]
+    - prediction_timestamp uses timezone-aware UTC datetime
     """
     __tablename__ = "predictions"
 
@@ -37,12 +41,13 @@ class Prediction(Base):
     id = Column(Integer, primary_key=True, index=True)
 
     # Foreign Key
-    student_id = Column(String, ForeignKey("students.id"), index=True)
+    student_id = Column(String, ForeignKey("students.id"), index=True, nullable=False)
 
     # Core predictions (DB-5: ALL scores MUST be 0-100 scale, not 0-1)
-    risk_score = Column(Float, index=True)  # 0-100 dropout risk scale
-    engagement_score = Column(Float)
-    retention_likelihood = Column(String)  # 'high', 'medium', 'low'
+    # risk_score is NOT NULL with check constraint for valid range
+    risk_score = Column(Float, index=True, nullable=False)  # 0-100 dropout risk scale
+    engagement_score = Column(Float, nullable=False)
+    retention_likelihood = Column(String, nullable=False)  # 'high', 'medium', 'low'
 
     # Legacy metrics (from old model)
     attendance = Column(Float)
@@ -59,9 +64,17 @@ class Prediction(Base):
     # ========== Prediction Metadata ==========
     # TODO: model_version currently stores "rule_based" since no trained ML model exists.
     # Future: will store ML model version when training pipeline is implemented.
-    model_version = Column(String)  # e.g., 'rule_based', 'xgboost_v1.0'
-    prediction_timestamp = Column(DateTime, default=lambda: datetime.now(timezone.utc))
+    model_version = Column(String)
+    prediction_timestamp = Column(DateTime, default=lambda: datetime.now(timezone.utc), nullable=False)
     top_risk_factors = Column(String)  # JSON string of top contributing features
 
     # Relationship
     student = relationship("Student", back_populates="predictions")
+
+    __table_args__ = (
+        # Ensure risk_score is within valid 0-100 range
+        CheckConstraint(
+            "risk_score >= 0.0 AND risk_score <= 100.0",
+            name="check_risk_score_range"
+        ),
+    )

@@ -6,7 +6,7 @@ Database models for raw events and engineered features.
 
 from sqlalchemy import Column, Integer, String, Float, ForeignKey, DateTime, Date, Boolean
 from sqlalchemy.orm import relationship
-from datetime import datetime
+from datetime import datetime, timezone
 from backend.database.connection import Base
 
 
@@ -26,7 +26,7 @@ class RawEvent(Base):
 
     # Event payload
     event_data = Column(String)  # JSON string for flexible event-specific data
-    timestamp = Column(DateTime, default=datetime.utcnow, index=True)
+    timestamp = Column(DateTime, default=lambda: datetime.now(timezone.utc), index=True)
 
     # Relationship
     student = relationship("Student", back_populates="raw_events")

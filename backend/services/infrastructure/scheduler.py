@@ -73,7 +73,7 @@ def _seconds_until(hour: int, minute: int, weekday: Optional[int] = None) -> flo
     return max((target - now).total_seconds(), 1.0)
 
 
-def generate_daily_predictions() -> None:
+def generate_daily_predictions() -> None:  # noqa: C901
     """Generate and persist risk predictions for all students."""
     logger.info("[SCHEDULER] Daily prediction job started.")
     try:
@@ -175,7 +175,7 @@ def generate_daily_predictions() -> None:
                     # ML-4: Add student_id and model_version for audit logging
                     features["student_id"] = student.id
                     features["model_version"] = settings.RISK_MODEL_VERSION
-                    
+
                     risk_score = RiskScorer.calculate_risk_score(
                         features,
                         graded_components=graded_map.get(student.id, []) or [],
@@ -486,7 +486,10 @@ class SchedulerService:
             return
 
         tasks = [
-            task for task in (self._daily_task, self._weekly_task, self._monthly_purge_task, self._backup_task, self._token_cleanup_task)
+            task for task in (
+                self._daily_task, self._weekly_task, self._monthly_purge_task,
+                self._backup_task, self._token_cleanup_task,
+            )
             if task is not None
         ]
         for task in tasks:
@@ -527,8 +530,14 @@ class SchedulerService:
                 "last_error": self._last_backup_error,
             },
             "token_cleanup": {
-                "last_run_at": self._last_token_cleanup_run_at.isoformat() if self._last_token_cleanup_run_at else None,
-                "last_success_at": self._last_token_cleanup_success_at.isoformat() if self._last_token_cleanup_success_at else None,
+                "last_run_at": (
+                    self._last_token_cleanup_run_at.isoformat()
+                    if self._last_token_cleanup_run_at else None
+                ),
+                "last_success_at": (
+                    self._last_token_cleanup_success_at.isoformat()
+                    if self._last_token_cleanup_success_at else None
+                ),
                 "last_error": self._last_token_cleanup_error,
             },
         }

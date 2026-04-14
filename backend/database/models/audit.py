@@ -1,6 +1,6 @@
 from sqlalchemy import Column, Integer, String, ForeignKey, DateTime, JSON
 from sqlalchemy.orm import relationship
-from datetime import datetime
+from datetime import datetime, timezone
 from ..connection import Base  # Corrected import for Base
 
 
@@ -30,7 +30,7 @@ class AuditLog(Base):
     request_id = Column(String(100), nullable=True, index=True)  # For tracing across logs
 
     # Timestamp
-    timestamp = Column(DateTime, default=datetime.utcnow, nullable=False, index=True)
+    timestamp = Column(DateTime, default=lambda: datetime.now(timezone.utc), nullable=False, index=True)
 
     # Legacy fields (maintained for backward compatibility)
     action_type = Column(String(50))  # risk_change, signal_update, login, export, ai_generation

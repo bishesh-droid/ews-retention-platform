@@ -209,7 +209,7 @@ class TestRiskScoring:
 class TestProductionLMSFormula:
     """
     TEST-4: Tests for production LMS feature formula (not legacy K-12).
-    
+
     These tests verify the actual feature keys used in production:
     - content_completion_score
     - login_consistency_score
@@ -237,9 +237,9 @@ class TestProductionLMSFormula:
     def test_lms_features_returns_valid_score(self):
         """LMS features dict returns a float between 0 and 100."""
         features = self._create_lms_features()
-        
+
         score = RiskScorer.calculate_risk_score(features)
-        
+
         assert isinstance(score, float), f"Score should be float, got {type(score)}"
         assert 0.0 <= score <= 100.0, f"Score {score} out of valid range [0, 100]"
         # Score should be reasonable given the input values (all around 65-80)
@@ -256,10 +256,10 @@ class TestProductionLMSFormula:
             time_investment_score=10.0,
             discussion_engagement_score=10.0,
         )
-        
+
         score = RiskScorer.calculate_risk_score(features)
         category = RiskScorer.get_risk_category(score)
-        
+
         assert category == "high", f"All low features should be high risk, got {category} with score {score}"
         assert score >= 70.0, f"High risk should have score >= 70, got {score}"
 
@@ -273,10 +273,10 @@ class TestProductionLMSFormula:
             time_investment_score=90.0,
             discussion_engagement_score=90.0,
         )
-        
+
         score = RiskScorer.calculate_risk_score(features)
         category = RiskScorer.get_risk_category(score)
-        
+
         assert category == "low", f"All high features should be low risk, got {category} with score {score}"
         assert score <= 40.0, f"Low risk should have score <= 40, got {score}"
 
@@ -290,10 +290,10 @@ class TestProductionLMSFormula:
             time_investment_score=72.0,
             discussion_engagement_score=68.0,
         )
-        
+
         # Should not raise an exception
         score = RiskScorer.calculate_risk_score(features)
-        
+
         # Should return a valid score in range
         assert isinstance(score, float), f"Score should be float, got {type(score)}"
         assert 0.0 <= score <= 100.0, f"Score {score} out of valid range [0, 100]"
@@ -308,9 +308,9 @@ class TestProductionLMSFormula:
             "student_id": "test@lms.edu",
             "model_version": "test-v1.0",
         }
-        
+
         score = RiskScorer.calculate_risk_score(features)
-        
+
         assert isinstance(score, float), f"Score should be float, got {type(score)}"
         assert 0.0 <= score <= 100.0, f"Score {score} out of valid range [0, 100]"
 
@@ -324,14 +324,14 @@ class TestProductionLMSFormula:
             "time_investment_score",
             "discussion_engagement_score",
         }
-        
+
         legacy_keys = {
             "attendance_score",
             "academic_score",
             "behavioral_score",
             "stability_score",
         }
-        
+
         # No overlap between LMS and legacy keys
         overlap = lms_keys & legacy_keys
         assert len(overlap) == 0, f"LMS and legacy keys should not overlap: {overlap}"

@@ -171,7 +171,7 @@ class StudentApplicationService:
         return StudentApplicationService.calculate_student_metrics(student, enrollment_dicts, graded_dicts, exam_dicts)
 
     @staticmethod
-    def get_all_students(
+    def get_all_students(  # noqa: C901
         db: Session,
         skip: int = 0,
         limit: int = 100,
@@ -612,17 +612,38 @@ class StudentApplicationService:
 
     @staticmethod
     def build_prediction_payload(student_metrics: Dict) -> Dict:
+        """
+        Build prediction payload for API response.
+
+        Scale convention (DB-5 compliant):
+        - risk_score, engagement_score: 0-100 scale (percentage)
+        - signal_breakdown scores: 0-1 scale (probability)
+
+        Args:
+            student_metrics: Dict with risk_score and signal scores already on 0-100 scale
+
+        Returns:
+            Dict with risk_score/engagement_score on 0-100, signals on 0-1
+        """
         risk = float(student_metrics["risk_score"])
+        # Safety check: risk should already be 0-100 scale
+        if not (0.0 <= risk <= 100.0):
+            raise ValueError(
+                f"build_prediction_payload: risk_score must be 0-100, got {risk}. "
+                "Check upstream scoring pipeline for scale bugs."
+            )
+
         return {
             "student_id": student_metrics["id"],
-            "risk_score": risk / 100.0,
-            "engagement_score": (100 - risk) / 100.0,
+            "risk_score": risk,  # 0-100 scale (DB-5 compliant)
+            "engagement_score": 100.0 - risk,  # 0-100 scale (complement of risk)
             "retention_likelihood": student_metrics["retention_likelihood"],
             "model_version": "rule_based_v2",
             "model_type": "rule_based",
             "model_description": "Weighted engagement formula — not a trained ML model",
             "score_basis": "rule_based_formula",
             "signal_breakdown": {
+                # Signal breakdown: normalize 0-100 feature scores to 0-1 probability scale
                 "academic_signal_score": student_metrics.get("content_completion_score", 0) / 100.0,
                 "engagement_signal_score": student_metrics.get("quiz_engagement_score", 0) / 100.0,
                 "consistency_signal_score": student_metrics.get("login_consistency_score", 0) / 100.0,

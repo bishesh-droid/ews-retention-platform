@@ -16,13 +16,13 @@ from backend.database.models.revoked_token import RevokedToken
 def purge_expired_revoked_tokens(db: Session) -> int:
     """
     Delete all revoked tokens where expires_at < current UTC time.
-    
+
     Args:
         db: SQLAlchemy database session
-        
+
     Returns:
         Number of rows deleted
-        
+
     Example:
         from backend.database.connection import SessionLocal
         db = SessionLocal()
@@ -33,18 +33,18 @@ def purge_expired_revoked_tokens(db: Session) -> int:
             db.close()
     """
     now = datetime.utcnow()
-    
+
     # Query for expired tokens
     expired_tokens = db.query(RevokedToken).filter(
         RevokedToken.expires_at < now
     )
-    
+
     # Count before deletion
     count = expired_tokens.count()
-    
+
     # Delete expired tokens
     if count > 0:
         expired_tokens.delete(synchronize_session=False)
         db.commit()
-    
+
     return count

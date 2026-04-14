@@ -6,7 +6,7 @@ Database model for student response tracking (feedback loop).
 
 from sqlalchemy import Column, Integer, String, Float, ForeignKey, DateTime, Boolean
 from sqlalchemy.orm import relationship
-from datetime import datetime
+from datetime import datetime, timezone
 from backend.database.connection import Base
 
 
@@ -33,7 +33,7 @@ class StudentResponse(Base):
 
     # ========== Final Outcome ==========
     retained = Column(Boolean, nullable=True)  # NULL if outcome not yet determined
-    recorded_at = Column(DateTime, default=datetime.utcnow)
+    recorded_at = Column(DateTime, default=lambda: datetime.now(timezone.utc))
 
     # Relationships
     student = relationship("Student", back_populates="responses")

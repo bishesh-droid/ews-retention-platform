@@ -36,7 +36,7 @@ ALLOWED_EXTENSIONS = {".xlsx", ".xls", ".csv"}
 
 @router.post("/admin/ingest", status_code=status.HTTP_202_ACCEPTED)
 @limiter.limit(RATE_LIMIT_INGEST)
-async def trigger_ingestion(
+async def trigger_ingestion(  # noqa: C901
     request: Request,
     background_tasks: BackgroundTasks,
     file: Optional[UploadFile] = File(None),
@@ -123,14 +123,17 @@ async def trigger_ingestion(
         try:
             from backend.services.core.data_ingestion import ingest_all_data
             from pathlib import Path
+            import asyncio
 
             # Pass uploaded file path for cleanup after ingestion
             uploaded_path = Path(saved_file_path) if saved_file_path else None
 
-            await ingest_all_data(
+            # ingest_all_data is a synchronous function - run in threadpool
+            await asyncio.to_thread(
+                ingest_all_data,
                 session,
-                triggered_by=f"api:{current_user.username}",
-                uploaded_filepath=uploaded_path
+                f"api:{current_user.username}",
+                uploaded_path
             )
             update_task(task_id, "success")
             logger.info(f"Background ingestion completed successfully (task {task_id})")

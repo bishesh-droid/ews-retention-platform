@@ -17,7 +17,7 @@ import numpy as np
 from backend.database import RawEvent, EngineeredFeatures, Student
 
 
-def compute_academic_signals(student_id: str, db: Session, lookback_days: int = 90) -> Dict[str, float]:
+def compute_academic_signals(student_id: str, db: Session, lookback_days: int = 90) -> Dict[str, float]:  # noqa: C901
     """
     Compute academic performance signals from LMS events
 

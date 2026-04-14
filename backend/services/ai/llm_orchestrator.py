@@ -109,7 +109,7 @@ class LLMOrchestrator:
 
         return None
 
-    def _invoke_llm(self, prompt: str, system_message: Optional[str] = None) -> str:
+    def _invoke_llm(self, prompt: str, system_message: Optional[str] = None) -> str:  # noqa: C901
         """Unified provider-agnostic LLM invocation."""
         if self.llm_provider == "gemini":
             try:
@@ -550,7 +550,8 @@ IMPORTANT INSTRUCTIONS:
 STUDENT DATA:
 {context_text}
 
-Task: Explain why this student's risk score is {context.get('current_metrics', {}).get('risk_score', 'unknown')}% and what specific factors contributed to recent changes.
+Task: Explain why this student's risk score is {context.get('current_metrics', {}).get('risk_score', 'unknown')}%
+and what specific factors contributed to recent changes.
 
 Begin your explanation with "Based on your recent academic activity..." and cite specific metrics."""
 

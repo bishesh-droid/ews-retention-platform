@@ -333,7 +333,7 @@ class SchemaValidator:
 
         return (len(errors) == 0, errors)
 
-    def validate_cell(self, value: Any, col_def: ColumnDefinition) -> tuple[bool, List[str]]:
+    def validate_cell(self, value: Any, col_def: ColumnDefinition) -> tuple[bool, List[str]]:  # noqa: C901
         """Validate a single cell"""
         errors = []
 

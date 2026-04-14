@@ -96,7 +96,7 @@ const InterventionCard = ({ recommendation, riskScore }) => {
                 <div className="risk-indicator">
                     <span className="risk-label">Current Risk Score:</span>
                     <span className="risk-value" style={{ color: thresholdColor }}>
-                        {Math.round(riskScore * 100)}%
+                        {Math.round(riskScore)}%
                     </span>
                 </div>
             </div>

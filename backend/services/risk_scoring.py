@@ -155,7 +155,7 @@ class RiskScorer:
         return weighted_sum / observed_weight, observed_weight
 
     @staticmethod
-    def calculate_risk_score(
+    def calculate_risk_score(  # noqa: C901
         features: Dict,
         *,
         graded_components: Optional[list] = None,
@@ -296,7 +296,7 @@ class RiskScorer:
             features["health_referral_needed"] = True
 
         final_score = round(max(0.0, min(100.0, risk_score)), 1)  # D6-2: Standardised to 1 decimal
-        
+
         # ML-4: Log prediction to audit trail if student_id is available in features
         student_id = features.get("student_id")
         if student_id:
@@ -307,7 +307,7 @@ class RiskScorer:
                 output_score=final_score,
                 output_category=RiskScorer.get_risk_category(final_score),
             )
-        
+
         return final_score
 
     @staticmethod
@@ -409,7 +409,7 @@ class RiskScorer:
     ) -> None:
         """
         ML-4: Log prediction to audit trail (PredictionLog table).
-        
+
         This is a best-effort logging — failures are logged but don't
         block the prediction response.
         """
@@ -417,7 +417,7 @@ class RiskScorer:
             from datetime import datetime, timezone
             from backend.database.connection import SessionLocal
             from backend.database.models.prediction_log import PredictionLog
-            
+
             db = SessionLocal()
             try:
                 log_entry = PredictionLog(

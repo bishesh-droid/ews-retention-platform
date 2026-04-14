@@ -1,6 +1,5 @@
 """Idempotent, validated ETL ingestion for EWS retention data."""
 
-import asyncio
 import hashlib
 import logging
 import os
@@ -110,7 +109,7 @@ DATE_FIELDS = {
 }
 
 
-async def _cleanup_uploaded_file(filepath: Path):
+def _cleanup_uploaded_file(filepath: Path):
     """Delete uploaded file after successful ingestion."""
     try:
         if filepath and filepath.exists():
@@ -120,7 +119,7 @@ async def _cleanup_uploaded_file(filepath: Path):
         logger.warning(f"Could not clean up file: {filepath}")  # non-fatal
 
 
-async def ingest_all_data(db: Session, triggered_by: str = "startup", uploaded_filepath: Path = None):
+def ingest_all_data(db: Session, triggered_by: str = "startup", uploaded_filepath: Path = None):
     """
     Run ETL in a single transaction-safe flow with full audit logging.
 
@@ -151,7 +150,7 @@ async def ingest_all_data(db: Session, triggered_by: str = "startup", uploaded_f
         start_time = time.time()
 
         try:
-            await _run_ingestion(db, stats)
+            _run_ingestion(db, stats)
             run.status = "partial" if stats.errors else "success"
         except Exception as e:
             run.status = "failed"
@@ -214,9 +213,12 @@ async def ingest_all_data(db: Session, triggered_by: str = "startup", uploaded_f
             pass  # Lock may have expired; that's fine
 
 
-async def _run_ingestion(db: Session, stats: IngestionStats):
+def _run_ingestion(db: Session, stats: IngestionStats):
     """
     Internal ingestion logic with stats tracking.
+
+    All database operations are synchronous and use the provided Session.
+    File I/O is performed in threadpool by callers when needed.
     """
     owner_thread_id = threading.get_ident()
     _assert_session_thread(owner_thread_id)
@@ -226,9 +228,9 @@ async def _run_ingestion(db: Session, stats: IngestionStats):
 
     logger.info("Starting data ingestion from XLSX files...")
     try:
-        await _ingest_engagement_data(db, files, owner_thread_id, stats)
-        await _ingest_quiz_assignment_exam(db, files, owner_thread_id, stats)
-        await _update_enrollments_from_latest(db, files, owner_thread_id, stats)
+        _ingest_engagement_data(db, files, owner_thread_id, stats)
+        _ingest_quiz_assignment_exam(db, files, owner_thread_id, stats)
+        _update_enrollments_from_latest(db, files, owner_thread_id, stats)
         db.flush()
 
         # Infer enrollment outcomes from exam data for T1 cohort
@@ -243,7 +245,7 @@ async def _run_ingestion(db: Session, stats: IngestionStats):
         if files.get("engagement"):
             from pathlib import Path
             semester_name = Path(files["engagement"]).stem
-        await _deactivate_missing_students(db, stats.seen_org_ids, semester_name)
+        _deactivate_missing_students(db, stats.seen_org_ids, semester_name)
 
         logger.info("Data ingestion complete.")
     except Exception:
@@ -314,14 +316,19 @@ def _validate_required_files(files: dict):
         raise FileNotFoundError(f"Missing required ETL input file(s): {', '.join(missing)}")
 
 
-async def _ingest_engagement_data(db: Session, files: dict, owner_thread_id: int, stats: IngestionStats):
+def _ingest_engagement_data(db: Session, files: dict, owner_thread_id: int, stats: IngestionStats):  # noqa: C901
+    """Process engagement data from XLSX file.
+
+    All DB operations use the provided sync Session.
+    File I/O is synchronous (caller runs in threadpool).
+    """
     _assert_session_thread(owner_thread_id)
     path = Path(files["engagement"])
     logger.info(f"Reading {path}...")
     sheet_name = "Learner Usage main dump"
 
     try:
-        wb = await asyncio.to_thread(openpyxl.load_workbook, str(path), read_only=True, data_only=True)
+        wb = openpyxl.load_workbook(str(path), read_only=True, data_only=True)
     except (openpyxl.utils.exceptions.InvalidFileException,
             zipfile.BadZipFile,
             ValueError,
@@ -630,7 +637,12 @@ def _update_course_content_row(by_name: dict, course_name: str, w1: int, w2: int
     course.content_required_total = total
 
 
-async def _ingest_quiz_assignment_exam(db: Session, files: dict, owner_thread_id: int, stats: IngestionStats):
+def _ingest_quiz_assignment_exam(db: Session, files: dict, owner_thread_id: int, stats: IngestionStats):
+    """Process quiz, assignment, and exam data from XLSX file.
+
+    All DB operations use the provided sync Session.
+    File I/O is synchronous (caller runs in threadpool).
+    """
     _assert_session_thread(owner_thread_id)
     path = Path(files["quiz_exam"])
     if not path.exists():
@@ -638,7 +650,7 @@ async def _ingest_quiz_assignment_exam(db: Session, files: dict, owner_thread_id
         return
 
     try:
-        wb = await asyncio.to_thread(openpyxl.load_workbook, str(path), read_only=True, data_only=True)
+        wb = openpyxl.load_workbook(str(path), read_only=True, data_only=True)
     except (openpyxl.utils.exceptions.InvalidFileException,
             zipfile.BadZipFile,
             ValueError,
@@ -659,7 +671,7 @@ async def _ingest_quiz_assignment_exam(db: Session, files: dict, owner_thread_id
         wb.close()
 
 
-def _ingest_graded_sheet(db: Session, wb, sheet_name: str, program: str, stats: IngestionStats):
+def _ingest_graded_sheet(db: Session, wb, sheet_name: str, program: str, stats: IngestionStats):  # noqa: C901
     if sheet_name not in wb.sheetnames:
         stats.add_error(sheet_name, "Sheet not found, skipping")
         return
@@ -832,7 +844,7 @@ def _ingest_written_exam_marks(db: Session, wb):
         raise ValueError("No valid rows found in required sheet 'Written Exam Marks'.")
 
 
-def _ingest_exam_attendance(db: Session, wb, sheet_name: str, slot: str):
+def _ingest_exam_attendance(db: Session, wb, sheet_name: str, slot: str):  # noqa: C901
     if sheet_name not in wb.sheetnames:
         logger.warning(f"Sheet '{sheet_name}' not found.")
         return
@@ -896,7 +908,7 @@ def _ingest_exam_attendance(db: Session, wb, sheet_name: str, slot: str):
         raise ValueError(f"No valid rows found in required sheet '{sheet_name}'.")
 
 
-def _ingest_exam_defaulters(db: Session, wb):
+def _ingest_exam_defaulters(db: Session, wb):  # noqa: C901
     if "Exam Defaulter" not in wb.sheetnames:
         logger.warning("Sheet 'Exam Defaulter' not found.")
         return
@@ -950,7 +962,12 @@ def _ingest_exam_defaulters(db: Session, wb):
                 exam.defaulter_reason = mapped_reason
 
 
-async def _update_enrollments_from_latest(db: Session, files: dict, owner_thread_id: int, stats: IngestionStats):
+def _update_enrollments_from_latest(db: Session, files: dict, owner_thread_id: int, stats: IngestionStats):  # noqa: C901
+    """Update enrollment records from latest snapshot files.
+
+    All DB operations use the provided sync Session.
+    File I/O is synchronous (caller runs in threadpool).
+    """
     _assert_session_thread(owner_thread_id)
     course_name_to_id = {(_safe_str(c.name).lower()): c.id for c in db.query(Course).all() if c.name}
     enrollments = {(e.student_id, e.course_id): e for e in db.query(Enrollment).all()}
@@ -962,7 +979,7 @@ async def _update_enrollments_from_latest(db: Session, files: dict, owner_thread
             logger.warning(f"Skipping optional snapshot (not found): {path.name}")
             continue
 
-        wb = await asyncio.to_thread(openpyxl.load_workbook, str(path), read_only=True, data_only=True)
+        wb = openpyxl.load_workbook(str(path), read_only=True, data_only=True)
         try:
             if src.get("learner_usage_sheet_by_prefix"):
                 sheet = next((s for s in wb.sheetnames if s.startswith("Learner Usage")), None)
@@ -1331,7 +1348,7 @@ def _assert_session_thread(owner_thread_id: int):
         )
 
 
-async def _deactivate_missing_students(session, seen_org_ids: set, semester_name: str):
+def _deactivate_missing_students(session, seen_org_ids: set, semester_name: str):
     """
     Mark students not in the latest export as inactive (soft delete).
 
@@ -1427,7 +1444,7 @@ def _parse_max_score(header_text: str) -> float:
     return 10.0
 
 
-def infer_outcomes_from_exam_data(db: Session) -> int:
+def infer_outcomes_from_exam_data(db: Session) -> int:  # noqa: C901
     """
     Infer final_outcome for T1 cohort from ExamRecord data.
 

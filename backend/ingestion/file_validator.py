@@ -95,7 +95,7 @@ class FileValidator:
         """Check if file exists and is readable"""
         return os.path.isfile(file_path) and os.access(file_path, os.R_OK)
 
-    def _validate_xlsx(self, file_path: str, messages: List[str], metadata: Dict) -> ValidationResult:
+    def _validate_xlsx(self, file_path: str, messages: List[str], metadata: Dict) -> ValidationResult:  # noqa: C901
         """Excel-specific validation"""
         try:
             wb = openpyxl.load_workbook(file_path, read_only=False, data_only=True)

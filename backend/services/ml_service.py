@@ -53,7 +53,7 @@ logger = sys_logger
 # the discrepancy is visible rather than silently swallowed.
 # ---------------------------------------------------------------------------
 
-def _try_load_joblib_models() -> Optional[Any]:
+def _try_load_joblib_models() -> Optional[Any]:  # noqa: C901
     """
     Try to load the XGBoost joblib model.
     Returns the model object or None if not available/compatible.
@@ -260,7 +260,7 @@ class MLService:
                 is_new_student=False,
                 week_number=trimester_week_number(),
             )
-            
+
             # ML-4: Add student_id and model_version for audit logging
             features["student_id"] = student_id
             features["model_version"] = settings.RISK_MODEL_VERSION

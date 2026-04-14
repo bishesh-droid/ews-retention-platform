@@ -1,26 +1,52 @@
 """
 Recommendations API Endpoints
 Generates rule-based recommendations for students.
+
+Security: IDOR protection via ResourceOwnershipChecker ensures:
+- Students can only access their own recommendations
+- Faculty/Admin/Retention team can access any student's recommendations
 """
 
+import logging
 from fastapi import APIRouter, Depends, HTTPException
 from sqlalchemy.orm import Session
 
-from backend.api.deps import get_db, get_current_user
+from backend.api.deps import get_db, require_resource_ownership, User
 from backend.services.student_service import StudentService
 from backend.utils.api import success_response
 
+logger = logging.getLogger(__name__)
+
 router = APIRouter(
     responses={404: {"description": "Not found"}},
-    dependencies=[Depends(get_current_user)],
 )
 
 
 @router.get("/{student_id}")
-def get_recommendations_for_student(student_id: str, db: Session = Depends(get_db)):
-    """Returns a list of recommendations for a given student."""
+def get_recommendations_for_student(
+    student_id: str,
+    db: Session = Depends(get_db),
+    current_user: User = Depends(require_resource_ownership()),
+):
+    """Returns a list of recommendations for a given student.
+
+    Security: ResourceOwnershipChecker enforces:
+    - role == "student": can only access own student_id (matched by email)
+    - role in ["faculty", "admin", "retention team"]: can access any student
+    - is_superuser == True: bypasses all checks
+
+    Returns 403 Forbidden if a student attempts to access another student's data.
+    All access attempts are logged for FERPA compliance.
+    """
+    # Log access attempt for audit trail (FERPA compliance)
+    logger.info(
+        "Recommendations access: user=%s role=%s student_id=%s",
+        current_user.email, current_user.role, student_id
+    )
+
     student = StudentService.get_student_by_id(db, student_id)
     if student is None:
+        logger.warning(f"Recommendations requested for non-existent student: {student_id}")
         raise HTTPException(status_code=404, detail="Student not found")
 
     risk = student["risk_score"]

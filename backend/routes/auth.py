@@ -120,6 +120,21 @@ async def refresh_token(
                 status_code=status.HTTP_401_UNAUTHORIZED,
                 detail="Invalid token type",
             )
+
+        # Check if refresh token has been revoked (SEC-4)
+        token_jti = payload.get("jti")
+        if token_jti:
+            revoked_result = await db.execute(
+                select(RevokedToken).where(RevokedToken.jti == token_jti)
+            )
+            if revoked_result.scalar_one_or_none():
+                raise HTTPException(
+                    status_code=status.HTTP_401_UNAUTHORIZED,
+                    detail="Token has been revoked",
+                    headers={"WWW-Authenticate": "Bearer"},
+                )
+    except HTTPException:
+        raise
     except Exception:
         raise HTTPException(
             status_code=status.HTTP_401_UNAUTHORIZED,
@@ -186,7 +201,7 @@ async def logout(
 ):
     """
     Logout user by revoking the access token and clearing refresh token cookie.
-    
+
     The token's JTI is added to the revocation blocklist, making the token
     invalid immediately even before its natural expiration (SEC-4).
     """
@@ -200,12 +215,12 @@ async def logout(
             )
             token_jti = unverified_payload.get("jti")
             token_exp = unverified_payload.get("exp")
-            
+
             if token_jti and token_exp:
                 # Add token to revocation blocklist
                 revoked_token = RevokedToken(
                     jti=token_jti,
-                    user_id=str(current_user.id),
+                    user_id=current_user.id,
                     expires_at=datetime.fromtimestamp(token_exp),
                 )
                 db.add(revoked_token)
@@ -215,7 +230,7 @@ async def logout(
             # Log but don't fail the logout if token revocation fails
             logger.warning(f"Failed to revoke token during logout: {e}")
             await db.rollback()
-    
+
     # Clear the refresh token cookie
     response.delete_cookie(
         key=REFRESH_TOKEN_COOKIE_NAME,

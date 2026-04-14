@@ -70,10 +70,22 @@ async_engine = create_async_engine(
 )
 
 
-async def _set_async_sqlite_pragmas(conn):
-    """Configure SQLite connection settings for each new async connection."""
-    # Enable foreign key enforcement
-    await conn.execute(text("PRAGMA foreign_keys = ON"))
+async def _set_async_sqlite_pragmas(dbapi_connection, connection_record):
+    """Configure SQLite connection settings for each new async connection.
+
+    This is called by the event listener for each new connection created.
+    """
+    # Enable foreign key enforcement (disabled by default in SQLite)
+    # Use raw cursor execution since this is a dbapi connection, not an AsyncConnection
+    cursor = dbapi_connection.cursor()
+    cursor.execute("PRAGMA foreign_keys = ON")
+    cursor.close()
+
+
+# Attach pragma configuration to every new async connection
+# The async event listener runs on the sync_engine underneath AsyncSession
+# This ensures PRAGMA is applied at connection creation time
+event.listen(async_engine.sync_engine, "connect", _set_async_sqlite_pragmas)
 
 
 # Async session factory
@@ -105,6 +117,9 @@ async def get_db_async() -> AsyncGenerator[AsyncSession, None]:
     """
     Canonical async DB dependency for FastAPI async endpoints.
 
+    SQLite PRAGMA (foreign_keys=ON) is applied automatically via event listener
+    on every new connection (see _set_async_sqlite_pragmas).
+
     Usage:
         @router.get("/students")
         async def get_students(db: AsyncSession = Depends(get_db_async)):
@@ -113,16 +128,11 @@ async def get_db_async() -> AsyncGenerator[AsyncSession, None]:
             return students
     """
     async with AsyncSessionLocal() as session:
-        # Configure SQLite pragmas for this session using the async_engine
-        async with async_engine.connect() as conn:
-            await _set_async_sqlite_pragmas(conn)
         try:
             yield session
         except Exception:
             await session.rollback()
             raise
-        finally:
-            await session.close()
 
 
 def init_db():

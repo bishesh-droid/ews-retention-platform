@@ -35,7 +35,7 @@ class StudentDataRetriever:
             safe.pop(key, None)
         return safe
 
-    def retrieve_student_context(self, student_id: str, depth: str = 'detailed', pseudonymise: bool = True) -> Dict[str, Any]:
+    def retrieve_student_context(self, student_id: str, depth: str = 'detailed', pseudonymise: bool = True) -> Dict[str, Any]:  # noqa: C901
         """
         Retrieve comprehensive student data for LLM prompts.
 
@@ -83,8 +83,8 @@ class StudentDataRetriever:
         context["risk_trend"] = risk_trend
         context["current_risk_score"] = risk_trend[-1] if risk_trend else None
         context["risk_trend_direction"] = (
-            "improving" if len(risk_trend) >= 2 and float(risk_trend[-1]) < float(risk_trend[-2])  # type: ignore[operator]
-            else "worsening" if len(risk_trend) >= 2 and float(risk_trend[-1]) > float(risk_trend[-2])  # type: ignore[operator]
+            "improving" if len(risk_trend) >= 2 and float(risk_trend[-1]) < float(risk_trend[-2])  # type: ignore[operator]  # noqa: E501
+            else "worsening" if len(risk_trend) >= 2 and float(risk_trend[-1]) > float(risk_trend[-2])  # type: ignore[operator]  # noqa: E501
             else "stable"
         )
         if risk_trend:
@@ -257,7 +257,7 @@ class InstitutionalDataRetriever:
         }
 
         # Intervention coverage
-        total_interventions = sum(len(list(s.interventions)) if s.interventions else 0 for s in students)  # type: ignore[arg-type]
+        total_interventions = sum(len(list(s.interventions)) if s.interventions else 0 for s in students)  # type: ignore[arg-type]  # noqa: E501
         students_with_interventions = len([s for s in students if s.interventions])  # type: ignore[misc]
 
         context["intervention_metrics"] = {

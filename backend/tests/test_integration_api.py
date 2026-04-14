@@ -15,12 +15,14 @@ from unittest.mock import MagicMock
 
 _INTEGRATION_DEV_KEY = "ews-integration-dev-key"
 
+
 def _valid_headers() -> dict:
     """Return correctly signed integration API headers."""
     return {
         "X-API-Key-Hash": hashlib.sha256(_INTEGRATION_DEV_KEY.encode()).hexdigest(),
         "X-Timestamp": str(int(time.time())),
     }
+
 
 def _invalid_headers() -> dict:
     """Return headers with a wrong API key hash but a valid timestamp."""
@@ -96,7 +98,14 @@ class TestStudentRiskProfile:
         )
         assert response.status_code == 200
 
-        profile = response.json()
+        # API wraps the payload in a success_response envelope: {"data": {...}, ...}
+        envelope = response.json()
+        assert "success" in envelope, "Missing 'success' field in envelope"
+        assert "message" in envelope, "Missing 'message' field in envelope"
+        assert "data" in envelope, "Missing 'data' field in envelope"
+        assert envelope["success"] is True
+
+        profile = envelope["data"]
 
         # Verify contract fields exist
         required_fields = [

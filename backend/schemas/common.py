@@ -35,7 +35,7 @@ class ErrorResponse(BaseModel):
 class APIResponse(BaseModel):
     """
     Standard API response envelope used across all endpoints.
-    
+
     All successful responses follow this structure:
     {
         "success": true,

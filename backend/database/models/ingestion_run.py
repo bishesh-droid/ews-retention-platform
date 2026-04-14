@@ -4,7 +4,7 @@ Ingestion Audit Log Model
 Tracks data ingestion runs with detailed statistics and error logging.
 """
 
-from datetime import datetime
+from datetime import datetime, timezone
 from sqlalchemy import Column, Integer, String, DateTime, Float, JSON
 from ..connection import Base
 
@@ -14,7 +14,7 @@ class IngestionRun(Base):
     __tablename__ = "ingestion_runs"
 
     id = Column(Integer, primary_key=True)
-    run_at = Column(DateTime, default=datetime.utcnow, index=True)
+    run_at = Column(DateTime, default=lambda: datetime.now(timezone.utc), index=True)
     triggered_by = Column(String(64), nullable=True)  # "startup"|"api"|"manual"
     files_processed = Column(JSON, default=list)  # [{"name": str, "rows": int}]
     students_created = Column(Integer, default=0)

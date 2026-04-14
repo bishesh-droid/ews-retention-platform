@@ -5,7 +5,7 @@ Stores the best-known content_required value per course per semester.
 Acts as a fallback when ingestion produces null values.
 """
 
-from datetime import datetime
+from datetime import datetime, timezone
 from sqlalchemy import Column, Integer, String, DateTime, UniqueConstraint
 from ..connection import Base
 
@@ -19,7 +19,7 @@ class CourseContentRegistry(Base):
     course_name = Column(String(256), nullable=False)
     semester_name = Column(String(64), nullable=False)
     content_required = Column(Integer, nullable=False)
-    last_updated_at = Column(DateTime, default=datetime.utcnow, onupdate=datetime.utcnow)
+    last_updated_at = Column(DateTime, default=lambda: datetime.now(timezone.utc), onupdate=lambda: datetime.now(timezone.utc))
     source_file = Column(String(256), nullable=True)
 
     __table_args__ = (

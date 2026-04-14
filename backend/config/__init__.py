@@ -41,7 +41,8 @@ TESTING: bool = os.getenv("TESTING", "false").lower() == "true"
 # SQLAlchemy engines share the same file (in-memory DBs are per-connection).
 DATABASE_URL: str
 if TESTING:
-    import tempfile, atexit
+    import tempfile
+    import atexit
     _test_db_fd, _test_db_path = tempfile.mkstemp(suffix=".db", prefix="ews_test_")
     os.close(_test_db_fd)
     DATABASE_URL = f"sqlite:///{_test_db_path}"

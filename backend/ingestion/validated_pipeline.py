@@ -149,7 +149,7 @@ class ValidatedEWSPipeline:
 
         return sorted(files)
 
-    def _process_file_with_validation(self, db, file_path: Path):
+    def _process_file_with_validation(self, db, file_path: Path):  # noqa: C901
         """Process a single file with full validation"""
         self.logger.info(f"\n[Processing] {file_path.name}")
 
