@@ -56,17 +56,161 @@ Examples of representing our community include using an official e-mail address,
 posting via an official social media account, or acting as an appointed
 representative at an online or offline event.
 
+## Scope of Application for Educational Software Projects
+
+This Code of Conduct applies to all contributors, maintainers, and community
+members engaging with this Early Warning System (EWS) retention platform and
+related educational software components. The scope specifically includes:
+
+**Code Contributions**: All pull requests, commits, code reviews, and technical
+discussions related to the platform's source code, including risk scoring algorithms,
+data ingestion pipelines, and API implementations.
+
+**Data Handling Discussions**: Conversations involving student engagement data,
+academic performance metrics, or any educational records, whether in GitHub issues,
+pull request comments, mailing lists, or community forums.
+
+**Security Disclosures**: Reports of vulnerabilities, security-related discussions,
+and responsible disclosure processes for this educational software platform.
+
+**Student Data Conversations**: Any discussion involving real or hypothetical student
+information, risk profiles, intervention records, or FERPA-protected educational records.
+
+**Communication Channels**: This Code applies to all public and private communication
+channels associated with the project, including but not limited to GitHub repositories,
+issue trackers, pull requests, mailing lists, chat platforms, video conferences,
+social media presence, and in-person events related to this educational software.
+
 ## Enforcement
 
 Instances of abusive, harassing, or otherwise unacceptable behavior may be
 reported to the community leaders responsible for enforcement at:
 
-📧 **conduct@your-organization.edu** (placeholder - update with actual contact)
+📧 **conduct@<your-domain>**
 
 All complaints will be reviewed and investigated promptly and fairly.
 
 All community leaders are obligated to respect the privacy and security of the
 reporter of any incident.
+
+## Governance & Enforcement Transparency
+
+### Community Leaders Definition
+
+"Community Leaders" for this project are defined as:
+
+* **Project Maintainers**: Core contributors with merge access to protected branches,
+  responsible for architectural decisions and release management.
+* **Core Contributors**: Active developers with sustained contribution history who
+  participate in technical design discussions and code review processes.
+* **Security Lead**: Designated maintainer responsible for handling security disclosures,
+  vulnerability triage, and coordination of security-related incidents.
+* **Community Manager**: Individual responsible for moderating discussions, managing
+  community events, and handling non-technical Code of Conduct matters.
+
+### Conflict of Interest Handling
+
+Community Leaders must recuse themselves from enforcement actions when:
+
+* They have a personal or professional relationship with the involved parties that
+  could impair impartial judgment.
+* They have previously expressed public opinions on the specific matter being investigated.
+* They stand to benefit personally or professionally from a particular outcome.
+
+When a Community Leader recuses themselves, another Leader will be assigned to ensure
+continuity of enforcement. A record of recusals will be maintained for transparency.
+
+### Escalation Procedure
+
+For matters that cannot be resolved at the initial reporting level:
+
+1. **Initial Report**: Submitted via conduct@<your-domain> or GitHub private disclosure.
+2. **Secondary Review**: If the reporter is unsatisfied with initial handling, they may
+   request review by a different Community Leader within 14 days.
+3. **Tertiary Escalation**: For matters involving Community Leaders themselves, or where
+   secondary review is insufficient, reports may be escalated to the Project Steering
+   Committee or designated institutional oversight body.
+4. **External Escalation**: For severe matters involving institutional policy violations,
+   reporters may escalate to the parent organization's HR or compliance office.
+
+### Appeal Process
+
+Individuals subject to enforcement actions may appeal decisions as follows:
+
+* **Appeal Window**: Appeals must be submitted within 30 days of the enforcement decision.
+* **Appeal Submission**: Written appeal must be sent to conduct@<your-domain> with
+  subject line "CODE OF CONDUCT APPEAL" and must include specific grounds for appeal.
+* **Appeal Review**: A different Community Leader or panel (not involved in original
+  decision) will review the appeal within 14 days.
+* **Final Decision**: The appeal reviewer's decision is final unless new evidence
+  emerges warranting further review.
+* **Status During Appeal**: Enforcement actions remain in effect during the appeal
+  process unless stayed by the reviewing panel.
+
+### Investigation Confidentiality Standards
+
+All Code of Conduct investigations will adhere to the following confidentiality
+standards:
+
+* **Reporter Confidentiality**: The identity of reporters will be protected to the
+  extent permitted by law and institutional policy. Anonymous reports are accepted
+  but may limit investigation capabilities.
+* **Subject Confidentiality**: Individuals under investigation will be informed of
+  allegations against them at the appropriate stage, balancing transparency with
+  investigation integrity.
+* **Witness Protection**: Witnesses providing information will have their identities
+  protected unless disclosure is necessary for the investigation or required by law.
+* **Documentation Security**: All investigation records, including emails, chat logs,
+  and notes, will be stored securely with access limited to involved Community Leaders.
+* **Retention Policy**: Investigation records will be retained for 2 years following
+  resolution, after which they will be securely deleted unless legal or institutional
+  requirements dictate otherwise.
+
+## Data Sensitivity & Responsible Conduct
+
+Given that this project involves educational software handling sensitive student
+information, all contributors must adhere to enhanced data handling standards:
+
+### FERPA-Protected Data
+
+The Family Educational Rights and Privacy Act (FERPA) protects the privacy of
+student education records. Contributors must:
+
+* Understand that student educational records include academic performance data,
+  enrollment information, risk scores, intervention records, and any personally
+  identifiable information linked to students.
+* Recognize that sharing FERPA-protected data without consent violates federal law
+  and this Code of Conduct.
+* Report any suspected FERPA violations immediately to the Security Lead.
+
+### Responsible Handling Expectations
+
+All contributors are expected to:
+
+* Handle any student data access granted for development/testing purposes with the
+  highest level of care and only for legitimate project purposes.
+* Use synthetic, anonymized, or de-identified data for all testing, development,
+  and demonstration purposes unless explicitly authorized otherwise.
+* Immediately report any accidental exposure or suspected breach of student data.
+* Complete any required data privacy training provided by the parent institution
+  or project maintainers.
+
+### Prohibition on Sharing Real Student Data
+
+**Strictly prohibited** in all project spaces:
+
+* Posting real student names, email addresses, student IDs, or other personally
+  identifiable information in GitHub issues, pull requests, comments, or any
+  public project communication.
+* Including real student records, grade data, or risk scores in code examples,
+  test data, screenshots, or documentation.
+* Sharing production database dumps or exports containing real student information.
+* Discussing specific real student cases in public or private project channels
+  without proper authorization and anonymization.
+
+Violations of these data sensitivity provisions will be treated as serious
+breaches of this Code of Conduct and may result in immediate suspension of
+contribution privileges pending investigation.
 
 ## Enforcement Guidelines
 

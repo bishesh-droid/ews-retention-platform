@@ -138,6 +138,415 @@ Educational institutions lose students due to disengagement, academic struggles,
 | Google Gemini | LLM explanations, suggestions | Optional |
 | Anthropic Claude | Alternative LLM provider | Optional |
 
+## Visual Architecture & System Working (Diagrammatic View)
+
+### System Architecture
+
+```mermaid
+flowchart TD
+    subgraph External["External Services"]
+        Gemini["Google Gemini API"]
+        Claude["Anthropic Claude API"]
+    end
+
+    subgraph Frontend["Frontend Layer"]
+        React["React SPA (Port 3000)"]
+        AuthContext["AuthContext (JWT State)"]
+        StudentContext["StudentContext (Data State)"]
+        Axios["Axios Interceptors"]
+    end
+
+    subgraph Backend["Backend Layer - FastAPI (Port 8000)"]
+        subgraph Routes["Routes Layer"]
+            Auth["auth.py"]
+            StudentV1["student_v1.py"]
+            FacultyV1["faculty_v1.py"]
+            AdminV1["admin_v1.py"]
+            MLRoutes["ml_routes.py"]
+            Interventions["interventions.py"]
+            Decisions["decisions.py"]
+            Business["business.py"]
+            Analytics["analytics.py"]
+        end
+
+        subgraph Services["Services Layer"]
+            RiskScorer["risk_scoring.py"]
+            FeatureEngineer["feature_engineering.py"]
+            CalendarScorer["calendar_scorer.py"]
+            DecisionEngine["decision_engine.py"]
+            MLService["ml_service.py"]
+            AnalyticsService["analytics_service.py"]
+        end
+
+        subgraph AIServices["AI Services (services/ai/)"]
+            LLMOrchestrator["llm_orchestrator.py"]
+            RAGEngine["rag_engine.py"]
+            HallucinationGuard["hallucination_guard.py"]
+        end
+
+        subgraph Infrastructure["Infrastructure Services"]
+            Scheduler["scheduler.py"]
+            TokenCleanup["token_cleanup.py"]
+            Recommender["recommender.py"]
+        end
+
+        subgraph Core["Core Modules"]
+            JWTAuth["auth.py (JWT)"]
+            Security["security.py"]
+            RateLimit["rate_limiting.py"]
+            AuditLogger["audit_logger.py"]
+        end
+
+        subgraph Middleware["Middleware"]
+            SecurityHeaders["security_headers.py"]
+            RequestValidation["request_validation.py"]
+            AuditMiddleware["security_logging.py"]
+        end
+    end
+
+    subgraph DataLayer["Data Layer"]
+        SQLite[("SQLite / PostgreSQL")]
+        Redis[("Redis Cache")]
+    end
+
+    subgraph DataIngestion["Data Ingestion Pipeline"]
+        MasterBuilder["master_builder.py"]
+        Loader["loader.py"]
+        Validator["validator.py"]
+        Normalizer["normalizer.py"]
+        SchemaMapper["schema_mapper.py"]
+    end
+
+    React --> Axios
+    Axios --> AuthContext
+    Axios --> StudentContext
+    Axios --> Auth
+    Axios --> StudentV1
+    Axios --> FacultyV1
+    Axios --> AdminV1
+    Axios --> MLRoutes
+    Axios --> Interventions
+    Axios --> Business
+    Axios --> Analytics
+
+    Auth --> JWTAuth
+    StudentV1 --> RiskScorer
+    FacultyV1 --> RiskScorer
+    MLRoutes --> MLService
+    Interventions --> DecisionEngine
+    Decisions --> DecisionEngine
+    Business --> AnalyticsService
+    Analytics --> AnalyticsService
+
+    RiskScorer --> FeatureEngineer
+    RiskScorer --> CalendarScorer
+    MLService --> FeatureEngineer
+    DecisionEngine --> LLMOrchestrator
+
+    LLMOrchestrator --> Gemini
+    LLMOrchestrator --> Claude
+    LLMOrchestrator --> HallucinationGuard
+    LLMOrchestrator --> RAGEngine
+
+    Scheduler --> RiskScorer
+    Scheduler --> MLService
+    Scheduler --> TokenCleanup
+
+    Routes --> Middleware
+    Middleware --> Core
+    Routes --> SQLite
+    Core --> SQLite
+    Core --> Redis
+    Services --> SQLite
+    AIServices --> SQLite
+
+    MasterBuilder --> Loader
+    Loader --> Validator
+    Validator --> Normalizer
+    Normalizer --> SchemaMapper
+    SchemaMapper --> SQLite
+```
+
+### Runtime Working Flow
+
+```mermaid
+flowchart TD
+    subgraph AuthFlow["Authentication Flow"]
+        User["User"] --> Login["POST /auth/login"]
+        Login --> ValidateCreds["Validate Credentials (bcrypt)"]
+        ValidateCreds --> CreateJWT["Create JWT Access Token"]
+        CreateJWT --> CreateRefresh["Create Refresh Token (httpOnly cookie)"]
+        CreateRefresh --> ReturnToken["Return Access Token"]
+    end
+
+    subgraph RequestCycle["Authenticated Request Cycle"]
+        Client["Client"] --> AttachHeader["Attach Authorization Header"]
+        AttachHeader --> ValidateJWT["JWT Validation Middleware"]
+        ValidateJWT --> CheckRevoked["Check RevokedToken Table"]
+        CheckRevoked --> RBAC["RBAC Authorization Check"]
+        RBAC --> AuditLog["Audit Logger (FERPA)"]
+        AuditLog --> ProcessRequest["Process Request"]
+    end
+
+    subgraph RiskPipeline["Risk Scoring Pipeline"]
+        Trigger["Scheduler Trigger (03:00 UTC)"]
+        Trigger --> LoadFeatures["Load Student Features"]
+        LoadFeatures --> CalcContent["content_completion_score (30%)"]
+        LoadFeatures --> CalcLogin["login_consistency_score (20%)"]
+        LoadFeatures --> CalcQuiz["quiz_engagement_score (20%)"]
+        LoadFeatures --> CalcAssignment["assignment_score (15%)"]
+        LoadFeatures --> CalcTime["time_investment_score (8%)"]
+        LoadFeatures --> CalcDiscussion["discussion_engagement_score (2%)"]
+        LoadFeatures --> CalcSelf["self_directed_learning_score (5%)"]
+        CalcContent --> WeightedSum["Compute Weighted Engagement"]
+        CalcLogin --> WeightedSum
+        CalcQuiz --> WeightedSum
+        CalcAssignment --> WeightedSum
+        CalcTime --> WeightedSum
+        CalcDiscussion --> WeightedSum
+        CalcSelf --> WeightedSum
+        WeightedSum --> BaseRisk["Base Risk = 100 - weighted_engagement"]
+        BaseRisk --> CalendarAdj["Calendar Adjustment (40% blend)"]
+        CalendarAdj --> AcademicFlags["Academic Flags Override"]
+        AcademicFlags --> StorePrediction["Store in predictions table"]
+        StorePrediction --> LogPrediction["Write to prediction_log"]
+    end
+
+    subgraph InterventionFlow["Intervention Decision Engine"]
+        GetRisk["Get Risk Score"] --> CheckGhost["Check Ghost Student Flags"]
+        CheckGhost --> CheckAcademic["Check Academic Flags"]
+        CheckAcademic --> PatternRoute["Pattern-Based Routing"]
+        PatternRoute --> ThresholdCheck["Threshold Check"]
+        ThresholdCheck --> NoAction["< 30: No Action"]
+        ThresholdCheck --> Gentle["30-40: Gentle Reminder"]
+        ThresholdCheck --> Mentor["40-60: Mentor Outreach"]
+        ThresholdCheck --> Escalated["60-80: Escalated Mentor"]
+        ThresholdCheck --> Urgent["80+: Urgent Intervention"]
+        Gentle --> CreateIntervention["Create Intervention Record"]
+        Mentor --> CreateIntervention
+        Escalated --> CreateIntervention
+        Urgent --> CreateIntervention
+        CreateIntervention --> AssignQueue["Assign to Faculty/Sales Queue"]
+    end
+
+    subgraph SchedulerCycle["Scheduler-Triggered Prediction Cycle"]
+        DailyTrigger["APScheduler Daily Trigger"] --> AcquireLock["Acquire Async Lock"]
+        AcquireLock --> LoadStudents["Load All Active Students"]
+        LoadStudents --> BatchProcess["Batch Process (feature extraction)"]
+        BatchProcess --> ScoreBatch["Score Batch (risk_scoring.py)"]
+        ScoreBatch --> PersistBatch["Persist to Database"]
+        PersistBatch --> UpdateSnapshots["Update Risk Snapshots"]
+        UpdateSnapshots --> ReleaseLock["Release Lock"]
+        ReleaseLock --> LogCompletion["Log Completion to audit_logs"]
+    end
+
+    subgraph AuditLogging["Audit Logging Flow"]
+        AnyAction["Any Data Access"] --> AuditMiddleware["Audit Middleware"]
+        AuditMiddleware --> MaskPII["Mask PII (email, student_id)"]
+        MaskPII --> WriteAudit["Write to audit_logs table"]
+        WriteAudit --> IncludeMetadata["Include: user_id, action, resource_type, timestamp, request_id"]
+    end
+
+    ReturnToken --> Client
+    ProcessRequest --> GetRisk
+    LogPrediction --> AnyAction
+    AssignQueue --> AnyAction
+    LogCompletion --> AuditLogging
+```
+
+### Data Flow
+
+```mermaid
+flowchart LR
+    subgraph Input["Data Input"]
+        ExcelFiles["Excel Files (.xlsx)"]
+        RawDir["backend/data/raw/"]
+    end
+
+    subgraph Upload["Upload Process"]
+        AdminUpload["Admin Upload /admin/ingest"]
+        Multipart["Multipart Form Data"]
+    end
+
+    subgraph Validation["Validation Layer"]
+        RowValidator["row_validators.py"]
+        ColumnCount["Column Count Check"]
+        RequiredFields["Required Field Presence"]
+        NumericBounds["Numeric Bounds Checking"]
+        EmailFormat["Email Format Validation"]
+    end
+
+    subgraph Quarantine["Quarantine Path"]
+        ValidationFail["Validation Failed"]
+        QuarantineDir["backend/data/quarantine/"]
+        ErrorLog["Error Log Entry"]
+    end
+
+    subgraph Transform["Transformation"]
+        SchemaMapper["schema_mapper.py"]
+        ColumnNorm["Column Name Normalization"]
+        DataTypeNorm["Data Type Normalization"]
+        MasterBuilder["master_builder.py"]
+    end
+
+    subgraph StarSchema["Star Schema Load"]
+        DimStudent["dim_student"]
+        DimCourse["dim_course"]
+        FactEngagement["fact_engagement"]
+        FactAcademic["fact_academic_performance"]
+        FactConsistency["fact_consistency"]
+        FactIntent["fact_intent_responsiveness"]
+    end
+
+    subgraph FeatureEng["Feature Engineering"]
+        AcademicExtractor["features/academic.py"]
+        EngagementExtractor["features/engagement.py"]
+        ConsistencyExtractor["features/consistency.py"]
+        IntentExtractor["features/intent.py"]
+        FeatureComposer["features/composer.py"]
+    end
+
+    subgraph Calculation["Risk Calculation"]
+        RiskScorer["risk_scoring.py"]
+        WeightedCalc["Weighted Signal Calculation"]
+        CalendarAdj["calendar_scorer.py"]
+        FinalRisk["Final Risk Score (0-100)"]
+    end
+
+    subgraph Persistence["Prediction Persistence"]
+        PredictionsTable["predictions table"]
+        RiskSnapshots["risk_snapshots table"]
+        PredictionLog["prediction_log table"]
+    end
+
+    ExcelFiles --> RawDir
+    RawDir --> AdminUpload
+    AdminUpload --> Multipart
+    Multipart --> RowValidator
+    RowValidator --> ColumnCount
+    ColumnCount --> RequiredFields
+    RequiredFields --> NumericBounds
+    NumericBounds --> EmailFormat
+
+    EmailFormat -->|Pass| SchemaMapper
+    EmailFormat -->|Fail| ValidationFail
+    ValidationFail --> QuarantineDir
+    ValidationFail --> ErrorLog
+
+    SchemaMapper --> ColumnNorm
+    ColumnNorm --> DataTypeNorm
+    DataTypeNorm --> MasterBuilder
+    MasterBuilder --> DimStudent
+    MasterBuilder --> DimCourse
+    MasterBuilder --> FactEngagement
+    MasterBuilder --> FactAcademic
+    MasterBuilder --> FactConsistency
+    MasterBuilder --> FactIntent
+
+    FactEngagement --> EngagementExtractor
+    FactAcademic --> AcademicExtractor
+    FactConsistency --> ConsistencyExtractor
+    FactIntent --> IntentExtractor
+
+    EngagementExtractor --> FeatureComposer
+    AcademicExtractor --> FeatureComposer
+    ConsistencyExtractor --> FeatureComposer
+    IntentExtractor --> FeatureComposer
+
+    FeatureComposer --> RiskScorer
+    RiskScorer --> WeightedCalc
+    WeightedCalc --> CalendarAdj
+    CalendarAdj --> FinalRisk
+
+    FinalRisk --> PredictionsTable
+    FinalRisk --> RiskSnapshots
+    FinalRisk --> PredictionLog
+```
+
+### Deployment View
+
+```mermaid
+flowchart TD
+    subgraph External["External Traffic"]
+        Users["Users / Admins / Faculty"]
+        Internet["Internet"]
+    end
+
+    subgraph ReverseProxy["Reverse Proxy Layer"]
+        Nginx["nginx Load Balancer"]
+        SSL["SSL Termination"]
+    end
+
+    subgraph DockerNetwork["Docker Network: ews-network"]
+        subgraph FrontendContainer["Frontend Container"]
+            ReactApp["React SPA (nginx:alpine)"]
+            StaticFiles["Static Build Files"]
+            NginxConf["nginx.conf"]
+        end
+
+        subgraph BackendContainer["Backend Container"]
+            FastAPIApp["FastAPI Application (Python 3.12 slim)"]
+            Uvicorn["Uvicorn Server (4 workers)"]
+            MiddlewareStack["Middleware Stack"]
+            RoutesLayer["Routes Layer"]
+            ServicesLayer["Services Layer"]
+        end
+
+        subgraph SchedulerContainer["Scheduler Container"]
+            APScheduler["APScheduler Service"]
+            SchedulerScript["scheduler.py"]
+            BackgroundJobs["Background Jobs"]
+        end
+
+        subgraph RedisContainer["Redis Container"]
+            RedisServer["Redis 7 (alpine)"]
+            RateLimitStore["Rate Limit Counters"]
+            LLMCache["LLM Response Cache"]
+        end
+
+        subgraph DatabaseContainer["Database Container (Production)"]
+            Postgres["PostgreSQL 14"]
+            DataVolume["Persistent Volume"]
+        end
+    end
+
+    subgraph DataVolumeMount["Data Volumes"]
+        SQLiteDev["SQLite (dev): ./backend/data/"]
+        PostgresData["Postgres Data: postgres_data"]
+        LogsVolume["Logs: ./logs/"]
+    end
+
+    Users --> Internet
+    Internet --> Nginx
+    Nginx --> SSL
+    SSL --> ReactApp
+    SSL --> Uvicorn
+
+    ReactApp --> StaticFiles
+    ReactApp --> NginxConf
+
+    Uvicorn --> FastAPIApp
+    FastAPIApp --> MiddlewareStack
+    MiddlewareStack --> RoutesLayer
+    RoutesLayer --> ServicesLayer
+
+    FastAPIApp --> RedisServer
+    FastAPIApp --> Postgres
+
+    APScheduler --> SchedulerScript
+    SchedulerScript --> BackgroundJobs
+    BackgroundJobs --> Uvicorn
+
+    RedisServer --> RateLimitStore
+    RedisServer --> LLMCache
+
+    Postgres --> DataVolume
+
+    SQLiteDev -.->|Development| FastAPIApp
+    PostgresData -.->|Production| Postgres
+    LogsVolume -.->|All Containers| FastAPIApp
+```
+
 ## Project Structure
 
 ### Root Directory
