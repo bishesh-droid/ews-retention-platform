@@ -248,6 +248,14 @@ async def lifespan(app: FastAPI):  # noqa: C901
 
     _startup_task = asyncio.create_task(_run_startup_ingestion())
 
+    def _on_startup_ingestion_done(task: asyncio.Task) -> None:
+        """Callback for when startup ingestion completes."""
+        try:
+            result = task.result()
+            sys_logger.info(f"Startup ingestion completed with result: {result}")
+        except Exception as e:
+            sys_logger.error(f"Startup ingestion task failed: {e}", exc_info=True)
+
     _startup_task.add_done_callback(_on_startup_ingestion_done)
 
     try:
