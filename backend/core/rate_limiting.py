@@ -1,3 +1,4 @@
+import os
 from slowapi import Limiter
 from slowapi.util import get_remote_address
 from slowapi.errors import RateLimitExceeded
@@ -7,8 +8,26 @@ from fastapi.responses import JSONResponse
 from backend.api.deps import get_current_user
 from backend.database.models.user import User
 
+
+# Check if we're in test mode
+IS_TESTING = os.environ.get("TESTING", "false").lower() == "true"
+
+
+def get_rate_limit_key(request: Request) -> str:
+    """Get rate limit key - returns a unique key per test when TESTING is set."""
+    if IS_TESTING:
+        # In tests, use a unique key per request to avoid rate limits
+        import uuid
+        return f"test-{uuid.uuid4()}"
+    return get_remote_address(request)
+
+
 # Default global limiter (IP-based for non-authenticated routes)
-limiter = Limiter(key_func=get_remote_address, default_limits=["200/minute"])
+# When TESTING, use unlimited by default
+if IS_TESTING:
+    limiter = Limiter(key_func=get_rate_limit_key, default_limits=[])
+else:
+    limiter = Limiter(key_func=get_remote_address, default_limits=["200/minute"])
 
 
 # ---------------------------------------------------------------------------

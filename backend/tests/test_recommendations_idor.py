@@ -37,8 +37,24 @@ def db_session():
 
 @pytest.fixture
 def cleanup_test_users(db_session: Session):
-    """Cleanup fixture to remove test users after tests."""
+    """Cleanup fixture to remove test users and students after tests."""
+    from backend.database.models.student import Student
+    from backend.database.models.enrollment import Enrollment
+    from backend.database.models.graded_component import GradedComponent
+    from backend.database.models.exam_record import ExamRecord
+
     yield
+    # Cleanup related student data first
+    student_ids = ["student1@test.com", "student2@test.com"]
+    for student_id in student_ids:
+        db_session.query(Enrollment).filter(Enrollment.student_id == student_id).delete()
+        db_session.query(GradedComponent).filter(GradedComponent.student_id == student_id).delete()
+        db_session.query(ExamRecord).filter(ExamRecord.student_id == student_id).delete()
+        student = db_session.query(Student).filter(Student.id == student_id).first()
+        if student:
+            db_session.delete(student)
+    db_session.commit()
+
     # Cleanup test users
     for username in ["student1@test.com", "student2@test.com", "faculty@test.com", "admin@test.com"]:
         user = db_session.query(User).filter(User.username == username).first()
@@ -152,10 +168,8 @@ def student2_student_record(db_session: Session):
 def get_auth_token(user: User) -> str:
     """Helper to create a valid access token for a user."""
     return create_access_token(
-        data={"sub": user.username, "role": user.role},
-        username=user.username,
-        email=user.email,
-        user_id=user.id,
+        subject=user.username,
+        role=user.role,
     )
 
 

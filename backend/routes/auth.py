@@ -217,18 +217,46 @@ async def logout(
             token_exp = unverified_payload.get("exp")
 
             if token_jti and token_exp:
-                # Add token to revocation blocklist
+                # Add token to revocation blocklist (use UTC timezone)
                 revoked_token = RevokedToken(
                     jti=token_jti,
                     user_id=current_user.id,
-                    expires_at=datetime.fromtimestamp(token_exp),
+                    expires_at=datetime.fromtimestamp(token_exp, tz=timezone.utc),
                 )
                 db.add(revoked_token)
                 await db.commit()
-                logger.info(f"Token revoked for user {current_user.id}, jti={token_jti}")
+                logger.info(f"Access token revoked for user {current_user.id}, jti={token_jti}")
         except Exception as e:
             # Log but don't fail the logout if token revocation fails
-            logger.warning(f"Failed to revoke token during logout: {e}")
+            logger.warning(f"Failed to revoke access token during logout: {e}")
+            await db.rollback()
+
+    # Also revoke the refresh token if present
+    refresh_token = request.cookies.get(REFRESH_TOKEN_COOKIE_NAME)
+    if refresh_token:
+        try:
+            # Decode refresh token without verification to extract jti and exp
+            unverified_payload = pyjwt.decode(
+                refresh_token,
+                key="",
+                options={"verify_signature": False, "verify_exp": False}
+            )
+            refresh_jti = unverified_payload.get("jti")
+            refresh_exp = unverified_payload.get("exp")
+
+            if refresh_jti and refresh_exp:
+                # Add refresh token to revocation blocklist (use UTC timezone)
+                revoked_refresh = RevokedToken(
+                    jti=refresh_jti,
+                    user_id=current_user.id,
+                    expires_at=datetime.fromtimestamp(refresh_exp, tz=timezone.utc),
+                )
+                db.add(revoked_refresh)
+                await db.commit()
+                logger.info(f"Refresh token revoked for user {current_user.id}, jti={refresh_jti}")
+        except Exception as e:
+            # Log but don't fail the logout if token revocation fails
+            logger.warning(f"Failed to revoke refresh token during logout: {e}")
             await db.rollback()
 
     # Clear the refresh token cookie

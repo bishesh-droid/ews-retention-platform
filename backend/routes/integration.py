@@ -215,7 +215,8 @@ def _build_risk_profile_from_cached_data(
     # Calculate features using pre-fetched data
     is_new = (student.old_new_student or "").lower() == "new"
     week_number = trimester_week_number()
-    program = "MSc" if "msc" in (student.parent_department_name or "").lower() else "BS"
+    dept_name = (student.parent_department_name or "").lower()
+    program = "MSc" if "msc" in dept_name else "BS"
     current_week = get_current_week(settings.TRIMESTER_START_DATE)
 
     features = FeatureEngineer.calculate_all_features(

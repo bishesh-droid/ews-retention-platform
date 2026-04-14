@@ -153,9 +153,11 @@ class ConsistencyFeatureExtractor:
         total_time = sum(e.get("total_time_spent", 0) or 0 for e in enrollments)
 
         if total_courses == 0:
+            # No enrollments - ghost if also no logins
+            is_ghost = student_login_count == 0
             return {
-                "is_ghost": False,
-                "ghost_type": None,
+                "is_ghost": is_ghost,
+                "ghost_type": "never_logged_in" if is_ghost else None,
                 "zero_progress_course_count": 0,
                 "total_enrolled_courses": 0,
                 "total_time_seconds": 0

@@ -82,7 +82,7 @@ class IntentFeatureExtractor:
             One of: "disengaged", "struggling", "at_risk_normal", "on_track"
         """
         # Rule 1: Disengaged - very low login and completion
-        if login_count < 5 and content_completion_rate < 0.05:
+        if login_count < 5 and content_completion_rate <= 0.05:
             return "disengaged"
 
         # Rule 2: Struggling - high login, low completion, significant time, poor quiz

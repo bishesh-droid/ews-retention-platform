@@ -331,7 +331,12 @@ class TestTokenRevocation:
         )
 
         assert refresh_response.status_code == 401
-        assert "revoked" in refresh_response.json().get("detail", "").lower()
+        response_json = refresh_response.json()
+        # Handle both envelope format (error.message) and direct format (detail)
+        error_message = response_json.get("detail", "")
+        if not error_message and "error" in response_json:
+            error_message = response_json["error"].get("message", "")
+        assert "revoked" in error_message.lower()
 
     def test_token_revoked_at_expiry_matches_jwt_exp(
         self, client: TestClient, test_user: User, db_session: Session
@@ -370,7 +375,7 @@ class TestTokenRevocation:
 
         assert revoked is not None
         # Verify expiry matches (within 1 second tolerance)
-        db_exp = int(revoked.expires_at.replace(tzinfo=timezone.utc).timestamp())
+        db_exp = int(revoked.expires_at.timestamp())
         assert abs(db_exp - token_exp) <= 1, "DB expiry should match JWT exp claim"
 
     def test_cannot_revoke_same_token_twice(self, client: TestClient, test_user: User, db_session: Session):
@@ -498,4 +503,9 @@ class TestAuthRefresh:
         )
 
         assert refresh_response.status_code == 401
-        assert "revoked" in refresh_response.json()["detail"].lower()
+        response_json = refresh_response.json()
+        # Handle both envelope format (error.message) and direct format (detail)
+        error_message = response_json.get("detail", "")
+        if not error_message and "error" in response_json:
+            error_message = response_json["error"].get("message", "")
+        assert "revoked" in error_message.lower()

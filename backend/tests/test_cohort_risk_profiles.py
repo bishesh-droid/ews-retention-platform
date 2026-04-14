@@ -56,13 +56,29 @@ def integration_headers():
 @pytest.fixture
 def cleanup_test_data(db_session: Session):
     """Cleanup fixture to remove test students after tests."""
+    from backend.database.models.enrollment import Enrollment
+    from backend.database.models.graded_component import GradedComponent
+    from backend.database.models.exam_record import ExamRecord
+
     yield
-    # Cleanup test students
-    for student_id in ["test1@test.com", "test2@test.com", "test3@test.com"]:
+    # Cleanup test data in reverse dependency order to avoid FK violations
+    # Include student IDs used across all tests in this file
+    test_student_ids = [
+        "test1@test.com", "test2@test.com", "test3@test.com",
+        "null_fields@test.com",  # From test_student_with_null_fields_handled_gracefully
+    ]
+    for student_id in test_student_ids:
+        # First delete related records
+        db_session.query(Enrollment).filter(Enrollment.student_id == student_id).delete()
+        db_session.query(GradedComponent).filter(GradedComponent.student_id == student_id).delete()
+        db_session.query(ExamRecord).filter(ExamRecord.student_id == student_id).delete()
+        db_session.commit()
+
+        # Then delete the student
         student = db_session.query(Student).filter(Student.id == student_id).first()
         if student:
             db_session.delete(student)
-    db_session.commit()
+            db_session.commit()
 
 
 @pytest.fixture
