@@ -39,7 +39,7 @@ jobs:
         pip install -r requirements-dev.txt
 
     - name: Lint
-      run: flake8 backend/ --max-line-length=100
+      run: flake8 backend/
 
     - name: Type check
       run: mypy backend/ --ignore-missing-imports
