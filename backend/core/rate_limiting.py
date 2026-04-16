@@ -21,6 +21,7 @@ def get_rate_limit_key(request: Request) -> str:
     if IS_TESTING:
         # In tests, use a unique key per request to avoid rate limits
         import uuid
+
         return f"test-{uuid.uuid4()}"
     return get_remote_address(request)
 
@@ -46,6 +47,7 @@ else:
 #
 # This ensures limits are per-user, not global across all users.
 # ---------------------------------------------------------------------------
+
 
 def get_user_id_from_request(request: Request) -> str:
     """Extract user ID from request state (set by get_current_user dependency)."""
@@ -104,6 +106,7 @@ def require_llm_rate_limit():
     Redis keys follow the convention:
         llm_ratelimit:{user_id}:{window}
     """
+
     def check_rate_limit(
         request: Request,
         current_user: User = Depends(get_current_user),
@@ -117,9 +120,11 @@ def require_llm_rate_limit():
         hour_key = f"llm_ratelimit:{current_user.id}:per_hour"
 
         # Get storage backend from limiter
-        storage = getattr(limiter, '_storage', None)
-        if storage is None or not hasattr(storage, 'incr'):
-            logger.warning("Rate limiter storage unavailable — skipping LLM rate limit check")
+        storage = getattr(limiter, "_storage", None)
+        if storage is None or not hasattr(storage, "incr"):
+            logger.warning(
+                "Rate limiter storage unavailable — skipping LLM rate limit check"
+            )
             return  # Degrade gracefully
 
         # Check minute limit (5/min)

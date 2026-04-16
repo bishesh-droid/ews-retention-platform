@@ -9,7 +9,7 @@ from backend.ml.utils.validation_utils import (
     validate_risk_score_dict,
     sanitize_risk_score_dict,
     get_safe_default_prediction,
-    validate_student_data
+    validate_student_data,
 )
 import sys
 import os
@@ -17,7 +17,7 @@ import numpy as np
 import pandas as pd
 
 # Add parent directory to path to allow imports
-sys.path.insert(0, os.path.abspath(os.path.join(os.path.dirname(__file__), '..')))
+sys.path.insert(0, os.path.abspath(os.path.join(os.path.dirname(__file__), "..")))
 
 
 class TestValidateAndClampProbability:
@@ -63,26 +63,17 @@ class TestValidateStudentFeatures:
 
     def test_valid_features(self):
         """Valid feature DataFrame should return True"""
-        df = pd.DataFrame({
-            'feature1': [1.0, 2.0, 3.0],
-            'feature2': [0.5, 0.6, 0.7]
-        })
+        df = pd.DataFrame({"feature1": [1.0, 2.0, 3.0], "feature2": [0.5, 0.6, 0.7]})
         assert validate_student_features(df) is True
 
     def test_nan_features_invalid(self):
         """Features with NaN should return False"""
-        df = pd.DataFrame({
-            'feature1': [1.0, np.nan, 3.0],
-            'feature2': [0.5, 0.6, 0.7]
-        })
+        df = pd.DataFrame({"feature1": [1.0, np.nan, 3.0], "feature2": [0.5, 0.6, 0.7]})
         assert validate_student_features(df) is False
 
     def test_inf_features_invalid(self):
         """Features with Inf should return False"""
-        df = pd.DataFrame({
-            'feature1': [1.0, 2.0, np.inf],
-            'feature2': [0.5, 0.6, 0.7]
-        })
+        df = pd.DataFrame({"feature1": [1.0, 2.0, np.inf], "feature2": [0.5, 0.6, 0.7]})
         assert validate_student_features(df) is False
 
     def test_empty_dataframe_invalid(self):
@@ -100,20 +91,16 @@ class TestSanitizeStudentFeatures:
 
     def test_nan_replaced_with_median(self):
         """NaN values should be replaced with median"""
-        df = pd.DataFrame({
-            'feature1': [1.0, np.nan, 3.0]
-        })
+        df = pd.DataFrame({"feature1": [1.0, np.nan, 3.0]})
         sanitized = sanitize_student_features(df)
-        assert not sanitized['feature1'].isna().any()
-        assert sanitized['feature1'].iloc[1] == 2.0  # median of [1.0, 3.0]
+        assert not sanitized["feature1"].isna().any()
+        assert sanitized["feature1"].iloc[1] == 2.0  # median of [1.0, 3.0]
 
     def test_inf_replaced(self):
         """Inf values should be replaced"""
-        df = pd.DataFrame({
-            'feature1': [1.0, np.inf, 3.0]
-        })
+        df = pd.DataFrame({"feature1": [1.0, np.inf, 3.0]})
         sanitized = sanitize_student_features(df)
-        assert not np.isinf(sanitized['feature1']).any()
+        assert not np.isinf(sanitized["feature1"]).any()
 
 
 class TestValidateRiskScoreDict:
@@ -122,31 +109,31 @@ class TestValidateRiskScoreDict:
     def test_valid_result(self):
         """Valid result dict should return True"""
         result = {
-            'risk_score': 0.75,
-            'prediction': 1,
-            'signal_breakdown': {
-                'academic_signal_score': 0.6,
-                'engagement_signal_score': 0.8
-            }
+            "risk_score": 0.75,
+            "prediction": 1,
+            "signal_breakdown": {
+                "academic_signal_score": 0.6,
+                "engagement_signal_score": 0.8,
+            },
         }
         assert validate_risk_score_dict(result) is True
 
     def test_missing_risk_score_invalid(self):
         """Dict without risk_score should return False"""
-        result = {'prediction': 1}
+        result = {"prediction": 1}
         assert validate_risk_score_dict(result) is False
 
     def test_nan_risk_score_invalid(self):
         """NaN risk_score should return False"""
-        result = {'risk_score': np.nan, 'prediction': 1}
+        result = {"risk_score": np.nan, "prediction": 1}
         assert validate_risk_score_dict(result) is False
 
     def test_out_of_range_risk_score_invalid(self):
         """Risk score outside [0, 100] should return False"""
-        result = {'risk_score': -0.5, 'prediction': 1}
+        result = {"risk_score": -0.5, "prediction": 1}
         assert validate_risk_score_dict(result) is False
 
-        result = {'risk_score': 150.0, 'prediction': 1}
+        result = {"risk_score": 150.0, "prediction": 1}
         assert validate_risk_score_dict(result) is False
 
     def test_none_result_invalid(self):
@@ -160,21 +147,21 @@ class TestGetSafeDefaultPrediction:
     def test_has_required_fields(self):
         """Default prediction should have all required fields"""
         default = get_safe_default_prediction()
-        assert 'risk_score' in default
-        assert 'prediction' in default
-        assert 'signal_breakdown' in default
-        assert 'model_version' in default
+        assert "risk_score" in default
+        assert "prediction" in default
+        assert "signal_breakdown" in default
+        assert "model_version" in default
 
     def test_risk_score_is_valid(self):
         """Default risk_score should be valid"""
         default = get_safe_default_prediction()
-        assert default['risk_score'] == 50.0
-        assert 0.0 <= default['risk_score'] <= 100.0
+        assert default["risk_score"] == 50.0
+        assert 0.0 <= default["risk_score"] <= 100.0
 
     def test_signals_are_valid(self):
         """All signal scores should be valid"""
         default = get_safe_default_prediction()
-        for signal_name, signal_value in default['signal_breakdown'].items():
+        for signal_name, signal_value in default["signal_breakdown"].items():
             assert 0.0 <= signal_value <= 1.0
 
 
@@ -200,19 +187,21 @@ class TestRegressionNoNegativeRiskScore:
             result = validate_and_clamp_probability(val, default=0.5)
             assert result >= 0.0, f"Invalid value {val} resulted in negative: {result}"
             assert result <= 1.0, f"Invalid value {val} resulted in > 1.0: {result}"
-            assert result == 0.5, f"Invalid value {val} should use default 0.5, got {result}"
+            assert (
+                result == 0.5
+            ), f"Invalid value {val} should use default 0.5, got {result}"
 
     def test_sanitize_prevents_negative(self):
         """Sanitize should prevent negative risk scores"""
         invalid_result = {
-            'risk_score': -1.0,  # This is the BUG we're fixing
-            'signal_breakdown': {}
+            "risk_score": -1.0,  # This is the BUG we're fixing
+            "signal_breakdown": {},
         }
 
         sanitized = sanitize_risk_score_dict(invalid_result)
-        assert sanitized['risk_score'] >= 0.0
-        assert sanitized['risk_score'] <= 1.0
-        assert sanitized['risk_score'] == 0.0  # -1 should be clamped to 0
+        assert sanitized["risk_score"] >= 0.0
+        assert sanitized["risk_score"] <= 1.0
+        assert sanitized["risk_score"] == 0.0  # -1 should be clamped to 0
 
 
 class TestValidateStudentData:
@@ -220,12 +209,12 @@ class TestValidateStudentData:
 
     def test_valid_dataframe(self):
         """Valid DataFrame should return True"""
-        df = pd.DataFrame({'id': ['student1'], 'absrate7': [0.1]})
+        df = pd.DataFrame({"id": ["student1"], "absrate7": [0.1]})
         assert validate_student_data(df) is True
 
     def test_valid_dict(self):
         """Valid dict should return True"""
-        data = {'id': 'student1', 'absrate7': 0.1}
+        data = {"id": "student1", "absrate7": 0.1}
         assert validate_student_data(data) is True
 
     def test_none_invalid(self):

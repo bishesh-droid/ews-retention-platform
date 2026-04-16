@@ -22,7 +22,9 @@ class User(Base):
     department = Column(String, nullable=True)  # Department scope for faculty accounts
     is_active = Column(Boolean, default=True, nullable=False)
     is_superuser = Column(Boolean, default=False, nullable=False)
-    created_at = Column(DateTime, default=lambda: datetime.now(timezone.utc), nullable=False)
+    created_at = Column(
+        DateTime, default=lambda: datetime.now(timezone.utc), nullable=False
+    )
     preferences = Column(JSON, default=dict)  # UI and notification preferences per user
 
     # Relationships
@@ -32,6 +34,6 @@ class User(Base):
         # Ensure role is one of the allowed values
         CheckConstraint(
             "role IN ('student', 'faculty', 'admin', 'retention team')",
-            name="check_valid_role"
+            name="check_valid_role",
         ),
     )

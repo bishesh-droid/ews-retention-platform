@@ -24,11 +24,16 @@ class TestIntentFeatureExtractor:
             graded_quiz_score=60.0,
             risk_score=30.0,
             total_login_count=50,
-            total_time_seconds=3600
+            total_time_seconds=3600,
         )
 
         assert isinstance(result, IntentFeatures)
-        assert result.engagement_pattern in ["disengaged", "struggling", "at_risk_normal", "on_track"]
+        assert result.engagement_pattern in [
+            "disengaged",
+            "struggling",
+            "at_risk_normal",
+            "on_track",
+        ]
 
     def test_classify_disengaged_low_login_low_completion(self):
         """Should classify as 'disengaged' with <5 logins and <5% completion."""
@@ -42,7 +47,7 @@ class TestIntentFeatureExtractor:
             graded_quiz_score=60.0,
             risk_score=30.0,
             total_login_count=3,  # < 5 logins
-            total_time_seconds=3600
+            total_time_seconds=3600,
         )
 
         assert result.engagement_pattern == "disengaged"
@@ -59,7 +64,7 @@ class TestIntentFeatureExtractor:
             graded_quiz_score=45.0,  # Poor quiz score (< 55)
             risk_score=50.0,
             total_login_count=100,  # > 80 logins
-            total_time_seconds=10000  # > 7200 seconds
+            total_time_seconds=10000,  # > 7200 seconds
         )
 
         assert result.engagement_pattern == "struggling"
@@ -76,7 +81,7 @@ class TestIntentFeatureExtractor:
             graded_quiz_score=None,  # None counts as failed
             risk_score=50.0,
             total_login_count=90,
-            total_time_seconds=8000
+            total_time_seconds=8000,
         )
 
         assert result.engagement_pattern == "struggling"
@@ -93,7 +98,7 @@ class TestIntentFeatureExtractor:
             graded_quiz_score=70.0,
             risk_score=45.0,  # >= 40 risk
             total_login_count=30,  # Not low enough for disengaged
-            total_time_seconds=5000
+            total_time_seconds=5000,
         )
 
         assert result.engagement_pattern == "at_risk_normal"
@@ -110,7 +115,7 @@ class TestIntentFeatureExtractor:
             graded_quiz_score=82.0,
             risk_score=20.0,  # Low risk (< 40)
             total_login_count=50,
-            total_time_seconds=50000
+            total_time_seconds=50000,
         )
 
         assert result.engagement_pattern == "on_track"
@@ -126,7 +131,7 @@ class TestIntentFeatureExtractor:
             graded_quiz_score=65.0,
             risk_score=39.0,  # Just below 40 threshold
             total_login_count=50,
-            total_time_seconds=20000
+            total_time_seconds=20000,
         )
 
         assert result.engagement_pattern == "on_track"
@@ -143,7 +148,7 @@ class TestIntentFeatureExtractor:
             graded_quiz_score=None,
             risk_score=50.0,
             total_login_count=100,
-            total_time_seconds=10000
+            total_time_seconds=10000,
         )
 
         assert result.engagement_pattern == "struggling"
@@ -160,7 +165,7 @@ class TestIntentFeatureExtractor:
             graded_quiz_score=60.0,
             risk_score=30.0,
             total_login_count=5,  # Exactly at threshold
-            total_time_seconds=3600
+            total_time_seconds=3600,
         )
 
         # Should NOT be disengaged because login_count is not < 5
@@ -178,7 +183,7 @@ class TestIntentFeatureExtractor:
             graded_quiz_score=60.0,
             risk_score=30.0,
             total_login_count=3,  # < 5 logins
-            total_time_seconds=3600
+            total_time_seconds=3600,
         )
 
         # Should NOT be disengaged because completion_rate is not < 0.05
@@ -196,7 +201,7 @@ class TestIntentFeatureExtractor:
             graded_quiz_score=45.0,
             risk_score=50.0,
             total_login_count=80,  # Exactly 80, not > 80
-            total_time_seconds=10000
+            total_time_seconds=10000,
         )
 
         # Should NOT be struggling because login_count is not > 80
@@ -215,7 +220,7 @@ class TestIntentFeatureExtractor:
             graded_quiz_score=45.0,
             risk_score=50.0,
             total_login_count=100,
-            total_time_seconds=10000
+            total_time_seconds=10000,
         )
 
         # Should NOT be struggling because completion_rate is not < 0.20

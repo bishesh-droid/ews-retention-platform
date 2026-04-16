@@ -15,42 +15,42 @@ class SecurityManager:
     # Prompt injection patterns to detect and remove
     PROMPT_INJECTION_PATTERNS = [
         # Role manipulation - standalone patterns for simple matches
-        r'\bignore\s+previous\b',
-        r'\bignore\s+all\s+previous\b',
-        r'\bignore\s+(?:all\s+)?(?:previous|prior|above|the\s+above)\s+(?:instructions?|prompts?|commands?|context)\b',
-        r'\bforget\s+(?:all\s+)?(?:previous|prior)\s+(?:instructions?|prompts?|commands?)\b',
-        r'\bdiscard\s+(?:all\s+)?(?:previous|prior)\s+(?:instructions?|prompts?|context?)\b',
-        r'\bdisregard\s+(?:all\s+)?(?:previous|prior)\s+(?:instructions?|prompts?|context?)\b',
+        r"\bignore\s+previous\b",
+        r"\bignore\s+all\s+previous\b",
+        r"\bignore\s+(?:all\s+)?(?:previous|prior|above|the\s+above)\s+(?:instructions?|prompts?|commands?|context)\b",
+        r"\bforget\s+(?:all\s+)?(?:previous|prior)\s+(?:instructions?|prompts?|commands?)\b",
+        r"\bdiscard\s+(?:all\s+)?(?:previous|prior)\s+(?:instructions?|prompts?|context?)\b",
+        r"\bdisregard\s+(?:all\s+)?(?:previous|prior)\s+(?:instructions?|prompts?|context?)\b",
         # System/role injection
-        r'^\s*system\s*[:\-]',
-        r'^\s*assistant\s*[:\-]',
-        r'^\s*user\s*[:\-]',
-        r'^\s*human\s*[:\-]',
-        r'^\s*ai\s*[:\-]',
-        r'^\s*developer\s*[:\-]',
-        r'^\s*instruction\s*[:\-]',
+        r"^\s*system\s*[:\-]",
+        r"^\s*assistant\s*[:\-]",
+        r"^\s*user\s*[:\-]",
+        r"^\s*human\s*[:\-]",
+        r"^\s*ai\s*[:\-]",
+        r"^\s*developer\s*[:\-]",
+        r"^\s*instruction\s*[:\-]",
         # Delimiter injection
-        r'```\s*(?:system|assistant|user|instructions?)',
-        r'---\s*(?:system|assistant|user)\s*---',
-        r'<\s*/?\s*(?:system|assistant|user|instructions?)\s*>',
+        r"```\s*(?:system|assistant|user|instructions?)",
+        r"---\s*(?:system|assistant|user)\s*---",
+        r"<\s*/?\s*(?:system|assistant|user|instructions?)\s*>",
         # Common jailbreak prefixes
-        r'^\s*DAN\s*[:\-]',
-        r'^\s*Jailbreak\s*[:\-]',
-        r'^\s*Developer\s*Mode\s*[:\-]',
-        r'\bdeveloper\s+mode\b',
-        r'\bignore\s+your\s+(?:programming|training|instructions|guidelines)\b',
-        r'\bdo\s+not\s+(?:follow|obey|adhere\s+to)\s+(?:your|the)\s+(?:instructions|guidelines|rules)\b',
-        r'\byou\s+are\s+now\s+(?:in|entering)\s+(?:developer\s+mode|DAN\s+mode|jailbreak\s+mode)\b',
+        r"^\s*DAN\s*[:\-]",
+        r"^\s*Jailbreak\s*[:\-]",
+        r"^\s*Developer\s*Mode\s*[:\-]",
+        r"\bdeveloper\s+mode\b",
+        r"\bignore\s+your\s+(?:programming|training|instructions|guidelines)\b",
+        r"\bdo\s+not\s+(?:follow|obey|adhere\s+to)\s+(?:your|the)\s+(?:instructions|guidelines|rules)\b",
+        r"\byou\s+are\s+now\s+(?:in|entering)\s+(?:developer\s+mode|DAN\s+mode|jailbreak\s+mode)\b",
         # Newline-based injection sequences
-        r'\n\s*system\s*[:\-]',
-        r'\n\s*assistant\s*[:\-]',
-        r'\n\s*instruction\s*[:\-]',
+        r"\n\s*system\s*[:\-]",
+        r"\n\s*assistant\s*[:\-]",
+        r"\n\s*instruction\s*[:\-]",
     ]
 
     # Compiled regex patterns for performance
     _INJECTION_REGEX = re.compile(
-        '|'.join(f'({p})' for p in PROMPT_INJECTION_PATTERNS),
-        re.IGNORECASE | re.MULTILINE
+        "|".join(f"({p})" for p in PROMPT_INJECTION_PATTERNS),
+        re.IGNORECASE | re.MULTILINE,
     )
 
     @staticmethod
@@ -68,10 +68,10 @@ class SecurityManager:
         text = str(data)
 
         # Step 1: Strip null bytes (prevents null byte injection attacks)
-        text = text.replace('\x00', '')
+        text = text.replace("\x00", "")
 
         # Step 2: Strip newlines and carriage returns (prevents newline-based injection)
-        text = text.replace('\r', '').replace('\n', '')
+        text = text.replace("\r", "").replace("\n", "")
 
         # Step 3: Use bleach.clean() for robust HTML sanitization
         # No HTML tags allowed, strip=True removes them entirely
@@ -80,7 +80,7 @@ class SecurityManager:
             tags=[],  # No HTML tags allowed
             attributes={},  # No attributes allowed
             protocols=[],  # No URL protocols allowed
-            strip=True  # Strip disallowed tags instead of escaping
+            strip=True,  # Strip disallowed tags instead of escaping
         )
 
         return sanitized
@@ -88,21 +88,28 @@ class SecurityManager:
     @staticmethod
     def _decode_url_encoding(text: str) -> str:
         """Decode URL percent-encoded strings and sanitize any malicious content."""
-        url_encoded_pattern = re.compile(r'%[0-9a-fA-F]{2}')
+        url_encoded_pattern = re.compile(r"%[0-9a-fA-F]{2}")
         if not url_encoded_pattern.search(text):
             return text
         try:
             import urllib.parse
+
             decoded = urllib.parse.unquote(text)
             # If decoded content contains malicious patterns, sanitize it thoroughly
-            if '<' in decoded or 'script' in decoded.lower() or 'alert' in decoded.lower():
+            if (
+                "<" in decoded
+                or "script" in decoded.lower()
+                or "alert" in decoded.lower()
+            ):
                 # Remove script tags and their content
-                decoded = re.sub(r'(?i)<script[^>]*>.*?</script>', '', decoded, flags=re.DOTALL)
+                decoded = re.sub(
+                    r"(?i)<script[^>]*>.*?</script>", "", decoded, flags=re.DOTALL
+                )
                 # Remove remaining tags
-                decoded = re.sub(r'(?i)<[^>]+>', '', decoded)
+                decoded = re.sub(r"(?i)<[^>]+>", "", decoded)
                 # Remove javascript event handlers and alerts
-                decoded = re.sub(r'(?i)alert\s*\([^)]*\)', '[REDACTED]', decoded)
-                decoded = re.sub(r'(?i)javascript:', '[REDACTED]', decoded)
+                decoded = re.sub(r"(?i)alert\s*\([^)]*\)", "[REDACTED]", decoded)
+                decoded = re.sub(r"(?i)javascript:", "[REDACTED]", decoded)
                 return decoded
             return decoded
         except Exception:
@@ -112,20 +119,26 @@ class SecurityManager:
     @staticmethod
     def _decode_unicode_escapes(text: str) -> str:
         r"""Decode Unicode escape sequences (\uXXXX and \xXX) and sanitize malicious content."""
-        unicode_escape_pattern = re.compile(r'\\u[0-9a-fA-F]{4}|\\x[0-9a-fA-F]{2}')
+        unicode_escape_pattern = re.compile(r"\\u[0-9a-fA-F]{4}|\\x[0-9a-fA-F]{2}")
         if not unicode_escape_pattern.search(text):
             return text
         try:
-            decoded = text.encode('utf-8').decode('unicode_escape')
+            decoded = text.encode("utf-8").decode("unicode_escape")
             # If decoded content contains malicious patterns, sanitize it thoroughly
-            if '<' in decoded or 'script' in decoded.lower() or 'alert' in decoded.lower():
+            if (
+                "<" in decoded
+                or "script" in decoded.lower()
+                or "alert" in decoded.lower()
+            ):
                 # Remove script tags and their content
-                decoded = re.sub(r'(?i)<script[^>]*>.*?</script>', '', decoded, flags=re.DOTALL)
+                decoded = re.sub(
+                    r"(?i)<script[^>]*>.*?</script>", "", decoded, flags=re.DOTALL
+                )
                 # Remove remaining tags
-                decoded = re.sub(r'(?i)<[^>]+>', '', decoded)
+                decoded = re.sub(r"(?i)<[^>]+>", "", decoded)
                 # Remove javascript event handlers and alerts
-                decoded = re.sub(r'(?i)alert\s*\([^)]*\)', '[REDACTED]', decoded)
-                decoded = re.sub(r'(?i)javascript:', '[REDACTED]', decoded)
+                decoded = re.sub(r"(?i)alert\s*\([^)]*\)", "[REDACTED]", decoded)
+                decoded = re.sub(r"(?i)javascript:", "[REDACTED]", decoded)
                 return decoded
             return decoded
         except (UnicodeDecodeError, UnicodeEncodeError):
@@ -134,14 +147,14 @@ class SecurityManager:
     @staticmethod
     def _strip_null_bytes(text: str) -> str:
         """Remove null bytes in various encodings."""
-        text = text.replace('\x00', '').replace('\u0000', '')
-        return re.sub(r'%00|\\x00|\\u0000', '', text, flags=re.IGNORECASE)
+        text = text.replace("\x00", "").replace("\u0000", "")
+        return re.sub(r"%00|\\x00|\\u0000", "", text, flags=re.IGNORECASE)
 
     @staticmethod
     def _normalize_newlines(text: str) -> str:
         """Normalize newlines and limit consecutive ones."""
-        text = text.replace('\r\n', '\n').replace('\r', '\n')
-        return re.sub(r'\n{4,}', '\n\n\n', text)
+        text = text.replace("\r\n", "\n").replace("\r", "\n")
+        return re.sub(r"\n{4,}", "\n\n\n", text)
 
     @staticmethod
     def _apply_bleach_sanitization(text: str) -> str:
@@ -151,32 +164,43 @@ class SecurityManager:
             tags=[],  # No HTML tags allowed
             attributes={},  # No attributes allowed
             protocols=[],  # No URL protocols allowed
-            strip=True  # Strip disallowed tags instead of escaping
+            strip=True,  # Strip disallowed tags instead of escaping
         )
 
     @staticmethod
     def _remove_control_chars(text: str) -> str:
         """Remove control characters except normal whitespace."""
-        return ''.join(
-            char for char in text
-            if char == '\n' or char == '\t' or (ord(char) >= 32 and ord(char) <= 126) or ord(char) > 127
+        return "".join(
+            char
+            for char in text
+            if char == "\n"
+            or char == "\t"
+            or (ord(char) >= 32 and ord(char) <= 126)
+            or ord(char) > 127
         )
 
     @staticmethod
     def _check_double_encoding(original: str, text: str) -> str:
         """Check for and handle double-encoding attempts with sanitization."""
-        url_encoded_pattern = re.compile(r'%[0-9a-fA-F]{2}')
-        if '%25' not in original or not url_encoded_pattern.search(text):
+        url_encoded_pattern = re.compile(r"%[0-9a-fA-F]{2}")
+        if "%25" not in original or not url_encoded_pattern.search(text):
             return text
         try:
             import urllib.parse
+
             decoded = urllib.parse.unquote(text)
             # Sanitize any malicious content in double-decoded text
-            if '<' in decoded or 'script' in decoded.lower() or 'alert' in decoded.lower():
-                decoded = re.sub(r'(?i)<script[^>]*>.*?</script>', '', decoded, flags=re.DOTALL)
-                decoded = re.sub(r'(?i)<[^>]+>', '', decoded)
-                decoded = re.sub(r'(?i)alert\s*\([^)]*\)', '[REDACTED]', decoded)
-                decoded = re.sub(r'(?i)javascript:', '[REDACTED]', decoded)
+            if (
+                "<" in decoded
+                or "script" in decoded.lower()
+                or "alert" in decoded.lower()
+            ):
+                decoded = re.sub(
+                    r"(?i)<script[^>]*>.*?</script>", "", decoded, flags=re.DOTALL
+                )
+                decoded = re.sub(r"(?i)<[^>]+>", "", decoded)
+                decoded = re.sub(r"(?i)alert\s*\([^)]*\)", "[REDACTED]", decoded)
+                decoded = re.sub(r"(?i)javascript:", "[REDACTED]", decoded)
                 return decoded
             return decoded
         except Exception:
@@ -188,7 +212,7 @@ class SecurityManager:
         max_len = max_length or SecurityManager.LLM_MAX_FREE_TEXT_LENGTH
         if len(text) <= max_len:
             return text
-        return text[:max_len].rsplit(' ', 1)[0] + '...'
+        return text[:max_len].rsplit(" ", 1)[0] + "..."
 
     @staticmethod
     def llm_sanitize(text: str, max_length: Optional[int] = None) -> str:
@@ -226,22 +250,23 @@ class SecurityManager:
         text = SecurityManager._decode_unicode_escapes(text)
 
         import html
+
         text = html.unescape(text)
 
         # After unescaping HTML entities, sanitize any revealed malicious content
         # (e.g. &lt;script&gt;alert(1)&lt;/script&gt; becomes <script>alert(1)</script>)
-        if '<' in text or 'script' in text.lower() or 'alert' in text.lower():
-            text = re.sub(r'(?i)<script[^>]*>.*?</script>', '', text, flags=re.DOTALL)
-            text = re.sub(r'(?i)<[^>]+>', '', text)
-            text = re.sub(r'(?i)alert\s*\([^)]*\)', '[REDACTED]', text)
-            text = re.sub(r'(?i)javascript:', '[REDACTED]', text)
+        if "<" in text or "script" in text.lower() or "alert" in text.lower():
+            text = re.sub(r"(?i)<script[^>]*>.*?</script>", "", text, flags=re.DOTALL)
+            text = re.sub(r"(?i)<[^>]+>", "", text)
+            text = re.sub(r"(?i)alert\s*\([^)]*\)", "[REDACTED]", text)
+            text = re.sub(r"(?i)javascript:", "[REDACTED]", text)
 
         text = SecurityManager._strip_null_bytes(text)
         text = SecurityManager._normalize_newlines(text)
         text = SecurityManager._apply_bleach_sanitization(text)
 
         # Remove prompt injection patterns
-        text = SecurityManager._INJECTION_REGEX.sub('[REDACTED]', text)
+        text = SecurityManager._INJECTION_REGEX.sub("[REDACTED]", text)
 
         text = SecurityManager._remove_control_chars(text)
         text = SecurityManager._check_double_encoding(original_for_detection, text)
@@ -249,7 +274,7 @@ class SecurityManager:
 
         # Final cleanup
         text = text.strip()
-        text = re.sub(r'\s+', ' ', text)
+        text = re.sub(r"\s+", " ", text)
 
         return text
 
@@ -282,13 +307,13 @@ class SecurityManager:
             text = str(text)
 
         # Step 1: Strip null bytes (common in injection attacks)
-        sanitized = text.replace('\x00', '')
+        sanitized = text.replace("\x00", "")
 
         # Step 2: Normalize newlines to prevent injection sequences
         # Replace \r\n, \r with \n for consistency, then limit consecutive newlines
-        sanitized = sanitized.replace('\r\n', '\n').replace('\r', '\n')
+        sanitized = sanitized.replace("\r\n", "\n").replace("\r", "\n")
         # Prevent newline-based injection by limiting to max 3 consecutive newlines
-        sanitized = re.sub(r'\n{4,}', '\n\n\n', sanitized)
+        sanitized = re.sub(r"\n{4,}", "\n\n\n", sanitized)
 
         # Step 3: Strip HTML using bleach
         # This removes script tags, event handlers, and other HTML nasties
@@ -296,32 +321,36 @@ class SecurityManager:
             sanitized,
             tags=[],  # No HTML tags allowed
             attributes={},  # No attributes allowed
-            strip=True  # Strip disallowed tags instead of escaping
+            strip=True,  # Strip disallowed tags instead of escaping
         )
 
         # Step 4: Remove prompt injection patterns
         # Replace matches with [REDACTED] to maintain text structure
         def replace_injection(match):
             # Log the attempt (in production, use proper logging)
-            return '[REDACTED]'
+            return "[REDACTED]"
 
         sanitized = SecurityManager._INJECTION_REGEX.sub(replace_injection, sanitized)
 
         # Step 5: Remove any remaining control characters except normal whitespace
         # Allow: space, tab, newline (already normalized)
-        sanitized = ''.join(
-            char for char in sanitized
-            if char == '\n' or char == '\t' or (ord(char) >= 32 and ord(char) <= 126) or ord(char) > 127
+        sanitized = "".join(
+            char
+            for char in sanitized
+            if char == "\n"
+            or char == "\t"
+            or (ord(char) >= 32 and ord(char) <= 126)
+            or ord(char) > 127
         )
 
         # Step 6: Truncate to safe maximum length
         max_len = max_length or SecurityManager.LLM_MAX_FREE_TEXT_LENGTH
         if len(sanitized) > max_len:
-            sanitized = sanitized[:max_len].rsplit(' ', 1)[0] + '...'
+            sanitized = sanitized[:max_len].rsplit(" ", 1)[0] + "..."
 
         # Step 7: Final cleanup - strip leading/trailing whitespace and normalize internal spaces
         sanitized = sanitized.strip()
-        sanitized = re.sub(r'\s+', ' ', sanitized)  # Normalize multiple spaces
+        sanitized = re.sub(r"\s+", " ", sanitized)  # Normalize multiple spaces
 
         return sanitized
 
@@ -341,17 +370,17 @@ class SecurityManager:
             return "Unknown"
 
         # Step 1: Strip null bytes (prevents null byte injection attacks)
-        name = name.replace('\x00', '')
+        name = name.replace("\x00", "")
 
         # Step 2: Strip newlines and carriage returns (prevents newline-based injection)
-        name = name.replace('\r', '').replace('\n', '')
+        name = name.replace("\r", "").replace("\n", "")
 
         # Step 3: Strip HTML using bleach
         name = bleach.clean(name, tags=[], attributes={}, strip=True)
 
         # Step 4: Remove prompt injection patterns BEFORE stripping special chars
         # (so patterns like "system:" are caught before the colon is removed)
-        name = SecurityManager._INJECTION_REGEX.sub('[REDACTED]', name)
+        name = SecurityManager._INJECTION_REGEX.sub("[REDACTED]", name)
 
         # Step 5: Remove any characters not typically found in names
         # Allow: letters, spaces, hyphens, apostrophes, periods (for initials)
@@ -359,7 +388,7 @@ class SecurityManager:
 
         # Step 6: Truncate
         if len(name) > SecurityManager.LLM_MAX_NAME_LENGTH:
-            name = name[:SecurityManager.LLM_MAX_NAME_LENGTH].rsplit(' ', 1)[0] + '...'
+            name = name[: SecurityManager.LLM_MAX_NAME_LENGTH].rsplit(" ", 1)[0] + "..."
 
         return name.strip() or "Unknown"
 
@@ -370,10 +399,14 @@ class SecurityManager:
 
         Allows more characters than names but still protects against injection.
         """
-        return SecurityManager.sanitize_for_llm(notes, max_length=SecurityManager.LLM_MAX_NOTES_LENGTH)
+        return SecurityManager.sanitize_for_llm(
+            notes, max_length=SecurityManager.LLM_MAX_NOTES_LENGTH
+        )
 
     @staticmethod
-    def validate_llm_input(data: Dict[str, Any], schema: Dict[str, tuple]) -> Dict[str, Any]:
+    def validate_llm_input(
+        data: Dict[str, Any], schema: Dict[str, tuple]
+    ) -> Dict[str, Any]:
         """
         Validate and sanitize multiple LLM input fields according to a schema.
 
@@ -400,7 +433,7 @@ class SecurityManager:
         if user_role not in allowed_roles:
             raise HTTPException(
                 status_code=status.HTTP_403_FORBIDDEN,
-                detail="Insufficient permissions to access this resource."
+                detail="Insufficient permissions to access this resource.",
             )
 
     @staticmethod
@@ -409,7 +442,9 @@ class SecurityManager:
         if skip < 0:
             raise HTTPException(status_code=400, detail="Skip must be >= 0")
         if limit <= 0 or limit > 1000:
-            raise HTTPException(status_code=400, detail="Limit must be between 1 and 1000")
+            raise HTTPException(
+                status_code=400, detail="Limit must be between 1 and 1000"
+            )
 
 
 security_manager = SecurityManager()

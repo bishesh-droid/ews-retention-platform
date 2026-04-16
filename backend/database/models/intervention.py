@@ -14,6 +14,7 @@ class Intervention(Base):
     Intervention model tracking all interventions applied to students,
     including AI-suggested interventions and their effectiveness.
     """
+
     __tablename__ = "interventions"
 
     # Primary Key
@@ -28,19 +29,31 @@ class Intervention(Base):
     action = Column(String)  # Description of the intervention action
 
     # Workflow fields (faculty ops)
-    status = Column(String, default="Pending")  # Pending | In Progress | Completed | Cancelled
-    assigned_faculty = Column(String, nullable=True)  # Display owner in UI (e.g., faculty name/email)
+    status = Column(
+        String, default="Pending"
+    )  # Pending | In Progress | Completed | Cancelled
+    assigned_faculty = Column(
+        String, nullable=True
+    )  # Display owner in UI (e.g., faculty name/email)
 
     # AI integration
     ai_suggested = Column(Boolean, default=False)  # False=manual, True=AI-suggested
-    ai_reasoning = Column(String)  # LLM explanation for why this intervention was suggested
+    ai_reasoning = Column(
+        String
+    )  # LLM explanation for why this intervention was suggested
 
     # Effectiveness tracking
-    effectiveness_score = Column(Float)  # Measured impact on student metrics (0-1 scale)
+    effectiveness_score = Column(
+        Float
+    )  # Measured impact on student metrics (0-1 scale)
 
     # Risk context at time of intervention
-    risk_score_at_trigger = Column(Float)  # Student's risk score when intervention was triggered
-    threshold_category = Column(String)  # 'gentle_reminder', 'mentor_outreach', 'urgent_intervention'
+    risk_score_at_trigger = Column(
+        Float
+    )  # Student's risk score when intervention was triggered
+    threshold_category = Column(
+        String
+    )  # 'gentle_reminder', 'mentor_outreach', 'urgent_intervention'
 
     # Intervention details
     channels = Column(String)  # JSON string: ["email", "whatsapp", "mentor_call"]

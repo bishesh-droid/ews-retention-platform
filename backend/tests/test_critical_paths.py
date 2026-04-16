@@ -14,7 +14,11 @@ Run with: TESTING=true pytest backend/tests/test_critical_paths.py -v
 import pytest
 
 # Import functions under test
-from backend.services.core.data_ingestion import _safe_int, _safe_float, ABSENT_SENTINELS
+from backend.services.core.data_ingestion import (
+    _safe_int,
+    _safe_float,
+    ABSENT_SENTINELS,
+)
 from backend.services.feature_engineering import FeatureEngineer
 from backend.services.core.decision_engine import (
     should_trigger_intervention,
@@ -26,6 +30,7 @@ from backend.services.core.decision_engine import (
 # =============================================================================
 # SECTION 1 — _safe_int and _safe_float (TEST-1, TEST-5)
 # =============================================================================
+
 
 class TestSafeConversions:
     """Test _safe_int and _safe_float edge cases and correct parsing."""
@@ -128,6 +133,7 @@ class TestAbsentSentinels:
 # SECTION 2 — calculate_content_completion_score (TEST-1)
 # =============================================================================
 
+
 class TestContentCompletionScore:
     """Test FeatureEngineer.calculate_content_completion_score edge cases."""
 
@@ -162,8 +168,16 @@ class TestContentCompletionScore:
     def test_optional_courses_excluded(self):
         """Optional (self-paced) courses should not affect mandatory completion rate."""
         enrollments = [
-            {"content_completed": 0, "content_required": 100, "is_optional": True},   # excluded
-            {"content_completed": 80, "content_required": 100, "is_optional": False},  # included
+            {
+                "content_completed": 0,
+                "content_required": 100,
+                "is_optional": True,
+            },  # excluded
+            {
+                "content_completed": 80,
+                "content_required": 100,
+                "is_optional": False,
+            },  # included
         ]
         result = FeatureEngineer.calculate_content_completion_score(enrollments)
         # Only the mandatory course counts: 80/100 = 80%
@@ -181,8 +195,16 @@ class TestContentCompletionScore:
     def test_multiple_courses_aggregated(self):
         """Test aggregation across multiple mandatory courses."""
         enrollments = [
-            {"content_completed": 50, "content_required": 100, "is_optional": False},  # 50%
-            {"content_completed": 90, "content_required": 100, "is_optional": False},  # 90%
+            {
+                "content_completed": 50,
+                "content_required": 100,
+                "is_optional": False,
+            },  # 50%
+            {
+                "content_completed": 90,
+                "content_required": 100,
+                "is_optional": False,
+            },  # 90%
         ]
         # Total: 140 completed / 200 required = 70%
         result = FeatureEngineer.calculate_content_completion_score(enrollments)
@@ -198,6 +220,7 @@ class TestContentCompletionScore:
 # SECTION 3 — Ghost student and activation outreach (TEST-4)
 # =============================================================================
 
+
 class TestGhostStudentDetection:
     """Test ghost student detection logic and activation outreach routing."""
 
@@ -205,7 +228,7 @@ class TestGhostStudentDetection:
         """Student with zero logins is a ghost (never_logged_in)."""
         result = FeatureEngineer.detect_ghost_student(
             enrollments=[{"content_completed": 0, "total_time_spent": 0}],
-            student_login_count=0
+            student_login_count=0,
         )
         assert result["is_ghost"] is True
         assert result["ghost_type"] == "never_logged_in"
@@ -214,7 +237,7 @@ class TestGhostStudentDetection:
         """Student with logins but no content progress is ghost (logged_in_never_started)."""
         result = FeatureEngineer.detect_ghost_student(
             enrollments=[{"content_completed": 0, "total_time_spent": 0}],
-            student_login_count=5
+            student_login_count=5,
         )
         assert result["is_ghost"] is True
         assert result["ghost_type"] == "logged_in_never_started"
@@ -223,7 +246,7 @@ class TestGhostStudentDetection:
         """Student with logins and significant time spent is not ghost (time > 300s threshold)."""
         result = FeatureEngineer.detect_ghost_student(
             enrollments=[{"content_completed": 0, "total_time_spent": 600}],
-            student_login_count=5
+            student_login_count=5,
         )
         # High time spent means they're engaging somehow, not a ghost
         assert result["is_ghost"] is False
@@ -232,7 +255,7 @@ class TestGhostStudentDetection:
         """Student with content progress is not a ghost."""
         result = FeatureEngineer.detect_ghost_student(
             enrollments=[{"content_completed": 10, "total_time_spent": 3600}],
-            student_login_count=20
+            student_login_count=20,
         )
         assert result["is_ghost"] is False
         assert result["ghost_type"] is None
@@ -244,15 +267,14 @@ class TestGhostStudentDetection:
                 {"content_completed": 5, "total_time_spent": 100},
                 {"content_completed": 0, "total_time_spent": 0},
             ],
-            student_login_count=10
+            student_login_count=10,
         )
         assert result["is_ghost"] is False
 
     def test_empty_enrollments_not_ghost(self):
         """Empty enrollments returns not ghost with zero counts."""
         result = FeatureEngineer.detect_ghost_student(
-            enrollments=[],
-            student_login_count=0
+            enrollments=[], student_login_count=0
         )
         assert result["is_ghost"] is False
         assert result["total_enrolled_courses"] == 0
@@ -289,12 +311,15 @@ class TestGhostStudentDetection:
         assert result["ghost_type"] == "logged_in_never_started"
         # Should have onboarding-specific actions
         action_text = " ".join(result["action_items"])
-        assert "onboarding" in action_text.lower() or "orientation" in action_text.lower()
+        assert (
+            "onboarding" in action_text.lower() or "orientation" in action_text.lower()
+        )
 
 
 # =============================================================================
 # SECTION 4 — Risk spike threshold boundary (TEST-3)
 # =============================================================================
+
 
 class TestRiskSpikeThreshold:
     """
@@ -313,7 +338,7 @@ class TestRiskSpikeThreshold:
         result = should_trigger_intervention(
             current_risk_score=60.0,
             previous_risk_score=50.0,
-            days_since_last_intervention=2  # within 7-day cooldown
+            days_since_last_intervention=2,  # within 7-day cooldown
         )
         assert result is False
 
@@ -326,7 +351,7 @@ class TestRiskSpikeThreshold:
         result = should_trigger_intervention(
             current_risk_score=66.0,
             previous_risk_score=50.0,
-            days_since_last_intervention=2
+            days_since_last_intervention=2,
         )
         assert result is True
 
@@ -338,7 +363,7 @@ class TestRiskSpikeThreshold:
         result = should_trigger_intervention(
             current_risk_score=65.0,
             previous_risk_score=50.0,
-            days_since_last_intervention=2
+            days_since_last_intervention=2,
         )
         assert result is True
 
@@ -349,7 +374,7 @@ class TestRiskSpikeThreshold:
         result = should_trigger_intervention(
             current_risk_score=51.0,
             previous_risk_score=50.0,
-            days_since_last_intervention=8  # beyond 7-day cooldown
+            days_since_last_intervention=8,  # beyond 7-day cooldown
         )
         assert result is True
 
@@ -361,7 +386,7 @@ class TestRiskSpikeThreshold:
         result = should_trigger_intervention(
             current_risk_score=80.0,
             previous_risk_score=None,
-            days_since_last_intervention=2
+            days_since_last_intervention=2,
         )
         assert result is False  # still in cooldown, no delta to bypass
 
@@ -372,7 +397,7 @@ class TestRiskSpikeThreshold:
         result = should_trigger_intervention(
             current_risk_score=80.0,
             previous_risk_score=None,
-            days_since_last_intervention=8  # expired
+            days_since_last_intervention=8,  # expired
         )
         assert result is True
 
@@ -383,7 +408,7 @@ class TestRiskSpikeThreshold:
         result = should_trigger_intervention(
             current_risk_score=20.0,  # below default 30.0 threshold
             previous_risk_score=None,
-            days_since_last_intervention=8
+            days_since_last_intervention=8,
         )
         assert result is False
 
@@ -398,6 +423,7 @@ class TestRiskSpikeThreshold:
 # =============================================================================
 # Additional Edge Case Tests
 # =============================================================================
+
 
 class TestDecisionEngineEdgeCases:
     """Additional edge cases for decision engine."""

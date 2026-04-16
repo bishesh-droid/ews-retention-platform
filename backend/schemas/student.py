@@ -14,13 +14,14 @@ from backend.schemas.common import STUDENT_ID_FIELD
 
 class StudentBase(BaseModel):
     """Base student schema with engagement-based fields and strict ID validation."""
+
     # Strict student ID validation: alphanumeric, underscores, hyphens only; 4-20 chars
     # This prevents injection attacks while allowing common ID formats
     id: str = STUDENT_ID_FIELD
     org_defined_id: Optional[str] = Field(
         None,
-        pattern=r'^[A-Za-z0-9_-]{4,20}$',
-        description="Organization-defined student ID (4-20 alphanumeric chars)"
+        pattern=r"^[A-Za-z0-9_-]{4,20}$",
+        description="Organization-defined student ID (4-20 alphanumeric chars)",
     )
     first_name: Optional[str] = None
     last_name: Optional[str] = None
@@ -36,8 +37,9 @@ class StudentCreate(StudentBase):
 
 class Student(StudentBase):
     """Full student schema with relationships."""
-    predictions: List['Prediction'] = []
-    interventions: List['Intervention'] = []
+
+    predictions: List["Prediction"] = []
+    interventions: List["Intervention"] = []
 
     model_config = ConfigDict(from_attributes=True)
 
@@ -49,6 +51,7 @@ class StudentMetricsResponse(BaseModel):
     BREAKING_CHANGE v1.1: "attendance_score" renamed to "exam_attendance_score"
     Frontend must update StudentProfile component to use new field name.
     """
+
     id: str
     first_name: Optional[str] = None
     last_name: Optional[str] = None
@@ -76,7 +79,7 @@ class StudentMetricsResponse(BaseModel):
     exam_attendance_score: Optional[float] = Field(
         None,
         description="Percentage of written exams attended (not LMS session attendance). "
-                    "Null if no exams have been held this trimester."
+        "Null if no exams have been held this trimester.",
     )
     zero_progress_ratio: Optional[float] = None
     progress_category: Optional[str] = None

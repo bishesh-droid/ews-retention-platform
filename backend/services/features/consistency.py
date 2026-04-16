@@ -18,12 +18,13 @@ from typing import List, Dict, Optional
 @dataclass
 class ConsistencyFeatures:
     """Typed dataclass for behavioral consistency features."""
-    engagement_trend: str                      # "active", "declining", "inactive"
-    is_ghost: bool                             # True if ghost student detected
-    ghost_type: Optional[str]                   # "never_logged_in" or "logged_in_never_started"
-    zero_progress_course_count: int            # Number of courses with 0 progress
-    total_enrolled_courses: int                # Total number of enrolled courses
-    total_time_seconds: float                  # Total time spent across all courses
+
+    engagement_trend: str  # "active", "declining", "inactive"
+    is_ghost: bool  # True if ghost student detected
+    ghost_type: Optional[str]  # "never_logged_in" or "logged_in_never_started"
+    zero_progress_course_count: int  # Number of courses with 0 progress
+    total_enrolled_courses: int  # Total number of enrolled courses
+    total_time_seconds: float  # Total time spent across all courses
 
 
 class ConsistencyFeatureExtractor:
@@ -39,7 +40,7 @@ class ConsistencyFeatureExtractor:
         if not ts:
             return None
         try:
-            ts_clean = ts.replace('Z', '+00:00')
+            ts_clean = ts.replace("Z", "+00:00")
             return datetime.fromisoformat(ts_clean)
         except (ValueError, TypeError):
             return None
@@ -52,11 +53,14 @@ class ConsistencyFeatureExtractor:
         except (TypeError, ValueError):
             return 0.0
         import math
+
         if not math.isfinite(v):
             return 0.0
         return max(0.0, v)
 
-    def extract(self, enrollments: List[Dict], total_login_count: int) -> ConsistencyFeatures:
+    def extract(
+        self, enrollments: List[Dict], total_login_count: int
+    ) -> ConsistencyFeatures:
         """
         Extract all consistency features from enrollment data.
 
@@ -75,7 +79,7 @@ class ConsistencyFeatureExtractor:
             ghost_type=ghost_info["ghost_type"],
             zero_progress_course_count=ghost_info["zero_progress_course_count"],
             total_enrolled_courses=ghost_info["total_enrolled_courses"],
-            total_time_seconds=ghost_info["total_time_seconds"]
+            total_time_seconds=ghost_info["total_time_seconds"],
         )
 
     def _get_engagement_trend(self, enrollments: List[Dict]) -> str:
@@ -131,7 +135,9 @@ class ConsistencyFeatureExtractor:
             return "declining"
         return "inactive"
 
-    def _detect_ghost_student(self, enrollments: List[Dict], student_login_count: int) -> Dict:
+    def _detect_ghost_student(
+        self, enrollments: List[Dict], student_login_count: int
+    ) -> Dict:
         """
         Detect "ghost" students with zero meaningful engagement.
 
@@ -159,7 +165,7 @@ class ConsistencyFeatureExtractor:
                 "ghost_type": None,
                 "zero_progress_course_count": 0,
                 "total_enrolled_courses": 0,
-                "total_time_seconds": 0
+                "total_time_seconds": 0,
             }
 
         all_zero_progress = zero_progress_courses == total_courses

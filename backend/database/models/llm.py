@@ -13,6 +13,7 @@ class LLMQuery(Base):
     Tracks all LLM interactions for audit, improvement, and cost tracking.
     Enables analysis of LLM usage patterns and response quality.
     """
+
     __tablename__ = "llm_queries"
 
     id = Column(Integer, primary_key=True, index=True)
@@ -31,10 +32,13 @@ class LLMInsight(Base):
     Stores institutional insights discovered by LLM through pattern analysis.
     These are proactive insights the system surfaces for administrators.
     """
+
     __tablename__ = "llm_insights"
 
     id = Column(Integer, primary_key=True, index=True)
-    insight_type = Column(String)  # 'systemic_issue', 'pattern', 'blind_spot', 'opportunity'
+    insight_type = Column(
+        String
+    )  # 'systemic_issue', 'pattern', 'blind_spot', 'opportunity'
     title = Column(String)
     content = Column(String)  # Full insight explanation
     source_data = Column(String)  # JSON of data that led to this insight
@@ -49,6 +53,7 @@ class AIExplanation(Base):
     Stores AI-generated explanations for students to provide transparency
     and help them understand their risk scores and recommendations.
     """
+
     __tablename__ = "ai_explanations"
 
     id = Column(Integer, primary_key=True, index=True)
@@ -65,10 +70,13 @@ class PatternDiscovery(Base):
     Stores discovered institutional patterns and blind spots identified by LLM.
     These represent systemic issues that require administrative attention.
     """
+
     __tablename__ = "pattern_discoveries"
 
     id = Column(Integer, primary_key=True, index=True)
-    pattern_type = Column(String)  # 'systemic_issue', 'cross_semester', 'demographic_disparity', 'blind_spot'
+    pattern_type = Column(
+        String
+    )  # 'systemic_issue', 'cross_semester', 'demographic_disparity', 'blind_spot'
     title = Column(String)  # Short title for the pattern
     description = Column(String)  # Detailed description
     severity = Column(String)  # 'low', 'medium', 'high', 'critical'

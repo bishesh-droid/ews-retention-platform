@@ -17,7 +17,7 @@ class ExportService:
     def to_excel(data: List[Dict[str, Any]]) -> BytesIO:
         df = pd.DataFrame(data)
         output = BytesIO()
-        with pd.ExcelWriter(output, engine='openpyxl') as writer:
+        with pd.ExcelWriter(output, engine="openpyxl") as writer:
             df.to_excel(writer, index=False)
         output.seek(0)
         return output
@@ -27,7 +27,7 @@ class ExportService:
         pdf = FPDF()
         pdf.add_page()
         pdf.set_font("Arial", size=12)
-        pdf.cell(200, 10, text=title, align='C')
+        pdf.cell(200, 10, text=title, align="C")
         pdf.ln()
 
         for row in data:
@@ -48,7 +48,7 @@ class ExportService:
             user_role=user_role,
             action_type="export",
             details={"report_type": report_type},
-            timestamp=datetime.utcnow()
+            timestamp=datetime.utcnow(),
         )
         db.add(audit)
         # Caller commits the transaction.

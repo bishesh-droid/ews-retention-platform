@@ -39,6 +39,7 @@ logger = logging.getLogger(__name__)
 
 def _get_redis_lock():
     from backend.config import REDIS_URL
+
     r = redis_lib.from_url(REDIS_URL)
     return r.lock("ews_ingestion_lock", timeout=600, blocking_timeout=0)
 
@@ -46,6 +47,7 @@ def _get_redis_lock():
 @dataclass
 class IngestionStats:
     """Tracks statistics and errors during data ingestion."""
+
     students_created: int = 0
     students_updated: int = 0
     enrollments_created: int = 0
@@ -54,7 +56,9 @@ class IngestionStats:
     risk_scores_updated: int = 0
     files_processed: list = field(default_factory=list)
     errors: list = field(default_factory=list)
-    seen_org_ids: set = field(default_factory=set)  # Track org IDs for soft delete (CROSS-1)
+    seen_org_ids: set = field(
+        default_factory=set
+    )  # Track org IDs for soft delete (CROSS-1)
 
     def add_error(self, file_name: str, error_msg: str):
         """Record an error with the associated file."""
@@ -86,17 +90,17 @@ ABSENT_SENTINELS = {"A", "AB", "a", "-", "NP", "Exc", "EX", ""}
 
 # Maps exam defaulter final remarks to normalized reason codes
 DEFAULTER_REASON_MAP = {
-    "full deffered":                      "deferred",
-    "full deferred":                      "deferred",
-    "will pursue in jan 2026":            "deferred",
-    "refund requested after due date":    "dropout_intent",
-    "no reason given":                    "unknown_high_risk",
-    "health issue":                       "health_support",
-    "personal commitment":                "personal",
-    "exam clash":                         "scheduling",
-    "can't contn prof commitment":        "dropout_intent",
-    "activation pending":                 "not_activated",
-    "preference not selected":            "not_activated",
+    "full deffered": "deferred",
+    "full deferred": "deferred",
+    "will pursue in jan 2026": "deferred",
+    "refund requested after due date": "dropout_intent",
+    "no reason given": "unknown_high_risk",
+    "health issue": "health_support",
+    "personal commitment": "personal",
+    "exam clash": "scheduling",
+    "can't contn prof commitment": "dropout_intent",
+    "activation pending": "not_activated",
+    "preference not selected": "not_activated",
 }
 
 DATE_FIELDS = {
@@ -119,7 +123,9 @@ def _cleanup_uploaded_file(filepath: Path):
         logger.warning(f"Could not clean up file: {filepath}")  # non-fatal
 
 
-def ingest_all_data(db: Session, triggered_by: str = "startup", uploaded_filepath: Path = None):
+def ingest_all_data(
+    db: Session, triggered_by: str = "startup", uploaded_filepath: Path = None
+):
     """
     Run ETL in a single transaction-safe flow with full audit logging.
 
@@ -178,10 +184,11 @@ def ingest_all_data(db: Session, triggered_by: str = "startup", uploaded_filepat
                     "status": run.status,
                     "students_created": stats.students_created,
                     "students_updated": stats.students_updated,
-                    "enrollments_processed": stats.enrollments_created + stats.enrollments_updated,
+                    "enrollments_processed": stats.enrollments_created
+                    + stats.enrollments_updated,
                     "duration_seconds": run.duration_seconds,
                     "error_count": len(stats.errors),
-                }
+                },
             )
 
             # D12-1: Alert on ingestion failure
@@ -192,17 +199,22 @@ def ingest_all_data(db: Session, triggered_by: str = "startup", uploaded_filepat
                         "run_id": run.id,
                         "error_count": len(stats.errors),
                         "first_error": stats.errors[0] if stats.errors else None,
-                    }
+                    },
                 )
                 # Optional: send to a Slack/email webhook if configured
                 alert_webhook = os.getenv("ALERT_WEBHOOK_URL")
                 if alert_webhook:
                     import httpx
+
                     try:
-                        httpx.post(alert_webhook, json={
-                            "text": f"EWS ingestion FAILED at {datetime.utcnow().isoformat()}. "
-                            f"{len(stats.errors)} errors. Check logs for run_id={run.id}"
-                        }, timeout=5)
+                        httpx.post(
+                            alert_webhook,
+                            json={
+                                "text": f"EWS ingestion FAILED at {datetime.utcnow().isoformat()}. "
+                                f"{len(stats.errors)} errors. Check logs for run_id={run.id}"
+                            },
+                            timeout=5,
+                        )
                     except Exception:
                         pass  # Alert failure must not crash ingestion
     finally:
@@ -244,6 +256,7 @@ def _run_ingestion(db: Session, stats: IngestionStats):
         semester_name = "current"
         if files.get("engagement"):
             from pathlib import Path
+
             semester_name = Path(files["engagement"]).stem
         _deactivate_missing_students(db, stats.seen_org_ids, semester_name)
 
@@ -263,17 +276,24 @@ def backfill_intervention_outcomes(session: Session):
     Do not commit inside this function — caller owns the transaction.
     """
     cutoff = datetime.utcnow() - timedelta(days=7)
-    pending_logs = session.query(InterventionLog).filter(
-        InterventionLog.acted_on.is_(True),
-        InterventionLog.follow_up_risk_score.is_(None),
-        InterventionLog.recommended_at <= cutoff,
-    ).all()
+    pending_logs = (
+        session.query(InterventionLog)
+        .filter(
+            InterventionLog.acted_on.is_(True),
+            InterventionLog.follow_up_risk_score.is_(None),
+            InterventionLog.recommended_at <= cutoff,
+        )
+        .all()
+    )
 
     for log in pending_logs:
         # Get latest risk snapshot for this student
-        latest_snapshot = session.query(RiskSnapshot).filter(
-            RiskSnapshot.student_id == log.student_org_id
-        ).order_by(RiskSnapshot.timestamp.desc()).first()
+        latest_snapshot = (
+            session.query(RiskSnapshot)
+            .filter(RiskSnapshot.student_id == log.student_org_id)
+            .order_by(RiskSnapshot.timestamp.desc())
+            .first()
+        )
 
         if not latest_snapshot:
             continue
@@ -313,10 +333,14 @@ def _validate_required_files(files: dict):
     required = ("engagement",)
     missing = [str(files[key]) for key in required if not Path(files[key]).exists()]
     if missing:
-        raise FileNotFoundError(f"Missing required ETL input file(s): {', '.join(missing)}")
+        raise FileNotFoundError(
+            f"Missing required ETL input file(s): {', '.join(missing)}"
+        )
 
 
-def _ingest_engagement_data(db: Session, files: dict, owner_thread_id: int, stats: IngestionStats):  # noqa: C901
+def _ingest_engagement_data(
+    db: Session, files: dict, owner_thread_id: int, stats: IngestionStats
+):  # noqa: C901
     """Process engagement data from XLSX file.
 
     All DB operations use the provided sync Session.
@@ -329,12 +353,15 @@ def _ingest_engagement_data(db: Session, files: dict, owner_thread_id: int, stat
 
     try:
         wb = openpyxl.load_workbook(str(path), read_only=True, data_only=True)
-    except (openpyxl.utils.exceptions.InvalidFileException,
-            zipfile.BadZipFile,
-            ValueError,
-            KeyError) as e:
-        logger.error("Unreadable file",
-                   extra={"file": path.name, "error": type(e).__name__})
+    except (
+        openpyxl.utils.exceptions.InvalidFileException,
+        zipfile.BadZipFile,
+        ValueError,
+        KeyError,
+    ) as e:
+        logger.error(
+            "Unreadable file", extra={"file": path.name, "error": type(e).__name__}
+        )
         stats.add_error(path.name, f"Unreadable file: {type(e).__name__}")
         raise  # Re-raise to trigger transaction rollback
     try:
@@ -342,7 +369,10 @@ def _ingest_engagement_data(db: Session, files: dict, owner_thread_id: int, stat
         rows = list(ws.iter_rows(values_only=True))
         if not rows:
             raise ValueError(f"No rows in {path.name} -> '{sheet_name}'")
-        logger.info("Processing engagement data", extra={"file": path.name, "rows": len(rows) - 1})
+        logger.info(
+            "Processing engagement data",
+            extra={"file": path.name, "rows": len(rows) - 1},
+        )
 
         header = {
             str(cell).strip().lower(): i
@@ -373,9 +403,7 @@ def _ingest_engagement_data(db: Session, files: dict, owner_thread_id: int, stat
         is_active_col = col(header, "is active")
         content_completed_col = col(header, "content completed")
         content_required_w1w2_col = col(header, "content required w1&2")
-        content_required_col = col(
-            header, "content required", "content required w1&2"
-        )
+        content_required_col = col(header, "content required", "content required w1&2")
 
         existing_students = {s.id: s for s in db.query(Student).all()}
         existing_courses = {c.id: c for c in db.query(Course).all()}
@@ -412,7 +440,11 @@ def _ingest_engagement_data(db: Session, files: dict, owner_thread_id: int, stat
             first_name = _cell_str(vals, first_name_col)
             last_name = _cell_str(vals, last_name_col)
             if is_active_col is not None and is_active_col < len(vals):
-                is_active = bool(vals[is_active_col]) if vals[is_active_col] is not None else True
+                is_active = (
+                    bool(vals[is_active_col])
+                    if vals[is_active_col] is not None
+                    else True
+                )
             else:
                 is_active = True
 
@@ -431,7 +463,7 @@ def _ingest_engagement_data(db: Session, files: dict, owner_thread_id: int, stat
             # D2-3: Only update old_new_student on first creation or semester change
             if student.old_new_student is None:
                 student.old_new_student = old_new  # first ingest — set from spreadsheet
-            elif getattr(student, 'semester_code', None) != semester_code:
+            elif getattr(student, "semester_code", None) != semester_code:
                 # Student is returning from a previous semester — promote to "old"
                 student.old_new_student = "old"
             # Otherwise: keep existing value — don't let stale spreadsheet data overwrite
@@ -547,7 +579,9 @@ def upsert_course_content_registry(
 
     existing = (
         db.query(CourseContentRegistry)
-        .filter_by(course_offering_code=course_offering_code, semester_name=semester_name)
+        .filter_by(
+            course_offering_code=course_offering_code, semester_name=semester_name
+        )
         .first()
     )
 
@@ -555,7 +589,8 @@ def upsert_course_content_registry(
     if existing is None:
         existing = next(
             (
-                obj for obj in db.new
+                obj
+                for obj in db.new
                 if isinstance(obj, CourseContentRegistry)
                 and obj.course_offering_code == course_offering_code
                 and obj.semester_name == semester_name
@@ -573,7 +608,9 @@ def upsert_course_content_registry(
             source_file=source_file,
         )
         db.add(registry)
-        logger.info(f"CourseContentRegistry created: {course_offering_code} ({semester_name}) = {content_required}")
+        logger.info(
+            f"CourseContentRegistry created: {course_offering_code} ({semester_name}) = {content_required}"
+        )
     elif content_required > existing.content_required:
         # Update with higher value (content was added mid-trimester)
         old_value = existing.content_required
@@ -589,7 +626,9 @@ def upsert_course_content_registry(
 def _merge_course_content_sheet(db: Session, wb):
     """Merge course content counts from optional 'Courses' sheet."""
     if "Courses" not in wb.sheetnames:
-        logger.warning("Optional sheet 'Courses' missing; skipping course content merge.")
+        logger.warning(
+            "Optional sheet 'Courses' missing; skipping course content merge."
+        )
         return
 
     courses = db.query(Course).all()
@@ -624,7 +663,9 @@ def _merge_course_content_sheet(db: Session, wb):
             )
 
 
-def _update_course_content_row(by_name: dict, course_name: str, w1: int, w2: int, lab: int, total: int):
+def _update_course_content_row(
+    by_name: dict, course_name: str, w1: int, w2: int, lab: int, total: int
+):
     if not course_name:
         return
     course = by_name.get(course_name.lower())
@@ -637,7 +678,9 @@ def _update_course_content_row(by_name: dict, course_name: str, w1: int, w2: int
     course.content_required_total = total
 
 
-def _ingest_quiz_assignment_exam(db: Session, files: dict, owner_thread_id: int, stats: IngestionStats):
+def _ingest_quiz_assignment_exam(
+    db: Session, files: dict, owner_thread_id: int, stats: IngestionStats
+):
     """Process quiz, assignment, and exam data from XLSX file.
 
     All DB operations use the provided sync Session.
@@ -651,12 +694,15 @@ def _ingest_quiz_assignment_exam(db: Session, files: dict, owner_thread_id: int,
 
     try:
         wb = openpyxl.load_workbook(str(path), read_only=True, data_only=True)
-    except (openpyxl.utils.exceptions.InvalidFileException,
-            zipfile.BadZipFile,
-            ValueError,
-            KeyError) as e:
-        logger.error("Unreadable file",
-                     extra={"file": path.name, "error": type(e).__name__})
+    except (
+        openpyxl.utils.exceptions.InvalidFileException,
+        zipfile.BadZipFile,
+        ValueError,
+        KeyError,
+    ) as e:
+        logger.error(
+            "Unreadable file", extra={"file": path.name, "error": type(e).__name__}
+        )
         stats.add_error(path.name, f"Unreadable file: {type(e).__name__}")
         raise  # Re-raise to trigger transaction rollback
     try:
@@ -674,7 +720,9 @@ def _ingest_quiz_assignment_exam(db: Session, files: dict, owner_thread_id: int,
         wb.close()
 
 
-def _ingest_graded_sheet(db: Session, wb, sheet_name: str, program: str, stats: IngestionStats):  # noqa: C901
+def _ingest_graded_sheet(
+    db: Session, wb, sheet_name: str, program: str, stats: IngestionStats
+):  # noqa: C901
     if sheet_name not in wb.sheetnames:
         stats.add_error(sheet_name, "Sheet not found, skipping")
         return
@@ -696,13 +744,23 @@ def _ingest_graded_sheet(db: Session, wb, sheet_name: str, program: str, stats: 
     if program == "BS":
         quiz_cols = [7, 8, 9, 10]
         assignment_cols = [11]
-        quiz_max_scores = [_parse_max_score(_safe_str(header[c])) if c < len(header) else 8.0 for c in quiz_cols]
-        assignment_max = _parse_max_score(_safe_str(header[11])) if len(header) > 11 else 28.0
+        quiz_max_scores = [
+            _parse_max_score(_safe_str(header[c])) if c < len(header) else 8.0
+            for c in quiz_cols
+        ]
+        assignment_max = (
+            _parse_max_score(_safe_str(header[11])) if len(header) > 11 else 28.0
+        )
     else:
         quiz_cols = [7, 8, 10]
         assignment_cols = [9]
-        quiz_max_scores = [_parse_max_score(_safe_str(header[c])) if c < len(header) else 15.0 for c in quiz_cols]
-        assignment_max = _parse_max_score(_safe_str(header[9])) if len(header) > 9 else 20.0
+        quiz_max_scores = [
+            _parse_max_score(_safe_str(header[c])) if c < len(header) else 15.0
+            for c in quiz_cols
+        ]
+        assignment_max = (
+            _parse_max_score(_safe_str(header[9])) if len(header) > 9 else 20.0
+        )
 
     for row_idx in range(3, len(rows)):
         vals = list(rows[row_idx])
@@ -713,14 +771,14 @@ def _ingest_graded_sheet(db: Session, wb, sheet_name: str, program: str, stats: 
         email = _safe_str(vals[3])
         student_name = _safe_str(vals[4])
         subject = _safe_str(
-            vals[14] if program == "BS" and len(vals) > 14
-            else vals[13] if len(vals) > 13
-            else course_name
+            vals[14]
+            if program == "BS" and len(vals) > 14
+            else vals[13] if len(vals) > 13 else course_name
         )
         subject_code = _safe_str(
-            vals[15] if program == "BS" and len(vals) > 15
-            else vals[14] if len(vals) > 14
-            else ""
+            vals[15]
+            if program == "BS" and len(vals) > 15
+            else vals[14] if len(vals) > 14 else ""
         )
         student_id = email if email else f"{bits_id.lower()}@bitspilani-digital.edu.in"
         if not student_id:
@@ -811,7 +869,9 @@ def _ingest_written_exam_marks(db: Session, wb):
         return
 
     ws = wb["Written Exam Marks"]
-    exam_map = {(e.student_id, e.course_code, e.slot): e for e in db.query(ExamRecord).all()}
+    exam_map = {
+        (e.student_id, e.course_code, e.slot): e for e in db.query(ExamRecord).all()
+    }
     valid_rows = 0
 
     for i, row in enumerate(ws.iter_rows(values_only=True)):
@@ -829,7 +889,11 @@ def _ingest_written_exam_marks(db: Session, wb):
             continue
 
         valid_rows += 1
-        slot = "slot-1" if "Slot-1" in semester_info else "slot-2" if "Slot-2" in semester_info else "unknown"
+        slot = (
+            "slot-1"
+            if "Slot-1" in semester_info
+            else "slot-2" if "Slot-2" in semester_info else "unknown"
+        )
         org_defined_id_raw = _safe_str(vals[6]) if len(vals) > 6 else ""
         if not org_defined_id_raw and "@" in email:
             org_defined_id_raw = email.split("@", 1)[0]
@@ -861,7 +925,9 @@ def _ingest_exam_attendance(db: Session, wb, sheet_name: str, slot: str):  # noq
         return
 
     ws = wb[sheet_name]
-    exam_map = {(e.student_id, e.course_code, e.slot): e for e in db.query(ExamRecord).all()}
+    exam_map = {
+        (e.student_id, e.course_code, e.slot): e for e in db.query(ExamRecord).all()
+    }
     valid_rows = 0
 
     # Read header to find UFM column
@@ -870,7 +936,11 @@ def _ingest_exam_attendance(db: Session, wb, sheet_name: str, slot: str):  # noq
         logger.warning(f"No rows in sheet '{sheet_name}'")
         return
 
-    header = {str(cell).strip().lower(): i for i, cell in enumerate(rows[0]) if cell is not None}
+    header = {
+        str(cell).strip().lower(): i
+        for i, cell in enumerate(rows[0])
+        if cell is not None
+    }
     ufm_col = None
     for col_name, idx in header.items():
         if "ufm" in col_name:
@@ -925,7 +995,9 @@ def _ingest_exam_defaulters(db: Session, wb):  # noqa: C901
         return
 
     ws = wb["Exam Defaulter"]
-    exam_map = {(e.student_id, e.course_code, e.slot): e for e in db.query(ExamRecord).all()}
+    exam_map = {
+        (e.student_id, e.course_code, e.slot): e for e in db.query(ExamRecord).all()
+    }
 
     # Read header to find FINAL REMARKS column
     rows = list(ws.iter_rows(values_only=True))
@@ -933,7 +1005,11 @@ def _ingest_exam_defaulters(db: Session, wb):  # noqa: C901
         logger.warning("No rows in sheet 'Exam Defaulter'")
         return
 
-    header = {str(cell).strip().lower(): i for i, cell in enumerate(rows[0]) if cell is not None}
+    header = {
+        str(cell).strip().lower(): i
+        for i, cell in enumerate(rows[0])
+        if cell is not None
+    }
     remarks_col = None
     for col_name, idx in header.items():
         if "final remarks" in col_name or "remarks" in col_name:
@@ -969,7 +1045,9 @@ def _ingest_exam_defaulters(db: Session, wb):  # noqa: C901
         if remarks_col is not None and remarks_col < len(vals):
             raw_remark = _safe_str(vals[remarks_col]).strip().lower()
             if raw_remark:
-                mapped_reason = DEFAULTER_REASON_MAP.get(raw_remark, "unknown_high_risk")
+                mapped_reason = DEFAULTER_REASON_MAP.get(
+                    raw_remark, "unknown_high_risk"
+                )
                 exam.defaulter_reason = mapped_reason
 
 
@@ -982,7 +1060,9 @@ def _update_enrollments_from_latest(
     File I/O is synchronous (caller runs in threadpool).
     """
     _assert_session_thread(owner_thread_id)
-    course_name_to_id = {(_safe_str(c.name).lower()): c.id for c in db.query(Course).all() if c.name}
+    course_name_to_id = {
+        (_safe_str(c.name).lower()): c.id for c in db.query(Course).all() if c.name
+    }
     enrollments = {(e.student_id, e.course_id): e for e in db.query(Enrollment).all()}
 
     sources = _snapshot_sources(files)
@@ -995,7 +1075,9 @@ def _update_enrollments_from_latest(
         wb = openpyxl.load_workbook(str(path), read_only=True, data_only=True)
         try:
             if src.get("learner_usage_sheet_by_prefix"):
-                sheet = next((s for s in wb.sheetnames if s.startswith("Learner Usage")), None)
+                sheet = next(
+                    (s for s in wb.sheetnames if s.startswith("Learner Usage")), None
+                )
                 if not sheet:
                     logger.warning(
                         f"No 'Learner Usage*' sheet in {path.name}. Found: {wb.sheetnames}"
@@ -1033,9 +1115,17 @@ def _update_enrollments_from_latest(
                     continue
 
                 if src.get("course_col") is not None:
-                    course_id = _safe_str(vals[src["course_col"]]) if src["course_col"] < len(vals) else ""
+                    course_id = (
+                        _safe_str(vals[src["course_col"]])
+                        if src["course_col"] < len(vals)
+                        else ""
+                    )
                 else:
-                    cname_raw = vals[src.get("cname_col", 0)] if src.get("cname_col", 0) < len(vals) else ""
+                    cname_raw = (
+                        vals[src.get("cname_col", 0)]
+                        if src.get("cname_col", 0) < len(vals)
+                        else ""
+                    )
                     course_id = course_name_to_id.get(_safe_str(cname_raw).lower(), "")
 
                 if not course_id:
@@ -1308,7 +1398,14 @@ def derive_program_from_org_id(org_id: str) -> str:
     return "BS"
 
 
-def _ensure_student(db: Session, student_id: str, org_id: str, name: str, program: str, stats: IngestionStats = None):
+def _ensure_student(
+    db: Session,
+    student_id: str,
+    org_id: str,
+    name: str,
+    program: str,
+    stats: IngestionStats = None,
+):
     student = db.query(Student).filter(Student.id == student_id).first()
     if not student:
         student = Student(id=student_id)
@@ -1345,7 +1442,7 @@ def _ensure_student(db: Session, student_id: str, org_id: str, name: str, progra
             extra={
                 "org_id_prefix": (org_id or "")[:4] + "…",
                 "id_hash": hashlib.sha256((student_id or "").encode()).hexdigest()[:10],
-            }
+            },
         )
     # B-3 Fix: Do NOT overwrite existing department assignments
     if not student.parent_department_name:
@@ -1385,13 +1482,17 @@ def _deactivate_missing_students(session, seen_org_ids: set, semester_name: str)
                 "Student deactivated",
                 extra={
                     "org_id_prefix": (student.org_defined_id or "")[:4] + "…",
-                    "id_hash": hashlib.sha256((student.id or "").encode()).hexdigest()[:10],
+                    "id_hash": hashlib.sha256((student.id or "").encode()).hexdigest()[
+                        :10
+                    ],
                     "reason": "not_in_latest_export",
-                }
+                },
             )
 
     if deactivated_count:
-        logger.info(f"Deactivated {deactivated_count} students not in latest export for {semester_name}")
+        logger.info(
+            f"Deactivated {deactivated_count} students not in latest export for {semester_name}"
+        )
         session.commit()
 
 
@@ -1421,7 +1522,7 @@ def _rescind_stale_ghost_alerts(db, org_id: str, current_login_count: int):
             extra={
                 "count": len(stale_logs),
                 "org_id_prefix": (org_id or "")[:4] + "…",
-            }
+            },
         )
 
 
@@ -1485,7 +1586,9 @@ def infer_outcomes_from_exam_data(db: Session) -> int:  # noqa: C901
 
     # Get enrollments for these students
     student_ids = list(student_exams.keys())
-    enrollments = db.query(Enrollment).filter(Enrollment.student_id.in_(student_ids)).all()
+    enrollments = (
+        db.query(Enrollment).filter(Enrollment.student_id.in_(student_ids)).all()
+    )
 
     updated_count = 0
     now = datetime.utcnow()

@@ -15,6 +15,7 @@ class StudentResponse(Base):
     Tracks student responses to interventions for feedback loop analysis.
     Enables measurement of intervention effectiveness and model improvement.
     """
+
     __tablename__ = "student_responses"
 
     id = Column(Integer, primary_key=True, index=True)
@@ -24,7 +25,9 @@ class StudentResponse(Base):
     # ========== Response Tracking ==========
     responded = Column(Boolean)  # Did the student respond to the intervention?
     response_time_hours = Column(Float)  # How long until response?
-    behavioral_change_detected = Column(Boolean)  # Was there observable behavior change?
+    behavioral_change_detected = Column(
+        Boolean
+    )  # Was there observable behavior change?
 
     # ========== Outcome Tracking (7-day window) ==========
     engagement_change_7days = Column(Float)  # % change in engagement after intervention

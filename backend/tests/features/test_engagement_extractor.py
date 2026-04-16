@@ -12,7 +12,10 @@ Comprehensive tests for:
 - Self-directed learning (optional courses)
 """
 
-from backend.services.features.engagement import EngagementFeatureExtractor, EngagementFeatures
+from backend.services.features.engagement import (
+    EngagementFeatureExtractor,
+    EngagementFeatures,
+)
 
 
 class TestEngagementFeatureExtractor:
@@ -54,6 +57,7 @@ class TestEngagementFeatureExtractor:
 
     def test_content_completion_with_registry_lookup(self):
         """Should use registry lookup when content_required is 0."""
+
         def mock_lookup(course_code, semester):
             return 25
 
@@ -288,7 +292,11 @@ class TestEngagementFeatureExtractor:
         extractor = EngagementFeatureExtractor()
 
         enrollments = [
-            {"content_completed": 5, "content_required_w1w2": 50, "is_optional": False},  # 10%
+            {
+                "content_completed": 5,
+                "content_required_w1w2": 50,
+                "is_optional": False,
+            },  # 10%
         ]
 
         result = extractor.extract(enrollments)
@@ -300,7 +308,11 @@ class TestEngagementFeatureExtractor:
         extractor = EngagementFeatureExtractor()
 
         enrollments = [
-            {"content_completed": 8, "content_required_w1w2": 50, "is_optional": False},  # 16%
+            {
+                "content_completed": 8,
+                "content_required_w1w2": 50,
+                "is_optional": False,
+            },  # 16%
         ]
 
         result = extractor.extract(enrollments)

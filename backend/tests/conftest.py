@@ -27,6 +27,7 @@ os.environ["INTEGRATION_API_KEY_HASH"] = hashlib.sha256(
 def initialize_test_db():
     """Create all DB tables once per test session before any test runs."""
     from backend.database.connection import init_db
+
     init_db()
     yield
 
@@ -44,7 +45,7 @@ def cleanup_db_after_each_test():
     try:
         # Delete data in reverse dependency order to avoid FK violations
         for table in reversed(Base.metadata.sorted_tables):
-            if table.name != 'sqlite_sequence':
+            if table.name != "sqlite_sequence":
                 db.execute(table.delete())
         db.commit()
     except Exception:

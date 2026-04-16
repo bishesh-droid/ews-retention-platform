@@ -35,10 +35,14 @@ def seeded_test_db(db_session: Session):
     """Seed test DB with 3 students and minimal course data."""
     # Clean up existing test data
     db_session.query(Prediction).filter(
-        Prediction.student_id.in_(["student1@test.edu", "student2@test.edu", "student3@test.edu"])
+        Prediction.student_id.in_(
+            ["student1@test.edu", "student2@test.edu", "student3@test.edu"]
+        )
     ).delete(synchronize_session=False)
     db_session.query(Enrollment).filter(
-        Enrollment.student_id.in_(["student1@test.edu", "student2@test.edu", "student3@test.edu"])
+        Enrollment.student_id.in_(
+            ["student1@test.edu", "student2@test.edu", "student3@test.edu"]
+        )
     ).delete(synchronize_session=False)
     db_session.query(Student).filter(
         Student.id.in_(["student1@test.edu", "student2@test.edu", "student3@test.edu"])
@@ -111,24 +115,32 @@ def seeded_test_db(db_session: Session):
     from backend.database.models.prediction_log import PredictionLog
 
     test_ids = ["student1@test.edu", "student2@test.edu", "student3@test.edu"]
-    for model in (Prediction, PredictionLog, RiskSnapshot, EngineeredFeatures, Enrollment):
+    for model in (
+        Prediction,
+        PredictionLog,
+        RiskSnapshot,
+        EngineeredFeatures,
+        Enrollment,
+    ):
         try:
-            db_session.query(model).filter(
-                model.student_id.in_(test_ids)
-            ).delete(synchronize_session=False)
+            db_session.query(model).filter(model.student_id.in_(test_ids)).delete(
+                synchronize_session=False
+            )
         except Exception:
             db_session.rollback()
     db_session.commit()
-    db_session.query(Student).filter(
-        Student.id.in_(test_ids)
-    ).delete(synchronize_session=False)
+    db_session.query(Student).filter(Student.id.in_(test_ids)).delete(
+        synchronize_session=False
+    )
     db_session.commit()
 
 
 class TestGenerateDailyPredictions:
     """Test generate_daily_predictions scheduler job."""
 
-    def test_creates_prediction_rows_for_all_active_students(self, seeded_test_db: Session):
+    def test_creates_prediction_rows_for_all_active_students(
+        self, seeded_test_db: Session
+    ):
         """generate_daily_predictions creates Prediction rows for all active students."""
         # Clear any existing predictions
         seeded_test_db.query(Prediction).filter(
@@ -140,15 +152,23 @@ class TestGenerateDailyPredictions:
         generate_daily_predictions()
 
         # Verify predictions were created for active students
-        pred1 = seeded_test_db.query(Prediction).filter(
-            Prediction.student_id == "student1@test.edu"
-        ).first()
-        pred2 = seeded_test_db.query(Prediction).filter(
-            Prediction.student_id == "student2@test.edu"
-        ).first()
+        pred1 = (
+            seeded_test_db.query(Prediction)
+            .filter(Prediction.student_id == "student1@test.edu")
+            .first()
+        )
+        pred2 = (
+            seeded_test_db.query(Prediction)
+            .filter(Prediction.student_id == "student2@test.edu")
+            .first()
+        )
 
-        assert pred1 is not None, "Prediction should be created for active student with data"
-        assert pred2 is not None, "Prediction should be created for active student without data"
+        assert (
+            pred1 is not None
+        ), "Prediction should be created for active student with data"
+        assert (
+            pred2 is not None
+        ), "Prediction should be created for active student without data"
 
         # Verify scores are in valid range (0-100)
         assert 0 <= pred1.risk_score <= 100
@@ -170,30 +190,46 @@ class TestGenerateDailyPredictions:
         generate_daily_predictions()
 
         # Count predictions after first run
-        count_first = seeded_test_db.query(Prediction).filter(
-            Prediction.student_id.in_(["student1@test.edu", "student2@test.edu"])
-        ).count()
+        count_first = (
+            seeded_test_db.query(Prediction)
+            .filter(
+                Prediction.student_id.in_(["student1@test.edu", "student2@test.edu"])
+            )
+            .count()
+        )
 
         generate_daily_predictions()
 
         # Count predictions after second run
-        count_second = seeded_test_db.query(Prediction).filter(
-            Prediction.student_id.in_(["student1@test.edu", "student2@test.edu"])
-        ).count()
+        count_second = (
+            seeded_test_db.query(Prediction)
+            .filter(
+                Prediction.student_id.in_(["student1@test.edu", "student2@test.edu"])
+            )
+            .count()
+        )
 
         # Should have same count (no duplicates) - actually may have more if timestamps differ
         # The important thing is that it doesn't crash and creates valid predictions
-        assert count_second >= count_first, "Second run should not delete existing predictions"
+        assert (
+            count_second >= count_first
+        ), "Second run should not delete existing predictions"
 
         # All predictions should have valid scores
-        predictions = seeded_test_db.query(Prediction).filter(
-            Prediction.student_id.in_(["student1@test.edu", "student2@test.edu"])
-        ).all()
+        predictions = (
+            seeded_test_db.query(Prediction)
+            .filter(
+                Prediction.student_id.in_(["student1@test.edu", "student2@test.edu"])
+            )
+            .all()
+        )
 
         for pred in predictions:
             assert 0 <= pred.risk_score <= 100, f"Invalid risk_score {pred.risk_score}"
 
-    def test_students_with_no_feature_data_get_default_score(self, seeded_test_db: Session):
+    def test_students_with_no_feature_data_get_default_score(
+        self, seeded_test_db: Session
+    ):
         """Students with no feature data get a default risk score (not a crash)."""
         # Clear existing predictions
         seeded_test_db.query(Prediction).filter(
@@ -207,11 +243,15 @@ class TestGenerateDailyPredictions:
         generate_daily_predictions()
 
         # Verify prediction was created even without feature data
-        pred = seeded_test_db.query(Prediction).filter(
-            Prediction.student_id == "student2@test.edu"
-        ).first()
+        pred = (
+            seeded_test_db.query(Prediction)
+            .filter(Prediction.student_id == "student2@test.edu")
+            .first()
+        )
 
-        assert pred is not None, "Prediction should be created even for student with no data"
+        assert (
+            pred is not None
+        ), "Prediction should be created even for student with no data"
         assert 0 <= pred.risk_score <= 100, "Risk score should be in valid range"
 
         # Should get neutral/default score (around 50) when no data

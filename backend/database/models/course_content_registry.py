@@ -12,6 +12,7 @@ from ..connection import Base
 
 class CourseContentRegistry(Base):
     """Registry for course content requirements with versioning."""
+
     __tablename__ = "course_content_registry"
 
     id = Column(Integer, primary_key=True)
@@ -22,10 +23,12 @@ class CourseContentRegistry(Base):
     last_updated_at = Column(
         DateTime,
         default=lambda: datetime.now(timezone.utc),
-        onupdate=lambda: datetime.now(timezone.utc)
+        onupdate=lambda: datetime.now(timezone.utc),
     )
     source_file = Column(String(256), nullable=True)
 
     __table_args__ = (
-        UniqueConstraint("course_offering_code", "semester_name", name="uq_course_semester"),
+        UniqueConstraint(
+            "course_offering_code", "semester_name", name="uq_course_semester"
+        ),
     )

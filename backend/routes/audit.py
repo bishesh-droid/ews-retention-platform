@@ -30,11 +30,17 @@ def get_audit_logs(
     skip: int = Query(0, ge=0, description="Number of records to skip"),
     limit: int = Query(50, ge=1, le=500, description="Number of records to return"),
     user_id: Optional[int] = Query(None, description="Filter by user ID"),
-    action: Optional[str] = Query(None, description="Filter by action (READ/WRITE/DELETE)"),
+    action: Optional[str] = Query(
+        None, description="Filter by action (READ/WRITE/DELETE)"
+    ),
     resource_type: Optional[str] = Query(None, description="Filter by resource type"),
     resource_id: Optional[str] = Query(None, description="Filter by resource ID"),
-    start_date: Optional[date] = Query(None, description="Filter from this date (inclusive)"),
-    end_date: Optional[date] = Query(None, description="Filter to this date (inclusive)"),
+    start_date: Optional[date] = Query(
+        None, description="Filter from this date (inclusive)"
+    ),
+    end_date: Optional[date] = Query(
+        None, description="Filter to this date (inclusive)"
+    ),
     db: Session = Depends(get_db),
     current_user: User = Depends(require_role(_ADMIN_ROLES)),
 ):
@@ -64,20 +70,19 @@ def get_audit_logs(
         if resource_id:
             query = query.filter(AuditLog.resource_id == resource_id)
         if start_date:
-            query = query.filter(AuditLog.timestamp >= datetime.combine(start_date, datetime.min.time()))
+            query = query.filter(
+                AuditLog.timestamp >= datetime.combine(start_date, datetime.min.time())
+            )
         if end_date:
-            query = query.filter(AuditLog.timestamp <= datetime.combine(end_date, datetime.max.time()))
+            query = query.filter(
+                AuditLog.timestamp <= datetime.combine(end_date, datetime.max.time())
+            )
 
         # Get total count for pagination
         total = query.count()
 
         # Apply ordering and pagination
-        logs = (
-            query.order_by(desc(AuditLog.timestamp))
-            .offset(skip)
-            .limit(limit)
-            .all()
-        )
+        logs = query.order_by(desc(AuditLog.timestamp)).offset(skip).limit(limit).all()
 
         # Format response
         return {
@@ -135,9 +140,13 @@ def get_audit_summary(
         query = db.query(AuditLog)
 
         if start_date:
-            query = query.filter(AuditLog.timestamp >= datetime.combine(start_date, datetime.min.time()))
+            query = query.filter(
+                AuditLog.timestamp >= datetime.combine(start_date, datetime.min.time())
+            )
         if end_date:
-            query = query.filter(AuditLog.timestamp <= datetime.combine(end_date, datetime.max.time()))
+            query = query.filter(
+                AuditLog.timestamp <= datetime.combine(end_date, datetime.max.time())
+            )
 
         # Total count
         total_access = query.count()
@@ -161,7 +170,7 @@ def get_audit_summary(
             db.query(
                 AuditLog.user_id,
                 AuditLog.user_role,
-                func.count(AuditLog.id).label("access_count")
+                func.count(AuditLog.id).label("access_count"),
             )
             .group_by(AuditLog.user_id, AuditLog.user_role)
             .order_by(desc("access_count"))
@@ -212,8 +221,8 @@ def get_student_audit_trail(
         logs = (
             db.query(AuditLog)
             .filter(
-                (AuditLog.resource_id == student_id) |
-                (AuditLog.affected_student_id == student_id)
+                (AuditLog.resource_id == student_id)
+                | (AuditLog.affected_student_id == student_id)
             )
             .order_by(desc(AuditLog.timestamp))
             .offset(skip)
@@ -224,8 +233,8 @@ def get_student_audit_trail(
         total = (
             db.query(AuditLog)
             .filter(
-                (AuditLog.resource_id == student_id) |
-                (AuditLog.affected_student_id == student_id)
+                (AuditLog.resource_id == student_id)
+                | (AuditLog.affected_student_id == student_id)
             )
             .count()
         )
@@ -251,4 +260,6 @@ def get_student_audit_trail(
         }
     except SQLAlchemyError as e:
         sys_logger.error(f"Database error fetching student audit trail: {e}")
-        raise HTTPException(status_code=500, detail="Failed to retrieve student audit trail")
+        raise HTTPException(
+            status_code=500, detail="Failed to retrieve student audit trail"
+        )

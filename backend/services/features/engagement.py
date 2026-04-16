@@ -20,17 +20,18 @@ import math
 @dataclass
 class EngagementFeatures:
     """Typed dataclass for LMS engagement features."""
-    content_completion_score: Optional[float]   # Overall content completion [0-100]
-    w1w2_completion_score: float                # Week 1-2 completion [0-100]
-    quiz_engagement_score: float                # Quiz activity [0-100]
-    discussion_engagement_score: float          # Forum participation [0-100]
-    login_consistency_score: float              # Login frequency [0-100]
-    time_investment_score: float                # Time spent [0-100]
-    assignment_score: float                     # Assignment submissions [0-100]
-    zero_progress_ratio: float                  # Fraction of courses with 0 progress [0-1]
-    progress_category: str                       # "0%", "0-10%", or ">10%"
+
+    content_completion_score: Optional[float]  # Overall content completion [0-100]
+    w1w2_completion_score: float  # Week 1-2 completion [0-100]
+    quiz_engagement_score: float  # Quiz activity [0-100]
+    discussion_engagement_score: float  # Forum participation [0-100]
+    login_consistency_score: float  # Login frequency [0-100]
+    time_investment_score: float  # Time spent [0-100]
+    assignment_score: float  # Assignment submissions [0-100]
+    zero_progress_ratio: float  # Fraction of courses with 0 progress [0-1]
+    progress_category: str  # "0%", "0-10%", or ">10%"
     per_course_breakdown: List[Dict] = field(default_factory=list)
-    self_directed_learning_score: float = 0.0   # Optional course engagement [0-100]
+    self_directed_learning_score: float = 0.0  # Optional course engagement [0-100]
 
 
 class EngagementFeatureExtractor:
@@ -55,12 +56,18 @@ class EngagementFeatureExtractor:
         return max(0.0, v)
 
     @staticmethod
-    def _adaptive_saturation_score(values: List[float], min_scale: float = 1.0, max_scale: float = 1000.0) -> float:
+    def _adaptive_saturation_score(
+        values: List[float], min_scale: float = 1.0, max_scale: float = 1000.0
+    ) -> float:
         """
         Data-driven normalization using exponential saturation.
         Scale is inferred from student's own positive-value distribution.
         """
-        clean = [max(0.0, float(v)) for v in values if isinstance(v, (int, float)) and math.isfinite(v)]
+        clean = [
+            max(0.0, float(v))
+            for v in values
+            if isinstance(v, (int, float)) and math.isfinite(v)
+        ]
         if not clean:
             return 0.0
 
@@ -79,7 +86,9 @@ class EngagementFeatureExtractor:
         score = 100.0 * (1.0 - math.exp(-avg_value / scale))
         return round(max(0.0, min(100.0, score)), 2)
 
-    def extract(self, enrollments: List[Dict], week_number: Optional[int] = None) -> EngagementFeatures:
+    def extract(
+        self, enrollments: List[Dict], week_number: Optional[int] = None
+    ) -> EngagementFeatures:
         """
         Extract all engagement features from enrollment data.
 
@@ -102,17 +111,25 @@ class EngagementFeatureExtractor:
             content_completion_score=content_completion,
             w1w2_completion_score=w1w2_completion,
             quiz_engagement_score=self._calculate_quiz_engagement_score(enrollments),
-            discussion_engagement_score=self._calculate_discussion_engagement_score(enrollments),
-            login_consistency_score=self._calculate_login_consistency_score(enrollments),
+            discussion_engagement_score=self._calculate_discussion_engagement_score(
+                enrollments
+            ),
+            login_consistency_score=self._calculate_login_consistency_score(
+                enrollments
+            ),
             time_investment_score=self._calculate_time_investment_score(enrollments),
             assignment_score=self._calculate_assignment_score(enrollments),
             zero_progress_ratio=self._calculate_zero_progress_ratio(enrollments),
             progress_category=self._get_progress_category(enrollments),
             per_course_breakdown=self._get_per_course_breakdown(enrollments),
-            self_directed_learning_score=self._calculate_self_directed_learning_score(enrollments)
+            self_directed_learning_score=self._calculate_self_directed_learning_score(
+                enrollments
+            ),
         )
 
-    def _calculate_content_completion_score(self, enrollments: List[Dict]) -> Optional[float]:
+    def _calculate_content_completion_score(
+        self, enrollments: List[Dict]
+    ) -> Optional[float]:
         """Calculate content completion rate across mandatory courses only."""
         mandatory = [e for e in enrollments if not e.get("is_optional", False)]
 
@@ -120,14 +137,16 @@ class EngagementFeatureExtractor:
         total_required = 0
 
         for e in mandatory:
-            done = e.get('content_completed') or 0
-            req = e.get('content_required') or 0
+            done = e.get("content_completed") or 0
+            req = e.get("content_required") or 0
 
             if req == 0 and self.registry_lookup:
-                req = self.registry_lookup(
-                    e.get('course_offering_code'),
-                    e.get('semester_name')
-                ) or 0
+                req = (
+                    self.registry_lookup(
+                        e.get("course_offering_code"), e.get("semester_name")
+                    )
+                    or 0
+                )
 
             if req > 0:
                 total_completed += done
@@ -143,7 +162,7 @@ class EngagementFeatureExtractor:
         total_required: float = 0
 
         for e in enrollments:
-            required_w1w2 = self._to_non_negative(e.get('content_required_w1w2', 0))
+            required_w1w2 = self._to_non_negative(e.get("content_required_w1w2", 0))
 
             # Prefer explicit W1/W2 completion field if available
             explicit = e.get("content_completed_w1w2")
@@ -165,11 +184,19 @@ class EngagementFeatureExtractor:
         if not enrollments:
             return 0.0
 
-        quiz_per_course = [self._to_non_negative(e.get('quiz_completed', 0)) for e in enrollments]
-        attempts_per_course = [self._to_non_negative(e.get('total_quiz_attempts', 0)) for e in enrollments]
+        quiz_per_course = [
+            self._to_non_negative(e.get("quiz_completed", 0)) for e in enrollments
+        ]
+        attempts_per_course = [
+            self._to_non_negative(e.get("total_quiz_attempts", 0)) for e in enrollments
+        ]
 
-        completion_component = self._adaptive_saturation_score(quiz_per_course, 1.0, 200.0)
-        attempt_component = self._adaptive_saturation_score(attempts_per_course, 1.0, 300.0)
+        completion_component = self._adaptive_saturation_score(
+            quiz_per_course, 1.0, 200.0
+        )
+        attempt_component = self._adaptive_saturation_score(
+            attempts_per_course, 1.0, 300.0
+        )
 
         return round((completion_component * 0.7) + (attempt_component * 0.3), 2)
 
@@ -180,9 +207,9 @@ class EngagementFeatureExtractor:
 
         weighted_activity = []
         for e in enrollments:
-            created = self._to_non_negative(e.get('discussion_posts_created', 0))
-            replies = self._to_non_negative(e.get('discussion_post_replies', 0))
-            read = self._to_non_negative(e.get('discussion_posts_read', 0))
+            created = self._to_non_negative(e.get("discussion_posts_created", 0))
+            replies = self._to_non_negative(e.get("discussion_post_replies", 0))
+            read = self._to_non_negative(e.get("discussion_posts_read", 0))
             weighted_activity.append((created * 3.0) + (replies * 2.0) + (read * 0.5))
 
         return self._adaptive_saturation_score(weighted_activity, 1.0, 500.0)
@@ -192,7 +219,9 @@ class EngagementFeatureExtractor:
         if not enrollments:
             return 0.0
 
-        logins_per_course = [self._to_non_negative(e.get('num_logins', 0)) for e in enrollments]
+        logins_per_course = [
+            self._to_non_negative(e.get("num_logins", 0)) for e in enrollments
+        ]
         return self._adaptive_saturation_score(logins_per_course, 1.0, 500.0)
 
     def _calculate_time_investment_score(self, enrollments: List[Dict]) -> float:
@@ -201,7 +230,7 @@ class EngagementFeatureExtractor:
             return 0.0
 
         hours_per_course = [
-            self._to_non_negative(e.get('total_time_spent_seconds', 0)) / 3600.0
+            self._to_non_negative(e.get("total_time_spent_seconds", 0)) / 3600.0
             for e in enrollments
         ]
         return self._adaptive_saturation_score(hours_per_course, 0.5, 200.0)
@@ -212,7 +241,7 @@ class EngagementFeatureExtractor:
             return 0.0
 
         submissions_per_course = [
-            self._to_non_negative(e.get('num_assignment_submissions', 0))
+            self._to_non_negative(e.get("num_assignment_submissions", 0))
             for e in enrollments
         ]
         return self._adaptive_saturation_score(submissions_per_course, 1.0, 100.0)
@@ -223,8 +252,9 @@ class EngagementFeatureExtractor:
             return 1.0
 
         zero_count = sum(
-            1 for e in enrollments
-            if self._to_non_negative(e.get('content_completed', 0)) <= 0.0
+            1
+            for e in enrollments
+            if self._to_non_negative(e.get("content_completed", 0)) <= 0.0
         )
         return round(zero_count / len(enrollments), 4)
 
@@ -234,7 +264,7 @@ class EngagementFeatureExtractor:
         total_required_w1w2: float = 0
 
         for e in enrollments:
-            required = self._to_non_negative(e.get('content_required_w1w2', 0))
+            required = self._to_non_negative(e.get("content_required_w1w2", 0))
             total_completed += self._w1w2_completed_for_enrollment(e)
             total_required_w1w2 += required
 
@@ -264,8 +294,8 @@ class EngagementFeatureExtractor:
         """Get per-course engagement breakdown."""
         breakdown = []
         for e in enrollments:
-            content_req = e.get('content_required', 0) or 0
-            content_done = e.get('content_completed', 0) or 0
+            content_req = e.get("content_required", 0) or 0
+            content_done = e.get("content_completed", 0) or 0
 
             if not content_req or content_req <= 0:
                 pct = None
@@ -275,20 +305,25 @@ class EngagementFeatureExtractor:
                 pct = round(min(100.0, raw_pct), 2)
                 stale_required_count = raw_pct > 100.0
 
-            breakdown.append({
-                "course_id": e.get('course_id'),
-                "course_name": e.get('course_name', ''),
-                "content_completed": content_done,
-                "content_required": content_req,
-                "completion_pct": pct,
-                "stale_required_count": stale_required_count,
-                "quiz_completed": e.get('quiz_completed', 0) or 0,
-                "total_quiz_attempts": e.get('total_quiz_attempts', 0) or 0,
-                "discussion_posts": e.get('discussion_posts_created', 0) or 0,
-                "time_spent_hours": round((e.get('total_time_spent_seconds', 0) or 0) / 3600, 2),
-                "logins": e.get('num_logins', 0) or 0,
-                "assignments_submitted": e.get('num_assignment_submissions', 0) or 0,
-            })
+            breakdown.append(
+                {
+                    "course_id": e.get("course_id"),
+                    "course_name": e.get("course_name", ""),
+                    "content_completed": content_done,
+                    "content_required": content_req,
+                    "completion_pct": pct,
+                    "stale_required_count": stale_required_count,
+                    "quiz_completed": e.get("quiz_completed", 0) or 0,
+                    "total_quiz_attempts": e.get("total_quiz_attempts", 0) or 0,
+                    "discussion_posts": e.get("discussion_posts_created", 0) or 0,
+                    "time_spent_hours": round(
+                        (e.get("total_time_spent_seconds", 0) or 0) / 3600, 2
+                    ),
+                    "logins": e.get("num_logins", 0) or 0,
+                    "assignments_submitted": e.get("num_assignment_submissions", 0)
+                    or 0,
+                }
+            )
         return breakdown
 
     def _calculate_self_directed_learning_score(self, enrollments: List[Dict]) -> float:

@@ -39,7 +39,9 @@ class TestSecurityHeaders:
 
         # 2. X-Content-Type-Options (MIME sniffing protection)
         content_type_options = response.headers.get("X-Content-Type-Options")
-        assert content_type_options == "nosniff", "X-Content-Type-Options should be 'nosniff'"
+        assert (
+            content_type_options == "nosniff"
+        ), "X-Content-Type-Options should be 'nosniff'"
 
         # 3. X-Frame-Options (clickjacking protection)
         frame_options = response.headers.get("X-Frame-Options")
@@ -53,12 +55,15 @@ class TestSecurityHeaders:
 
         # 5. X-XSS-Protection
         xss_protection = response.headers.get("X-XSS-Protection")
-        assert xss_protection == "1; mode=block", "X-XSS-Protection should be '1; mode=block'"
+        assert (
+            xss_protection == "1; mode=block"
+        ), "X-XSS-Protection should be '1; mode=block'"
 
         # 6. Referrer-Policy
         referrer_policy = response.headers.get("Referrer-Policy")
-        assert referrer_policy == "strict-origin-when-cross-origin", \
-            "Referrer-Policy should be 'strict-origin-when-cross-origin'"
+        assert (
+            referrer_policy == "strict-origin-when-cross-origin"
+        ), "Referrer-Policy should be 'strict-origin-when-cross-origin'"
 
     def test_security_headers_on_api_endpoint(self, client):
         """Verify headers are present on API endpoints."""

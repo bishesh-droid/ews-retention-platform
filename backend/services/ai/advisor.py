@@ -5,6 +5,7 @@ from typing import Optional
 
 try:
     from google import genai
+
     GENAI_AVAILABLE = True
 except ImportError:
     genai = None
@@ -12,6 +13,7 @@ except ImportError:
 
 try:
     from anthropic import AsyncAnthropic
+
     ANTHROPIC_AVAILABLE = True
 except ImportError:
     AsyncAnthropic = None
@@ -21,12 +23,17 @@ from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
 from backend.database import Student, Prediction
 from backend.config import (
-    LLM_PROVIDER, GEMINI_API_KEY, GEMINI_MODEL,
-    CLAUDE_API_KEY, CLAUDE_MODEL, LLM_TEMPERATURE, LLM_MAX_TOKENS,
+    LLM_PROVIDER,
+    GEMINI_API_KEY,
+    GEMINI_MODEL,
+    CLAUDE_API_KEY,
+    CLAUDE_MODEL,
+    LLM_TEMPERATURE,
+    LLM_MAX_TOKENS,
 )
 from backend.core.security import security_manager
 
-PROMPTS_DIR = 'prompts'
+PROMPTS_DIR = "prompts"
 
 # Thread pool for blocking operations (file I/O, sync SDK calls)
 _executor = ThreadPoolExecutor(max_workers=4)
@@ -44,7 +51,9 @@ async def _load_prompt_template(prompt_name: str, use_hardened: bool = True) -> 
     Wrapped in executor since file I/O is blocking.
     """
     template_suffix = "_hardened" if use_hardened else ""
-    prompt_file = os.path.join(PROMPTS_DIR, f"{prompt_name}_advice{template_suffix}.txt")
+    prompt_file = os.path.join(
+        PROMPTS_DIR, f"{prompt_name}_advice{template_suffix}.txt"
+    )
 
     # Fallback to standard template if hardened doesn't exist
     if use_hardened and not os.path.exists(prompt_file):
@@ -55,15 +64,12 @@ async def _load_prompt_template(prompt_name: str, use_hardened: bool = True) -> 
 
     # Run blocking file I/O in thread pool
     loop = asyncio.get_event_loop()
-    with open(prompt_file, 'r') as f:
+    with open(prompt_file, "r") as f:
         return await loop.run_in_executor(_executor, f.read)
 
 
 async def get_ai_advice(  # noqa: C901
-    student_id: str,
-    prompt_name: str,
-    db: AsyncSession,
-    use_hardened: bool = True
+    student_id: str, prompt_name: str, db: AsyncSession, use_hardened: bool = True
 ) -> str:
     """
     Generate AI advice for a student using hardened prompt templates.
@@ -79,9 +85,7 @@ async def get_ai_advice(  # noqa: C901
         AI-generated advice string, or error message if generation fails
     """
     # Fetch student data asynchronously
-    result = await db.execute(
-        select(Student).where(Student.id == student_id)
-    )
+    result = await db.execute(select(Student).where(Student.id == student_id))
     student = result.scalar_one_or_none()
 
     if not student:
@@ -108,7 +112,8 @@ async def get_ai_advice(  # noqa: C901
     # This prevents prompt injection attacks via student data fields
     prompt_data = {
         "student_name": security_manager.sanitize_student_name(
-            f"{student.first_name or ''} {student.last_name or ''}".strip() or student.id
+            f"{student.first_name or ''} {student.last_name or ''}".strip()
+            or student.id
         ),
         "risk_score": security_manager.sanitize_for_llm(
             f"{latest_prediction.risk_score:.2f}%", max_length=50
@@ -146,7 +151,7 @@ async def get_ai_advice(  # noqa: C901
                 client = genai.Client(api_key=GEMINI_API_KEY)
                 return client.models.generate_content(
                     model=GEMINI_MODEL,
-                    contents=f"{system_message}\n\n{formatted_prompt}"
+                    contents=f"{system_message}\n\n{formatted_prompt}",
                 )
 
             response = await loop.run_in_executor(_executor, _gemini_generate)
@@ -166,9 +171,7 @@ async def get_ai_advice(  # noqa: C901
                 max_tokens=LLM_MAX_TOKENS,
                 temperature=LLM_TEMPERATURE,
                 system=system_message,
-                messages=[
-                    {"role": "user", "content": formatted_prompt}
-                ]
+                messages=[{"role": "user", "content": formatted_prompt}],
             )
             return message.content[0].text
 
@@ -191,17 +194,21 @@ async def main_test():
         test_student = result.scalar_one_or_none()
 
         if test_student:
-            print(f"\n--- Generating 'Faculty' advice for student: {test_student.id} ---")
-            faculty_prompt = await get_ai_advice(test_student.id, 'faculty', db)
+            print(
+                f"\n--- Generating 'Faculty' advice for student: {test_student.id} ---"
+            )
+            faculty_prompt = await get_ai_advice(test_student.id, "faculty", db)
             print(faculty_prompt)
 
-            print(f"\n--- Generating 'Marketing' advice for student: {test_student.id} ---")
-            marketing_prompt = await get_ai_advice(test_student.id, 'marketing', db)
+            print(
+                f"\n--- Generating 'Marketing' advice for student: {test_student.id} ---"
+            )
+            marketing_prompt = await get_ai_advice(test_student.id, "marketing", db)
             print(marketing_prompt)
         else:
             print("No students found in the database to test the AI Advisor.")
 
 
-if __name__ == '__main__':
+if __name__ == "__main__":
     # Run async test
     asyncio.run(main_test())

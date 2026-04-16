@@ -109,14 +109,16 @@ def load_t1_outcomes(db_session: Session) -> pd.DataFrame:
         # Label outcome
         outcome = "at_risk" if (score_pct < 40 or not present) else "passed"
 
-        data.append({
-            "org_id": org_id,
-            "student_id": rec.student_id,
-            "course_name": course_name,
-            "score_pct": round(score_pct, 2),
-            "present": present,
-            "outcome": outcome,
-        })
+        data.append(
+            {
+                "org_id": org_id,
+                "student_id": rec.student_id,
+                "course_name": course_name,
+                "score_pct": round(score_pct, 2),
+                "present": present,
+                "outcome": outcome,
+            }
+        )
 
     df = pd.DataFrame(data)
 
@@ -125,7 +127,9 @@ def load_t1_outcomes(db_session: Session) -> pd.DataFrame:
         # Group by student, check if any course is at_risk
         student_outcomes = (
             df.groupby(["org_id", "student_id"])
-            .apply(lambda x: "at_risk" if (x["outcome"] == "at_risk").any() else "passed")
+            .apply(
+                lambda x: "at_risk" if (x["outcome"] == "at_risk").any() else "passed"
+            )
             .reset_index(name="student_outcome")
         )
         # Merge back
@@ -179,28 +183,32 @@ def load_t1_risk_features(db_session: Session) -> pd.DataFrame:
     for e in enrollments:
         if e.student_id not in enrollments_by_student:
             enrollments_by_student[e.student_id] = []
-        enrollments_by_student[e.student_id].append({
-            "course_id": e.course_id,
-            "course_name": e.course.student.name if hasattr(e, "course") and e.course else "",
-            "content_completed": e.content_completed,
-            "content_required": e.content_required,
-            "content_required_w1w2": e.content_required_w1w2,
-            "quiz_completed": e.quiz_completed,
-            "total_quiz_attempts": e.total_quiz_attempts,
-            "discussion_posts_created": e.discussion_posts_created,
-            "discussion_post_replies": e.discussion_post_replies,
-            "discussion_posts_read": e.discussion_posts_read,
-            "num_assignment_submissions": e.num_assignment_submissions,
-            "total_time_spent_seconds": e.total_time_spent_seconds,
-            "num_logins": e.num_logins,
-            "last_system_login": e.last_system_login,
-            "last_visited_date": e.last_visited_date,
-            "last_assignment_submission_date": e.last_assignment_submission_date,
-            "last_quiz_attempt_date": e.last_quiz_attempt_date,
-            "last_discussion_post_date": e.last_discussion_post_date,
-            "last_scorm_visit_date": e.last_scorm_visit_date,
-            "last_scorm_completion_date": e.last_scorm_completion_date,
-        })
+        enrollments_by_student[e.student_id].append(
+            {
+                "course_id": e.course_id,
+                "course_name": (
+                    e.course.student.name if hasattr(e, "course") and e.course else ""
+                ),
+                "content_completed": e.content_completed,
+                "content_required": e.content_required,
+                "content_required_w1w2": e.content_required_w1w2,
+                "quiz_completed": e.quiz_completed,
+                "total_quiz_attempts": e.total_quiz_attempts,
+                "discussion_posts_created": e.discussion_posts_created,
+                "discussion_post_replies": e.discussion_post_replies,
+                "discussion_posts_read": e.discussion_posts_read,
+                "num_assignment_submissions": e.num_assignment_submissions,
+                "total_time_spent_seconds": e.total_time_spent_seconds,
+                "num_logins": e.num_logins,
+                "last_system_login": e.last_system_login,
+                "last_visited_date": e.last_visited_date,
+                "last_assignment_submission_date": e.last_assignment_submission_date,
+                "last_quiz_attempt_date": e.last_quiz_attempt_date,
+                "last_discussion_post_date": e.last_discussion_post_date,
+                "last_scorm_visit_date": e.last_scorm_visit_date,
+                "last_scorm_completion_date": e.last_scorm_completion_date,
+            }
+        )
 
     # Check for RiskSnapshot records
     snapshots = (
@@ -244,20 +252,24 @@ def load_t1_risk_features(db_session: Session) -> pd.DataFrame:
         # Also add risk_score to features dict for engagement pattern calculation
         features["risk_score"] = risk_score
         # Recalculate engagement pattern with the risk score
-        features["engagement_pattern"] = FeatureEngineer.classify_engagement_pattern(features)
+        features["engagement_pattern"] = FeatureEngineer.classify_engagement_pattern(
+            features
+        )
 
-        data.append({
-            "org_id": org_id,
-            "student_id": student,
-            "content_completion_score": features.get("content_completion_score", 0),
-            "login_consistency_score": features.get("login_consistency_score", 0),
-            "quiz_engagement_score": features.get("quiz_engagement_score", 0),
-            "assignment_score": features.get("assignment_score", 0),
-            "time_investment_score": features.get("time_investment_score", 0),
-            "discussion_score": features.get("discussion_engagement_score", 0),
-            "risk_score": risk_score,
-            "engagement_pattern": features.get("engagement_pattern", "on_track"),
-        })
+        data.append(
+            {
+                "org_id": org_id,
+                "student_id": student,
+                "content_completion_score": features.get("content_completion_score", 0),
+                "login_consistency_score": features.get("login_consistency_score", 0),
+                "quiz_engagement_score": features.get("quiz_engagement_score", 0),
+                "assignment_score": features.get("assignment_score", 0),
+                "time_investment_score": features.get("time_investment_score", 0),
+                "discussion_score": features.get("discussion_engagement_score", 0),
+                "risk_score": risk_score,
+                "engagement_pattern": features.get("engagement_pattern", "on_track"),
+            }
+        )
 
     return pd.DataFrame(data)
 
@@ -313,19 +325,21 @@ def run_threshold_analysis(
         # False Positive Rate = FP / (FP + TN)
         fpr = fp / (fp + tn) if (fp + tn) > 0 else 0.0
 
-        results.append({
-            "threshold": t,
-            "tp": int(tp),
-            "fp": int(fp),
-            "fn": int(fn),
-            "tn": int(tn),
-            "precision": round(precision, 4),
-            "recall": round(recall, 4),
-            "f1": round(f1, 4),
-            "fpr": round(fpr, 4),
-            "flagged_count": int(tp + fp),
-            "flagged_pct": round((tp + fp) / len(merged) * 100, 1),
-        })
+        results.append(
+            {
+                "threshold": t,
+                "tp": int(tp),
+                "fp": int(fp),
+                "fn": int(fn),
+                "tn": int(tn),
+                "precision": round(precision, 4),
+                "recall": round(recall, 4),
+                "f1": round(f1, 4),
+                "fpr": round(fpr, 4),
+                "flagged_count": int(tp + fp),
+                "flagged_pct": round((tp + fp) / len(merged) * 100, 1),
+            }
+        )
 
     metrics_df = pd.DataFrame(results)
 
@@ -379,14 +393,20 @@ def recommend_threshold(metrics_df: pd.DataFrame, min_recall: float = 0.75) -> f
     print("\n" + "=" * 80)
     print("RECOMMENDED THRESHOLD")
     print("=" * 80)
-    print(f"Recommended threshold: {t} | Precision: {p:.2f} | Recall: {r:.2f} | F1: {f:.2f}")
-    print(f"At this threshold, {n_flagged} students flagged as at-risk out of {total} ({pct:.1f}%)")
+    print(
+        f"Recommended threshold: {t} | Precision: {p:.2f} | Recall: {r:.2f} | F1: {f:.2f}"
+    )
+    print(
+        f"At this threshold, {n_flagged} students flagged as at-risk out of {total} ({pct:.1f}%)"
+    )
     print("=" * 80)
 
     return float(t)
 
 
-def plot_precision_recall_curve(metrics_df: pd.DataFrame, recommended_t: float, output_path: str):
+def plot_precision_recall_curve(
+    metrics_df: pd.DataFrame, recommended_t: float, output_path: str
+):
     """
     Save a matplotlib precision-recall curve figure.
 
@@ -484,7 +504,9 @@ if __name__ == "__main__":
         recommended_t = recommend_threshold(metrics_df, min_recall=0.75)
 
         # 5. Generate plot
-        output_path = str(project_root / "backend" / "ml" / "outputs" / "threshold_calibration.png")
+        output_path = str(
+            project_root / "backend" / "ml" / "outputs" / "threshold_calibration.png"
+        )
         plot_precision_recall_curve(metrics_df, recommended_t, output_path)
 
         # 6. Print config suggestions

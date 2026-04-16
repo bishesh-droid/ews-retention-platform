@@ -40,25 +40,37 @@ def get_study_plan(
     risk = student["risk_score"]
     weeks = []
     for week_num in range(1, 5):
-        focus = "content completion" if student.get("content_completion_score", 0) < 50 else "quiz preparation"
-        weeks.append({
-            "week": week_num,
-            "focus": focus,
-            "goals": [
-                f"Complete {5 + week_num} content modules",
-                f"Attempt at least {week_num} practice quizzes",
-                "Review lecture notes for 30 minutes daily",
-            ],
-            "estimated_hours": 10 + (5 if risk > 60 else 0),
-        })
+        focus = (
+            "content completion"
+            if student.get("content_completion_score", 0) < 50
+            else "quiz preparation"
+        )
+        weeks.append(
+            {
+                "week": week_num,
+                "focus": focus,
+                "goals": [
+                    f"Complete {5 + week_num} content modules",
+                    f"Attempt at least {week_num} practice quizzes",
+                    "Review lecture notes for 30 minutes daily",
+                ],
+                "estimated_hours": 10 + (5 if risk > 60 else 0),
+            }
+        )
 
     return {
         "success": True,
         "student_id": student_id,
         "generated_at": datetime.now().isoformat(),
         "plan_duration_weeks": 4,
-        "plan": {"weeks": weeks, "overall_goal": "Improve engagement and academic performance"},
-        "context_summary": {"risk_score": risk, "dominant_factor": student.get("dominant_risk_factor", "")},
+        "plan": {
+            "weeks": weeks,
+            "overall_goal": "Improve engagement and academic performance",
+        },
+        "context_summary": {
+            "risk_score": risk,
+            "dominant_factor": student.get("dominant_risk_factor", ""),
+        },
     }
 
 
@@ -77,13 +89,21 @@ def get_faculty_summary(
     talking_points = []
     if include_talking_points:
         if student.get("content_completion_score", 0) < 30:
-            talking_points.append("Content completion is low - ask about study schedule challenges")
+            talking_points.append(
+                "Content completion is low - ask about study schedule challenges"
+            )
         if student.get("exam_attendance_rate", 0) < 80:
-            talking_points.append("Has missed some exams - explore reasons and offer support")
+            talking_points.append(
+                "Has missed some exams - explore reasons and offer support"
+            )
         if student.get("discussion_engagement_score", 0) < 10:
-            talking_points.append("Not participating in discussions - encourage peer collaboration")
+            talking_points.append(
+                "Not participating in discussions - encourage peer collaboration"
+            )
         if not talking_points:
-            talking_points.append("Student is performing well - recognize achievements and encourage continued effort")
+            talking_points.append(
+                "Student is performing well - recognize achievements and encourage continued effort"
+            )
 
     return {
         "success": True,

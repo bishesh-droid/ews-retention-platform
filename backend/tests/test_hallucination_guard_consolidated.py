@@ -22,7 +22,6 @@ class TestHallucinationGuardConsolidation(unittest.TestCase):
 
     def test_llm_orchestrator_uses_canonical_guard(self):
         """llm_orchestrator.py should use GuardrailValidator from hallucination_guard."""
-        from backend.services.ai.llm_orchestrator import LLMOrchestrator
         from backend.services.ai.hallucination_guard import HallucinationPrevention
 
         # Verify the orchestrator imports and uses the canonical class
@@ -33,7 +32,7 @@ class TestHallucinationGuardConsolidation(unittest.TestCase):
         self.assertIs(
             rag_module.GuardrailValidator,
             HallucinationPrevention,
-            "rag_engine.GuardrailValidator must be hallucination_guard.HallucinationPrevention"
+            "rag_engine.GuardrailValidator must be hallucination_guard.HallucinationPrevention",
         )
 
     def test_guardrail_validator_has_validate_response(self):
@@ -41,12 +40,12 @@ class TestHallucinationGuardConsolidation(unittest.TestCase):
         from backend.services.ai.hallucination_guard import HallucinationPrevention
 
         self.assertTrue(
-            hasattr(HallucinationPrevention, 'validate_response'),
-            "HallucinationPrevention must have validate_response method"
+            hasattr(HallucinationPrevention, "validate_response"),
+            "HallucinationPrevention must have validate_response method",
         )
         self.assertTrue(
-            callable(getattr(HallucinationPrevention, 'validate_response')),
-            "validate_response must be callable"
+            callable(getattr(HallucinationPrevention, "validate_response")),
+            "validate_response must be callable",
         )
 
 

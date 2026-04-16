@@ -25,6 +25,7 @@ class AuditLog(Base):
     to maintain a complete audit trail. Application-level enforcement is used
     for SQLite; PostgreSQL production should use DDL triggers or RLS policies.
     """
+
     __tablename__ = "audit_logs"
 
     # Primary key
@@ -36,18 +37,28 @@ class AuditLog(Base):
 
     # Action details (READ/WRITE/DELETE for data access auditing)
     action = Column(String(20), nullable=False, index=True)  # READ, WRITE, DELETE
-    resource_type = Column(String(50), nullable=False, index=True)  # student, enrollment, grade, etc.
-    resource_id = Column(String(50), nullable=False, index=True)  # student_id, enrollment_id, etc.
+    resource_type = Column(
+        String(50), nullable=False, index=True
+    )  # student, enrollment, grade, etc.
+    resource_id = Column(
+        String(50), nullable=False, index=True
+    )  # student_id, enrollment_id, etc.
 
     # Network/request context
     ip_address = Column(String(45), nullable=True)  # IPv4 or IPv6
-    request_id = Column(String(100), nullable=True, index=True)  # For tracing across logs
+    request_id = Column(
+        String(100), nullable=True, index=True
+    )  # For tracing across logs
 
     # Timestamp
-    timestamp = Column(DateTime, default=lambda: datetime.now(timezone.utc), nullable=False, index=True)
+    timestamp = Column(
+        DateTime, default=lambda: datetime.now(timezone.utc), nullable=False, index=True
+    )
 
     # Legacy fields (maintained for backward compatibility)
-    action_type = Column(String(50))  # risk_change, signal_update, login, export, ai_generation
+    action_type = Column(
+        String(50)
+    )  # risk_change, signal_update, login, export, ai_generation
     affected_student_id = Column(String(50), index=True)
     details = Column(JSON)  # Store specific action data
 
@@ -63,13 +74,13 @@ class AuditLog(Base):
 
 
 # SQLite application-level guard: prevent UPDATE and DELETE on audit_logs
-@event.listens_for(AuditLog, 'before_update')
+@event.listens_for(AuditLog, "before_update")
 def prevent_audit_update(mapper, connection, target):
     """Raise RuntimeError if attempting to update an AuditLog record."""
     raise RuntimeError("AuditLog is append-only: UPDATE operations are prohibited")
 
 
-@event.listens_for(AuditLog, 'before_delete')
+@event.listens_for(AuditLog, "before_delete")
 def prevent_audit_delete(mapper, connection, target):
     """Raise RuntimeError if attempting to delete an AuditLog record."""
     raise RuntimeError("AuditLog is append-only: DELETE operations are prohibited")

@@ -18,8 +18,11 @@ Outputs:
 
 import joblib
 from sklearn.metrics import (
-    roc_auc_score, precision_score, recall_score, f1_score,
-    classification_report
+    roc_auc_score,
+    precision_score,
+    recall_score,
+    f1_score,
+    classification_report,
 )
 from sklearn.model_selection import train_test_split, StratifiedKFold, cross_val_score
 import json
@@ -40,6 +43,7 @@ try:
 except ImportError:
     print("Installing xgboost...")
     import subprocess
+
     subprocess.check_call([sys.executable, "-m", "pip", "install", "xgboost"])
     import xgboost as xgb
 
@@ -49,18 +53,18 @@ except ImportError:
 # ============================================================================
 
 FEATURE_NAMES: List[str] = [
-    "content_completion_score",      # 0-100: content completion rate
-    "login_consistency_score",       # 0-100: login frequency
-    "quiz_engagement_score",         # 0-100: quiz completion/attempts
-    "assignment_score",              # 0-100: assignment submissions
-    "time_investment_score",         # 0-100: time spent in content
-    "discussion_engagement_score",   # 0-100: discussion participation
+    "content_completion_score",  # 0-100: content completion rate
+    "login_consistency_score",  # 0-100: login frequency
+    "quiz_engagement_score",  # 0-100: quiz completion/attempts
+    "assignment_score",  # 0-100: assignment submissions
+    "time_investment_score",  # 0-100: time spent in content
+    "discussion_engagement_score",  # 0-100: discussion participation
     "self_directed_learning_score",  # 0-100: optional course engagement
-    "w1w2_completion_score",         # 0-100: weeks 1 & 2 content completion
-    "zero_progress_ratio",           # 0-1: fraction of courses with zero progress
-    "graded_quiz_score",             # 0-100: average graded quiz score
-    "graded_assignment_score",       # 0-100: average graded assignment score
-    "exam_score",                    # 0-100: exam performance score
+    "w1w2_completion_score",  # 0-100: weeks 1 & 2 content completion
+    "zero_progress_ratio",  # 0-1: fraction of courses with zero progress
+    "graded_quiz_score",  # 0-100: average graded quiz score
+    "graded_assignment_score",  # 0-100: average graded assignment score
+    "exam_score",  # 0-100: exam performance score
 ]
 
 # Training configuration
@@ -98,26 +102,22 @@ def generate_synthetic_student_data(n_samples: int = N_SAMPLES) -> pd.DataFrame:
 
     # Login consistency - correlated with content completion
     login_consistency = (
-        0.6 * content_completion +
-        0.4 * np.random.beta(2, 2, n_samples) * 100
+        0.6 * content_completion + 0.4 * np.random.beta(2, 2, n_samples) * 100
     )
 
     # Quiz engagement - correlated with content completion
     quiz_engagement = (
-        0.5 * content_completion +
-        0.5 * np.random.beta(2, 2, n_samples) * 100
+        0.5 * content_completion + 0.5 * np.random.beta(2, 2, n_samples) * 100
     )
 
     # Assignment score - correlated with quiz engagement
     assignment_score = (
-        0.6 * quiz_engagement +
-        0.4 * np.random.beta(2, 2, n_samples) * 100
+        0.6 * quiz_engagement + 0.4 * np.random.beta(2, 2, n_samples) * 100
     )
 
     # Time investment - correlated with login consistency
     time_investment = (
-        0.5 * login_consistency +
-        0.5 * np.random.beta(1.5, 2, n_samples) * 100
+        0.5 * login_consistency + 0.5 * np.random.beta(1.5, 2, n_samples) * 100
     )
 
     # Discussion engagement - independent, lower values generally
@@ -128,69 +128,69 @@ def generate_synthetic_student_data(n_samples: int = N_SAMPLES) -> pd.DataFrame:
 
     # W1W2 completion - strongly correlated with overall content completion
     w1w2_completion = (
-        0.7 * content_completion +
-        0.3 * np.random.beta(2, 1.5, n_samples) * 100
+        0.7 * content_completion + 0.3 * np.random.beta(2, 1.5, n_samples) * 100
     )
 
     # Zero progress ratio - inverse to content completion
     zero_progress_ratio = np.clip(
-        1.0 - (content_completion / 100) + np.random.normal(0, 0.1, n_samples),
-        0, 1
+        1.0 - (content_completion / 100) + np.random.normal(0, 0.1, n_samples), 0, 1
     )
 
     # Graded quiz score - correlated with quiz engagement
     graded_quiz_score = (
-        0.6 * quiz_engagement +
-        0.4 * np.random.beta(2.5, 1.5, n_samples) * 100
+        0.6 * quiz_engagement + 0.4 * np.random.beta(2.5, 1.5, n_samples) * 100
     )
 
     # Graded assignment score - correlated with assignment score
     graded_assignment_score = (
-        0.7 * assignment_score +
-        0.3 * np.random.beta(2, 2, n_samples) * 100
+        0.7 * assignment_score + 0.3 * np.random.beta(2, 2, n_samples) * 100
     )
 
     # Exam score - correlated with graded quiz and assignment scores
     exam_score = (
-        0.4 * graded_quiz_score +
-        0.4 * graded_assignment_score +
-        0.2 * np.random.beta(2, 2, n_samples) * 100
+        0.4 * graded_quiz_score
+        + 0.4 * graded_assignment_score
+        + 0.2 * np.random.beta(2, 2, n_samples) * 100
     )
 
     # Create DataFrame
-    df = pd.DataFrame({
-        "content_completion_score": np.clip(content_completion, 0, 100),
-        "login_consistency_score": np.clip(login_consistency, 0, 100),
-        "quiz_engagement_score": np.clip(quiz_engagement, 0, 100),
-        "assignment_score": np.clip(assignment_score, 0, 100),
-        "time_investment_score": np.clip(time_investment, 0, 100),
-        "discussion_engagement_score": np.clip(discussion_engagement, 0, 100),
-        "self_directed_learning_score": np.clip(self_directed_learning, 0, 100),
-        "w1w2_completion_score": np.clip(w1w2_completion, 0, 100),
-        "zero_progress_ratio": np.clip(zero_progress_ratio, 0, 1),
-        "graded_quiz_score": np.clip(graded_quiz_score, 0, 100),
-        "graded_assignment_score": np.clip(graded_assignment_score, 0, 100),
-        "exam_score": np.clip(exam_score, 0, 100),
-    })
+    df = pd.DataFrame(
+        {
+            "content_completion_score": np.clip(content_completion, 0, 100),
+            "login_consistency_score": np.clip(login_consistency, 0, 100),
+            "quiz_engagement_score": np.clip(quiz_engagement, 0, 100),
+            "assignment_score": np.clip(assignment_score, 0, 100),
+            "time_investment_score": np.clip(time_investment, 0, 100),
+            "discussion_engagement_score": np.clip(discussion_engagement, 0, 100),
+            "self_directed_learning_score": np.clip(self_directed_learning, 0, 100),
+            "w1w2_completion_score": np.clip(w1w2_completion, 0, 100),
+            "zero_progress_ratio": np.clip(zero_progress_ratio, 0, 1),
+            "graded_quiz_score": np.clip(graded_quiz_score, 0, 100),
+            "graded_assignment_score": np.clip(graded_assignment_score, 0, 100),
+            "exam_score": np.clip(exam_score, 0, 100),
+        }
+    )
 
     # Generate dropout labels based on feature combinations
     # Lower scores = higher dropout risk
     dropout_risk_score = (
-        -0.3 * df["content_completion_score"] +
-        -0.2 * df["login_consistency_score"] +
-        -0.2 * df["quiz_engagement_score"] +
-        -0.15 * df["assignment_score"] +
-        -0.1 * df["time_investment_score"] +
-        -0.05 * df["discussion_engagement_score"] +
-        +0.3 * df["zero_progress_ratio"] * 100 +  # Strong positive predictor
-        -0.1 * df["graded_quiz_score"] +
-        -0.1 * df["graded_assignment_score"] +
-        -0.1 * df["exam_score"] +
-        -0.15 * df["self_directed_learning_score"]  # Protective factor
+        -0.3 * df["content_completion_score"]
+        + -0.2 * df["login_consistency_score"]
+        + -0.2 * df["quiz_engagement_score"]
+        + -0.15 * df["assignment_score"]
+        + -0.1 * df["time_investment_score"]
+        + -0.05 * df["discussion_engagement_score"]
+        + +0.3 * df["zero_progress_ratio"] * 100  # Strong positive predictor
+        + -0.1 * df["graded_quiz_score"]
+        + -0.1 * df["graded_assignment_score"]
+        + -0.1 * df["exam_score"]
+        + -0.15 * df["self_directed_learning_score"]  # Protective factor
     )
 
     # Normalize and add noise
-    dropout_risk_score = (dropout_risk_score - dropout_risk_score.mean()) / dropout_risk_score.std()
+    dropout_risk_score = (
+        dropout_risk_score - dropout_risk_score.mean()
+    ) / dropout_risk_score.std()
     dropout_risk_score += np.random.normal(0, 0.5, n_samples)
 
     # Convert to probability using sigmoid
@@ -294,7 +294,9 @@ def train_xgboost_model(df: pd.DataFrame) -> Tuple[xgb.XGBClassifier, Dict[str, 
     print(f"  - F1 Score:  {test_f1:.4f}")
 
     print("\nClassification report:")
-    print(classification_report(y_test, y_pred, target_names=["Retained", "Dropped Out"]))
+    print(
+        classification_report(y_test, y_pred, target_names=["Retained", "Dropped Out"])
+    )
 
     # Feature importance
     importance = model.feature_importances_

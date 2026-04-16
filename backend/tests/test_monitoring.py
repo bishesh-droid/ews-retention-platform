@@ -83,11 +83,15 @@ def test_monitoring_endpoint_returns_stats(authed_client: TestClient, monkeypatc
     assert body["data"] == expected
 
 
-def test_monitoring_endpoint_handles_stats_failure(authed_client: TestClient, monkeypatch):
+def test_monitoring_endpoint_handles_stats_failure(
+    authed_client: TestClient, monkeypatch
+):
     def _raise_runtime_error():
         raise RuntimeError("stats backend unavailable")
 
-    monkeypatch.setattr(monitoring.ml_service, "get_runtime_stats", _raise_runtime_error)
+    monkeypatch.setattr(
+        monitoring.ml_service, "get_runtime_stats", _raise_runtime_error
+    )
 
     response = authed_client.get("/api/v1/monitoring/predictions")
 

@@ -28,19 +28,25 @@ class RawEventCreate(BaseModel):
 
 def _create_event(event: RawEventCreate, expected_source: str, db: Session):
     if event.event_source != expected_source:
-        raise HTTPException(status_code=400, detail=f"event_source must be '{expected_source}'")
+        raise HTTPException(
+            status_code=400, detail=f"event_source must be '{expected_source}'"
+        )
 
     db_event = RawEvent(
         student_id=event.student_id,
         event_source=event.event_source,
         event_type=event.event_type,
         event_data=json.dumps(event.event_data) if event.event_data else "{}",
-        timestamp=datetime.utcnow()
+        timestamp=datetime.utcnow(),
     )
     db.add(db_event)
     db.commit()
     db.refresh(db_event)
-    return {"status": "success", "event_id": db_event.id, "message": f"{expected_source} event recorded"}
+    return {
+        "status": "success",
+        "event_id": db_event.id,
+        "message": f"{expected_source} event recorded",
+    }
 
 
 @router.post("/lms", status_code=201)

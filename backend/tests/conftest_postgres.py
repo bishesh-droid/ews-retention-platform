@@ -29,8 +29,7 @@ from sqlalchemy_utils import database_exists, create_database
 
 # PostgreSQL connection string - uses environment or defaults to local test db
 POSTGRES_TEST_URL = os.getenv(
-    "POSTGRES_TEST_URL",
-    "postgresql://postgres:postgres@localhost:5432/ews_test_db"
+    "POSTGRES_TEST_URL", "postgresql://postgres:postgres@localhost:5432/ews_test_db"
 )
 
 # Create PostgreSQL engine with proper settings for tests
@@ -56,13 +55,13 @@ def postgres_engine():
     Creates test database if it doesn't exist.
     """
     engine = get_postgres_engine()
-    
+
     # Create database if it doesn't exist
     if not database_exists(engine.url):
         create_database(engine.url)
-    
+
     yield engine
-    
+
     # Cleanup after all tests
     engine.dispose()
 
@@ -74,12 +73,12 @@ def postgres_db(postgres_engine):
     Creates all tables before each test, drops after.
     """
     from backend.database.models import Base
-    
+
     # Create all tables
     Base.metadata.create_all(bind=postgres_engine)
-    
+
     yield postgres_engine
-    
+
     # Drop all tables to ensure clean state
     Base.metadata.drop_all(bind=postgres_engine)
 
@@ -93,7 +92,7 @@ def postgres_session(postgres_db) -> Generator[Session, None, None]:
     connection = postgres_db.connect()
     transaction = connection.begin()
     session = sessionmaker(bind=connection)()
-    
+
     try:
         yield session
     finally:
@@ -110,28 +109,29 @@ def postgres_client(postgres_db):
     from fastapi.testclient import TestClient
     from backend.main import app
     from backend.database.connection import get_db
-    
+
     # Create a session bound to the test transaction
     connection = postgres_db.connect()
     transaction = connection.begin()
     session = sessionmaker(bind=connection)()
-    
+
     def override_get_db():
         try:
             yield session
         finally:
             pass
-    
+
     # Override the dependency
     app.dependency_overrides[get_db] = override_get_db
-    
+
     # Initialize app state
     from backend.core.rate_limiting import limiter
+
     app.state.limiter = limiter
-    
+
     with TestClient(app) as client:
         yield client
-    
+
     # Cleanup
     session.close()
     transaction.rollback()
@@ -144,7 +144,7 @@ def postgres_transaction_session(postgres_engine):
     """
     Context manager for PostgreSQL transactional sessions.
     Useful for integration tests that need manual transaction control.
-    
+
     Usage:
         with postgres_transaction_session(engine) as session:
             # Do database operations
@@ -153,7 +153,7 @@ def postgres_transaction_session(postgres_engine):
     connection = postgres_engine.connect()
     transaction = connection.begin()
     session = sessionmaker(bind=connection)()
-    
+
     try:
         yield session
     except Exception:
@@ -179,7 +179,7 @@ def pytest_configure(config):
     """Configure pytest based on test mode."""
     test_mode = config.getoption("--test-mode")
     os.environ["TEST_MODE"] = test_mode
-    
+
     if test_mode == "postgres":
         # Set TESTING=false temporarily so DATABASE_URL from environment is used
         os.environ["TESTING"] = "false"

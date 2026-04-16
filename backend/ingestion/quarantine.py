@@ -2,6 +2,7 @@
 Quarantine Management
 Store and track rejected rows with full context
 """
+
 import json
 import csv
 from pathlib import Path
@@ -13,6 +14,7 @@ from dataclasses import dataclass, asdict
 @dataclass
 class QuarantinedRow:
     """A single quarantined row with context"""
+
     source_file: str
     sheet_name: Optional[str]
     row_number: int
@@ -29,6 +31,7 @@ class QuarantinedRow:
 @dataclass
 class QuarantineSummary:
     """Summary statistics for quarantine"""
+
     total_quarantined: int
     by_file: Dict[str, int]
     by_reason: Dict[str, int]
@@ -57,7 +60,7 @@ class QuarantineManager:
         row_number: int,
         failed_column: str = "",
         failure_message: str = "",
-        sheet_name: Optional[str] = None
+        sheet_name: Optional[str] = None,
     ):
         """
         Add a row to quarantine
@@ -79,7 +82,7 @@ class QuarantineManager:
             failed_column=failed_column,
             failure_message=failure_message,
             original_row=row_data,
-            quarantined_at=datetime.now().isoformat()
+            quarantined_at=datetime.now().isoformat(),
         )
 
         self.quarantined_rows.append(quarantined)
@@ -99,24 +102,31 @@ class QuarantineManager:
             by_file[row.source_file] = by_file.get(row.source_file, 0) + 1
 
             # Count by reason
-            by_reason[row.quarantine_reason] = by_reason.get(row.quarantine_reason, 0) + 1
+            by_reason[row.quarantine_reason] = (
+                by_reason.get(row.quarantine_reason, 0) + 1
+            )
 
             # Count by column
             if row.failed_column:
                 by_column[row.failed_column] = by_column.get(row.failed_column, 0) + 1
 
-        quarantine_rate = (len(self.quarantined_rows) / self.total_rows_processed *
-                           100) if self.total_rows_processed > 0 else 0.0
+        quarantine_rate = (
+            (len(self.quarantined_rows) / self.total_rows_processed * 100)
+            if self.total_rows_processed > 0
+            else 0.0
+        )
 
         return QuarantineSummary(
             total_quarantined=len(self.quarantined_rows),
             by_file=by_file,
             by_reason=by_reason,
             by_column=by_column,
-            quarantine_rate=round(quarantine_rate, 2)
+            quarantine_rate=round(quarantine_rate, 2),
         )
 
-    def export_quarantine_report(self, source_file: str, format: str = 'csv') -> Optional[Path]:
+    def export_quarantine_report(
+        self, source_file: str, format: str = "csv"
+    ) -> Optional[Path]:
         """
         Export quarantined rows for a specific file
 
@@ -134,10 +144,10 @@ class QuarantineManager:
             return None
 
         # Generate filename
-        timestamp = datetime.now().strftime('%Y-%m-%d')
+        timestamp = datetime.now().strftime("%Y-%m-%d")
         base_name = Path(source_file).stem
 
-        if format == 'csv':
+        if format == "csv":
             output_path = self.quarantine_dir / f"{base_name}_rejected_{timestamp}.csv"
             self._export_csv(file_rows, output_path)
         else:
@@ -158,36 +168,41 @@ class QuarantineManager:
 
         all_columns = sorted(all_columns_set)
 
-        with open(output_path, 'w', newline='') as f:
+        with open(output_path, "w", newline="") as f:
             # Add metadata columns
-            fieldnames = ['row_number', 'quarantine_reason', 'failed_column', 'failure_message'] + all_columns
+            fieldnames = [
+                "row_number",
+                "quarantine_reason",
+                "failed_column",
+                "failure_message",
+            ] + all_columns
             writer = csv.DictWriter(f, fieldnames=fieldnames)
 
             writer.writeheader()
 
             for row in rows:
                 row_dict = {
-                    'row_number': row.row_number,
-                    'quarantine_reason': row.quarantine_reason,
-                    'failed_column': row.failed_column,
-                    'failure_message': row.failure_message,
-                    **row.original_row
+                    "row_number": row.row_number,
+                    "quarantine_reason": row.quarantine_reason,
+                    "failed_column": row.failed_column,
+                    "failure_message": row.failure_message,
+                    **row.original_row,
                 }
                 writer.writerow(row_dict)
 
     def _export_jsonl(self, rows: List[QuarantinedRow], output_path: Path):
         """Export as JSON Lines"""
-        with open(output_path, 'w') as f:
+        with open(output_path, "w") as f:
             for row in rows:
-                f.write(json.dumps(row.to_dict()) + '\n')
+                f.write(json.dumps(row.to_dict()) + "\n")
 
     def print_summary(self):
         """Print formatted quarantine summary"""
         summary = self.get_summary()
 
-        print("\n" + "="*80)
+        print("\n" + "=" * 80)
         print("QUARANTINE SUMMARY")
-        print("="*80)
+        print("=" * 80)
         print(f"Total Rows Processed: {self.total_rows_processed:,}")
         print(f"Rows Quarantined: {summary.total_quarantined:,}")
         print(f"Quarantine Rate: {summary.quarantine_rate:.2f}%")
@@ -199,16 +214,20 @@ class QuarantineManager:
 
         if summary.by_reason:
             print("\nQuarantined by Reason:")
-            for reason, count in sorted(summary.by_reason.items(), key=lambda x: x[1], reverse=True):
+            for reason, count in sorted(
+                summary.by_reason.items(), key=lambda x: x[1], reverse=True
+            ):
                 print(f"  {reason}: {count}")
 
         if summary.by_column:
             print("\nTop Failed Columns:")
-            top_columns = sorted(summary.by_column.items(), key=lambda x: x[1], reverse=True)[:10]
+            top_columns = sorted(
+                summary.by_column.items(), key=lambda x: x[1], reverse=True
+            )[:10]
             for column, count in top_columns:
                 print(f"  {column}: {count}")
 
-        print("="*80)
+        print("=" * 80)
 
     def clear(self):
         """Clear quarantine data"""

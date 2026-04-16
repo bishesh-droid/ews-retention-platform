@@ -17,9 +17,18 @@ These tests replace TODOs in the original test suite and verify:
 import pytest
 from typing import List, Dict
 
-from backend.services.features.academic import AcademicFeatureExtractor, AcademicFeatures
-from backend.services.features.engagement import EngagementFeatureExtractor, EngagementFeatures
-from backend.services.features.consistency import ConsistencyFeatureExtractor, ConsistencyFeatures
+from backend.services.features.academic import (
+    AcademicFeatureExtractor,
+    AcademicFeatures,
+)
+from backend.services.features.engagement import (
+    EngagementFeatureExtractor,
+    EngagementFeatures,
+)
+from backend.services.features.consistency import (
+    ConsistencyFeatureExtractor,
+    ConsistencyFeatures,
+)
 from backend.services.features.intent import IntentFeatureExtractor, IntentFeatures
 from backend.services.features.composer import FeatureEngineer
 
@@ -27,6 +36,7 @@ from backend.services.features.composer import FeatureEngineer
 # =============================================================================
 # Test Data Fixtures
 # =============================================================================
+
 
 @pytest.fixture
 def sample_enrollments() -> List[Dict]:
@@ -92,9 +102,24 @@ def sample_graded_components() -> List[Dict]:
     return [
         {"component_type": "quiz", "score": 85, "max_score": 100, "missed": False},
         {"component_type": "quiz", "score": 92, "max_score": 100, "missed": False},
-        {"component_type": "quiz", "score": None, "max_score": 100, "missed": True},  # Missed
-        {"component_type": "assignment", "score": 78, "max_score": 100, "missed": False},
-        {"component_type": "assignment", "score": 88, "max_score": 100, "missed": False},
+        {
+            "component_type": "quiz",
+            "score": None,
+            "max_score": 100,
+            "missed": True,
+        },  # Missed
+        {
+            "component_type": "assignment",
+            "score": 78,
+            "max_score": 100,
+            "missed": False,
+        },
+        {
+            "component_type": "assignment",
+            "score": 88,
+            "max_score": 100,
+            "missed": False,
+        },
     ]
 
 
@@ -102,9 +127,30 @@ def sample_graded_components() -> List[Dict]:
 def sample_exam_records() -> List[Dict]:
     """Sample exam record data for testing."""
     return [
-        {"course_code": "CS101", "present": True, "marks_obtained": 75, "marks_total": 100, "defaulter_reason": None, "ufm_flagged": False},
-        {"course_code": "DS201", "present": True, "marks_obtained": 82, "marks_total": 100, "defaulter_reason": None, "ufm_flagged": False},
-        {"course_code": "ML301", "present": False, "marks_obtained": 0, "marks_total": 100, "defaulter_reason": "health_support", "ufm_flagged": False},
+        {
+            "course_code": "CS101",
+            "present": True,
+            "marks_obtained": 75,
+            "marks_total": 100,
+            "defaulter_reason": None,
+            "ufm_flagged": False,
+        },
+        {
+            "course_code": "DS201",
+            "present": True,
+            "marks_obtained": 82,
+            "marks_total": 100,
+            "defaulter_reason": None,
+            "ufm_flagged": False,
+        },
+        {
+            "course_code": "ML301",
+            "present": False,
+            "marks_obtained": 0,
+            "marks_total": 100,
+            "defaulter_reason": "health_support",
+            "ufm_flagged": False,
+        },
     ]
 
 
@@ -132,10 +178,13 @@ def partial_enrollments() -> List[Dict]:
 # AcademicFeatureExtractor Tests
 # =============================================================================
 
+
 class TestAcademicFeatureExtractor:
     """Tests for AcademicFeatureExtractor."""
 
-    def test_extract_with_full_data(self, sample_graded_components, sample_exam_records):
+    def test_extract_with_full_data(
+        self, sample_graded_components, sample_exam_records
+    ):
         """Academic extractor should return valid features with full data."""
         extractor = AcademicFeatureExtractor()
         features = extractor.extract(sample_graded_components, sample_exam_records)
@@ -204,7 +253,13 @@ class TestAcademicFeatureExtractor:
         """UFM flag should be detected when present."""
         extractor = AcademicFeatureExtractor()
         exam_records = [
-            {"present": True, "marks_obtained": 50, "marks_total": 100, "ufm_flagged": True, "defaulter_reason": None},
+            {
+                "present": True,
+                "marks_obtained": 50,
+                "marks_total": 100,
+                "ufm_flagged": True,
+                "defaulter_reason": None,
+            },
         ]
         features = extractor.extract([], exam_records)
 
@@ -214,7 +269,13 @@ class TestAcademicFeatureExtractor:
         """Deferred flag should be detected when present."""
         extractor = AcademicFeatureExtractor()
         exam_records = [
-            {"present": False, "marks_obtained": 0, "marks_total": 100, "ufm_flagged": False, "defaulter_reason": "deferred"},
+            {
+                "present": False,
+                "marks_obtained": 0,
+                "marks_total": 100,
+                "ufm_flagged": False,
+                "defaulter_reason": "deferred",
+            },
         ]
         features = extractor.extract([], exam_records)
 
@@ -224,7 +285,13 @@ class TestAcademicFeatureExtractor:
         """Dropout intent flag should be detected when present."""
         extractor = AcademicFeatureExtractor()
         exam_records = [
-            {"present": False, "marks_obtained": 0, "marks_total": 100, "ufm_flagged": False, "defaulter_reason": "dropout_intent"},
+            {
+                "present": False,
+                "marks_obtained": 0,
+                "marks_total": 100,
+                "ufm_flagged": False,
+                "defaulter_reason": "dropout_intent",
+            },
         ]
         features = extractor.extract([], exam_records)
 
@@ -232,10 +299,14 @@ class TestAcademicFeatureExtractor:
 
     def test_nan_input_handling(self):
         """NaN values should be handled gracefully without crashing."""
-        import math
         extractor = AcademicFeatureExtractor()
         graded_components = [
-            {"component_type": "quiz", "score": float('nan'), "max_score": 100, "missed": False},
+            {
+                "component_type": "quiz",
+                "score": float("nan"),
+                "max_score": 100,
+                "missed": False,
+            },
         ]
         # Should not crash - should handle NaN gracefully
         features = extractor.extract(graded_components, [])
@@ -245,6 +316,7 @@ class TestAcademicFeatureExtractor:
 # =============================================================================
 # EngagementFeatureExtractor Tests
 # =============================================================================
+
 
 class TestEngagementFeatureExtractor:
     """Tests for EngagementFeatureExtractor."""
@@ -306,13 +378,15 @@ class TestEngagementFeatureExtractor:
         extractor = EngagementFeatureExtractor()
 
         # Week 2: uses W1W2-specific calculation
-        features_week2 = extractor.extract(sample_enrollments, week_number=2)
+        extractor.extract(sample_enrollments, week_number=2)
 
         # Week 5: uses full-term completion
         features_week5 = extractor.extract(sample_enrollments, week_number=5)
 
         # Week 5 should use full-term completion rate
-        assert features_week5.w1w2_completion_score == (features_week5.content_completion_score or 0)
+        assert features_week5.w1w2_completion_score == (
+            features_week5.content_completion_score or 0
+        )
 
     def test_self_directed_learning_from_optional(self, sample_enrollments):
         """SDL score should be based on optional course engagement."""
@@ -352,7 +426,9 @@ class TestEngagementFeatureExtractor:
         assert features_low.progress_category == "0-10%"
 
         # 15% completion (>10% bucket)
-        enrollments_high = [{"content_completed_w1w2": 1.5, "content_required_w1w2": 10}]
+        enrollments_high = [
+            {"content_completed_w1w2": 1.5, "content_required_w1w2": 10}
+        ]
         features_high = extractor.extract(enrollments_high, week_number=2)
         assert features_high.progress_category == ">10%"
 
@@ -378,12 +454,16 @@ class TestEngagementFeatureExtractor:
         # Should return valid features even with missing data
         assert isinstance(features, EngagementFeatures)
         # content_required missing -> completion should be None or 0
-        assert features.content_completion_score is None or features.content_completion_score >= 0
+        assert (
+            features.content_completion_score is None
+            or features.content_completion_score >= 0
+        )
 
 
 # =============================================================================
 # ConsistencyFeatureExtractor Tests
 # =============================================================================
+
 
 class TestConsistencyFeatureExtractor:
     """Tests for ConsistencyFeatureExtractor."""
@@ -391,7 +471,9 @@ class TestConsistencyFeatureExtractor:
     def test_extract_with_full_data(self, sample_enrollments):
         """Consistency extractor should return valid features."""
         extractor = ConsistencyFeatureExtractor()
-        total_logins = sum(e["num_logins"] for e in sample_enrollments)  # 25 + 15 + 8 = 48
+        total_logins = sum(
+            e["num_logins"] for e in sample_enrollments
+        )  # 25 + 15 + 8 = 48
         features = extractor.extract(sample_enrollments, total_logins)
 
         assert isinstance(features, ConsistencyFeatures)
@@ -429,7 +511,10 @@ class TestConsistencyFeatureExtractor:
         """Ghost detection should identify students who logged in but never started."""
         extractor = ConsistencyFeatureExtractor()
         enrollments = [
-            {"content_completed": 0, "total_time_spent": 100},  # Some time but no progress
+            {
+                "content_completed": 0,
+                "total_time_spent": 100,
+            },  # Some time but no progress
         ]
         features = extractor.extract(enrollments, total_login_count=5)
 
@@ -448,12 +533,14 @@ class TestConsistencyFeatureExtractor:
     def test_engagement_trend_active(self):
         """Active trend should be detected with recent activity."""
         from datetime import datetime, timedelta
+
         extractor = ConsistencyFeatureExtractor()
 
         enrollments = [
             {
                 "content_completed": 10,
-                "last_system_login": (datetime.utcnow() - timedelta(days=5)).isoformat() + "Z",
+                "last_system_login": (datetime.utcnow() - timedelta(days=5)).isoformat()
+                + "Z",
             },
         ]
         features = extractor.extract(enrollments, total_login_count=20)
@@ -463,12 +550,16 @@ class TestConsistencyFeatureExtractor:
     def test_engagement_trend_inactive(self):
         """Inactive trend should be detected with no recent activity."""
         from datetime import datetime, timedelta
+
         extractor = ConsistencyFeatureExtractor()
 
         enrollments = [
             {
                 "content_completed": 10,
-                "last_system_login": (datetime.utcnow() - timedelta(days=60)).isoformat() + "Z",
+                "last_system_login": (
+                    datetime.utcnow() - timedelta(days=60)
+                ).isoformat()
+                + "Z",
             },
         ]
         features = extractor.extract(enrollments, total_login_count=5)
@@ -479,6 +570,7 @@ class TestConsistencyFeatureExtractor:
 # =============================================================================
 # IntentFeatureExtractor Tests
 # =============================================================================
+
 
 class TestIntentFeatureExtractor:
     """Tests for IntentFeatureExtractor."""
@@ -549,10 +641,13 @@ class TestIntentFeatureExtractor:
 # FeatureEngineer Composer Tests
 # =============================================================================
 
+
 class TestFeatureEngineerComposer:
     """Tests for the FeatureEngineer composer."""
 
-    def test_composer_assembles_all_features(self, sample_graded_components, sample_exam_records):
+    def test_composer_assembles_all_features(
+        self, sample_graded_components, sample_exam_records
+    ):
         """Composer should assemble features from all extractors."""
         # Mock the fetch methods
         engineer = FeatureEngineer()
@@ -587,7 +682,9 @@ class TestFeatureEngineerComposer:
         )
         intent = IntentFeatures(engagement_pattern="on_track")
 
-        features = engineer._assemble_features(academic, engagement, consistency, intent)
+        features = engineer._assemble_features(
+            academic, engagement, consistency, intent
+        )
 
         # Verify all features are present
         assert features["graded_quiz_score"] == 80.0
@@ -633,12 +730,17 @@ class TestFeatureEngineerComposer:
 # Integration Tests
 # =============================================================================
 
+
 class TestFeatureExtractionIntegration:
     """Integration tests for the full feature extraction pipeline."""
 
-    def test_full_pipeline_with_sample_data(self, sample_enrollments, sample_graded_components, sample_exam_records):
+    def test_full_pipeline_with_sample_data(
+        self, sample_enrollments, sample_graded_components, sample_exam_records
+    ):
         """Full feature extraction pipeline should produce valid output."""
-        from backend.services.feature_engineering import FeatureEngineer as LegacyFeatureEngineer
+        from backend.services.feature_engineering import (
+            FeatureEngineer as LegacyFeatureEngineer,
+        )
 
         features = LegacyFeatureEngineer.calculate_all_features(
             sample_enrollments,
@@ -650,13 +752,23 @@ class TestFeatureExtractionIntegration:
 
         # Verify all expected keys are present
         expected_keys = [
-            "content_completion_score", "w1w2_completion_score",
-            "quiz_engagement_score", "discussion_engagement_score",
-            "login_consistency_score", "time_investment_score",
-            "assignment_score", "graded_quiz_score", "graded_assignment_score",
-            "exam_score", "exam_attendance_rate",
-            "zero_progress_ratio", "progress_category", "engagement_trend",
-            "per_course_breakdown", "engagement_pattern", "ghost_info",
+            "content_completion_score",
+            "w1w2_completion_score",
+            "quiz_engagement_score",
+            "discussion_engagement_score",
+            "login_consistency_score",
+            "time_investment_score",
+            "assignment_score",
+            "graded_quiz_score",
+            "graded_assignment_score",
+            "exam_score",
+            "exam_attendance_rate",
+            "zero_progress_ratio",
+            "progress_category",
+            "engagement_trend",
+            "per_course_breakdown",
+            "engagement_pattern",
+            "ghost_info",
         ]
 
         for key in expected_keys:
@@ -664,9 +776,12 @@ class TestFeatureExtractionIntegration:
 
         # Verify score bounds
         score_fields = [
-            "content_completion_score", "w1w2_completion_score",
-            "quiz_engagement_score", "discussion_engagement_score",
-            "login_consistency_score", "time_investment_score",
+            "content_completion_score",
+            "w1w2_completion_score",
+            "quiz_engagement_score",
+            "discussion_engagement_score",
+            "login_consistency_score",
+            "time_investment_score",
             "assignment_score",
         ]
 
@@ -677,7 +792,9 @@ class TestFeatureExtractionIntegration:
 
     def test_empty_data_pipeline(self, empty_enrollments):
         """Pipeline should handle empty data without crashing."""
-        from backend.services.feature_engineering import FeatureEngineer as LegacyFeatureEngineer
+        from backend.services.feature_engineering import (
+            FeatureEngineer as LegacyFeatureEngineer,
+        )
 
         features = LegacyFeatureEngineer.calculate_all_features(
             empty_enrollments,
@@ -689,7 +806,12 @@ class TestFeatureExtractionIntegration:
 
         # Should return valid feature dict
         assert isinstance(features, dict)
-        assert features["engagement_pattern"] in ["disengaged", "struggling", "at_risk_normal", "on_track"]
+        assert features["engagement_pattern"] in [
+            "disengaged",
+            "struggling",
+            "at_risk_normal",
+            "on_track",
+        ]
 
 
 if __name__ == "__main__":

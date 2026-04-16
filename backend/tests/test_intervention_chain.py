@@ -19,58 +19,70 @@ from backend.services.core.decision_engine import (
 # SECTION 1 — Unit tests for get_intervention_recommendation (threshold ladder)
 # =============================================================================
 
-@pytest.mark.parametrize("score,expected_type,expected_priority", [
-    (15,  "no_action",          None),
-    (29,  "no_action",          None),
-    (30,  "gentle_reminder",    "low"),
-    (39,  "gentle_reminder",    "low"),
-    (40,  "mentor_outreach",    "medium"),
-    (59,  "mentor_outreach",    "medium"),
-    (60,  "mentor_outreach",    "high"),   # escalated mentor, NOT urgent
-    (79,  "mentor_outreach",    "high"),   # still NOT urgent
-    (80,  "urgent_intervention", "critical"),
-    (100, "urgent_intervention", "critical"),
-])
+
+@pytest.mark.parametrize(
+    "score,expected_type,expected_priority",
+    [
+        (15, "no_action", None),
+        (29, "no_action", None),
+        (30, "gentle_reminder", "low"),
+        (39, "gentle_reminder", "low"),
+        (40, "mentor_outreach", "medium"),
+        (59, "mentor_outreach", "medium"),
+        (60, "mentor_outreach", "high"),  # escalated mentor, NOT urgent
+        (79, "mentor_outreach", "high"),  # still NOT urgent
+        (80, "urgent_intervention", "critical"),
+        (100, "urgent_intervention", "critical"),
+    ],
+)
 def test_intervention_threshold_ladder(score, expected_type, expected_priority):
     """
     Test the full threshold ladder for intervention recommendations.
     Validates fix B-4 (missing elif) is correctly wired.
     """
     result = get_intervention_recommendation(score)
-    assert result["type"] == expected_type, \
-        f"score={score}: got {result['type']}, expected {expected_type}"
+    assert (
+        result["type"] == expected_type
+    ), f"score={score}: got {result['type']}, expected {expected_type}"
     if expected_priority:
-        assert result.get("priority") == expected_priority, \
-            f"score={score}: priority mismatch"
+        assert (
+            result.get("priority") == expected_priority
+        ), f"score={score}: priority mismatch"
 
 
 # =============================================================================
 # SECTION 2 — Unit tests for calculate_intervention_priority
 # =============================================================================
 
-@pytest.mark.parametrize("score,expected_priority", [
-    (10,  "low"),
-    (44,  "low"),
-    (45,  "medium"),
-    (69,  "medium"),
-    (70,  "high"),
-    (84,  "high"),
-    (85,  "critical"),
-    (100, "critical"),
-])
+
+@pytest.mark.parametrize(
+    "score,expected_priority",
+    [
+        (10, "low"),
+        (44, "low"),
+        (45, "medium"),
+        (69, "medium"),
+        (70, "high"),
+        (84, "high"),
+        (85, "critical"),
+        (100, "critical"),
+    ],
+)
 def test_priority_scale_is_0_to_100(score, expected_priority):
     """
     Test that priority scale correctly uses 0-100 range.
     Validates fix M-1 (scale normalization) is correctly wired.
     """
     result = calculate_intervention_priority(score)
-    assert result == expected_priority, \
-        f"score={score}: got {result}, expected {expected_priority}"
+    assert (
+        result == expected_priority
+    ), f"score={score}: got {result}, expected {expected_priority}"
 
 
 # =============================================================================
 # SECTION 3 — Scale contract assertion tests
 # =============================================================================
+
 
 def test_decision_engine_rejects_normalised_score():
     """
@@ -101,6 +113,7 @@ def test_decision_engine_rejects_over_100():
 # SECTION 4 — Integration smoke test for the full call chain
 # =============================================================================
 
+
 def test_student_with_risk_65_gets_mentor_not_urgent():
     """
     Smoke test that the full service layer correctly routes risk_score=65.
@@ -115,10 +128,13 @@ def test_student_with_risk_65_gets_mentor_not_urgent():
         features={},
     )
 
-    assert result["type"] != "urgent_intervention", \
-        "risk_score=65 must NOT produce urgent_intervention — fix B-4 may not be wired correctly"
-    assert "mentor" in result["type"].lower() or result["type"] in ["academic_support", "mentor_outreach"], \
-        f"risk_score=65 should get mentor or academic support, got {result['type']}"
+    assert (
+        result["type"] != "urgent_intervention"
+    ), "risk_score=65 must NOT produce urgent_intervention — fix B-4 may not be wired correctly"
+    assert "mentor" in result["type"].lower() or result["type"] in [
+        "academic_support",
+        "mentor_outreach",
+    ], f"risk_score=65 should get mentor or academic support, got {result['type']}"
 
 
 def test_engagement_pattern_struggling_gets_academic_support():
@@ -131,8 +147,9 @@ def test_engagement_pattern_struggling_gets_academic_support():
         features={},
     )
 
-    assert result["type"] == "academic_support", \
-        f"Struggling students should get academic_support, got {result['type']}"
+    assert (
+        result["type"] == "academic_support"
+    ), f"Struggling students should get academic_support, got {result['type']}"
 
 
 def test_ghost_student_gets_activation_outreach():
@@ -142,18 +159,24 @@ def test_ghost_student_gets_activation_outreach():
     result = get_intervention_recommendation(
         risk_score=50.0,
         engagement_pattern="on_track",
-        features={"requires_activation_outreach": True, "ghost_info": {"ghost_type": "never_logged_in"}},
+        features={
+            "requires_activation_outreach": True,
+            "ghost_info": {"ghost_type": "never_logged_in"},
+        },
     )
 
-    assert result["type"] == "activation_outreach", \
-        f"Ghost students should get activation_outreach, got {result['type']}"
-    assert result.get("priority") == "critical", \
-        "Activation outreach should be critical priority"
+    assert (
+        result["type"] == "activation_outreach"
+    ), f"Ghost students should get activation_outreach, got {result['type']}"
+    assert (
+        result.get("priority") == "critical"
+    ), "Activation outreach should be critical priority"
 
 
 # =============================================================================
 # SECTION 5 — Spike threshold tests
 # =============================================================================
+
 
 def test_spike_threshold_uses_0_to_100_scale():
     """
@@ -167,14 +190,14 @@ def test_spike_threshold_uses_0_to_100_scale():
     assert not should_trigger_intervention(
         current_risk_score=50.15,
         previous_risk_score=50.0,
-        days_since_last_intervention=3
+        days_since_last_intervention=3,
     ), "Delta of 0.15 should NOT trigger intervention (below threshold)"
 
     # Large delta (15) SHOULD trigger even within cooldown
     assert should_trigger_intervention(
         current_risk_score=65.0,
         previous_risk_score=50.0,
-        days_since_last_intervention=3
+        days_since_last_intervention=3,
     ), "Delta of 15 SHOULD trigger intervention (significant spike)"
 
 
@@ -206,18 +229,19 @@ def test_spike_respects_cooldown():
 # Edge case tests
 # =============================================================================
 
+
 def test_nan_inf_rejection():
     """
     Test that NaN and Inf values are rejected.
     """
 
     # NaN should be handled (current implementation uses 50.0 as default)
-    result = get_intervention_recommendation(float('nan'))
+    result = get_intervention_recommendation(float("nan"))
     assert result["type"] is not None  # Should return some valid recommendation
 
     # Inf should raise assertion error
     with pytest.raises(AssertionError):
-        get_intervention_recommendation(float('inf'))
+        get_intervention_recommendation(float("inf"))
 
 
 def test_boundary_scores():

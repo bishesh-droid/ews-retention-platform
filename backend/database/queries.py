@@ -19,6 +19,7 @@ def get_student_by_id(db: Session, student_id: str):
         Student model instance or None if not found
     """
     from backend.database.models.student import Student
+
     return db.query(Student).filter(Student.id == student_id).first()
 
 
@@ -34,6 +35,7 @@ def get_students_by_ids(db: Session, student_ids: list[str]):
         List of Student model instances
     """
     from backend.database.models.student import Student
+
     return db.query(Student).filter(Student.id.in_(student_ids)).all()
 
 
@@ -50,6 +52,7 @@ def get_all_students(db: Session, skip: int = 0, limit: int = 100):
         List of Student model instances
     """
     from backend.database.models.student import Student
+
     return db.query(Student).offset(skip).limit(limit).all()
 
 
@@ -64,6 +67,7 @@ def get_student_count(db: Session) -> int:
         Total number of students
     """
     from backend.database.models.student import Student
+
     return db.query(Student).count()
 
 
@@ -79,6 +83,7 @@ def get_prediction_by_student_id(db: Session, student_id: str):
         Prediction model instance or None if not found
     """
     from backend.database.models.prediction import Prediction
+
     return (
         db.query(Prediction)
         .filter(Prediction.student_id == student_id)
@@ -100,6 +105,7 @@ def get_all_predictions(db: Session, skip: int = 0, limit: int = 500):
         List of Prediction model instances
     """
     from backend.database.models.prediction import Prediction
+
     return (
         db.query(Prediction)
         .order_by(Prediction.prediction_timestamp.desc(), Prediction.id.desc())
@@ -122,6 +128,11 @@ def get_interventions_by_student_id(db: Session, student_id: str, limit: int = 1
         List of Intervention model instances
     """
     from backend.database.models.intervention import Intervention
-    return db.query(Intervention).filter(
-        Intervention.student_id == student_id
-    ).order_by(Intervention.date.desc()).limit(limit).all()
+
+    return (
+        db.query(Intervention)
+        .filter(Intervention.student_id == student_id)
+        .order_by(Intervention.date.desc())
+        .limit(limit)
+        .all()
+    )

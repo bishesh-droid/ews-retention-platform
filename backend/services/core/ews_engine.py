@@ -140,7 +140,7 @@ def batch_predict(
     for s in students:
         is_new = bool(s.get("is_new_student", False))
         if s.get("old_new_student") is not None:
-            is_new = (str(s.get("old_new_student")).lower() == "new")
+            is_new = str(s.get("old_new_student")).lower() == "new"
         wn = s.get("week_number")
         pred = calculate_student_risk(
             enrollments=s.get("enrollments", []),
@@ -168,7 +168,8 @@ def get_signal_summary(
             if s.get("graded_quiz_score") is not None
             else None
         ),
-        "engagement": lambda s: float(s.get("content_completion_score", 0) or 0) / 100.0,
+        "engagement": lambda s: float(s.get("content_completion_score", 0) or 0)
+        / 100.0,
         "consistency": lambda s: (
             (float(s["exam_attendance_rate"]) / 100.0)
             if s.get("exam_attendance_rate") is not None
@@ -188,8 +189,7 @@ def get_signal_summary(
 
     if signal_category not in signal_map:
         raise ValueError(
-            "Invalid signal category. Must be one of: "
-            f"{list(signal_map.keys())}"
+            "Invalid signal category. Must be one of: " f"{list(signal_map.keys())}"
         )
 
     signal_values = [signal_map[signal_category](s) for s in students]

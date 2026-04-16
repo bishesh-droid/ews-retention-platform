@@ -54,13 +54,13 @@ class TestFeatureEngineering:
     def test_attendance_score_with_negative_absence(self):
         """Test attendance calculation with negative absence rates."""
         student_data = {
-            'absrate1': -5.0,
-            'absrate2': -3.0,
-            'absrate3': 2.0,
-            'absrate4': 5.0,
-            'absrate5': 10.0,
-            'absrate6': 15.0,
-            'absrate7': 8.0
+            "absrate1": -5.0,
+            "absrate2": -3.0,
+            "absrate3": 2.0,
+            "absrate4": 5.0,
+            "absrate5": 10.0,
+            "absrate6": 15.0,
+            "absrate7": 8.0,
         }
 
         score = FeatureEngineer.calculate_attendance_score(student_data)
@@ -72,7 +72,7 @@ class TestFeatureEngineering:
         # Set all quarterly scores to 3.0 (average)
         for year in range(1, 8):
             for quarter in range(1, 5):
-                student_data[f'q{quarter}mpa{year}'] = 3.0
+                student_data[f"q{quarter}mpa{year}"] = 3.0
 
         score = FeatureEngineer.calculate_academic_score(student_data)
         assert 0 <= score <= 100
@@ -84,24 +84,24 @@ class TestFeatureEngineering:
 
         # Perfect attendance (no absences)
         for year in range(1, 8):
-            student_data[f'absrate{year}'] = 0.0
-            student_data[f'nsusp{year}'] = 0.0
-            student_data[f'mobility{year}'] = 0.0
+            student_data[f"absrate{year}"] = 0.0
+            student_data[f"nsusp{year}"] = 0.0
+            student_data[f"mobility{year}"] = 0.0
             for quarter in range(1, 5):
-                student_data[f'q{quarter}mpa{year}'] = 5.0  # Perfect GPA
+                student_data[f"q{quarter}mpa{year}"] = 5.0  # Perfect GPA
 
-        student_data['nograd'] = 0  # Graduated
+        student_data["nograd"] = 0  # Graduated
 
         features = FeatureEngineer.calculate_all_features(student_data)
 
         # Perfect student should have high scores
         # Note: Due to CSV containing negative values, zero absences/suspensions
         # get normalized to mid-range (~60%), not 100%
-        assert features['attendance_score'] > 50
-        assert features['academic_score'] > 80  # MPA=5.0 is above normal max
-        assert features['behavioral_score'] > 50  # Zero suspensions = mid-range
-        assert features['stability_score'] > 50  # Zero mobility = mid-range
-        assert features['graduated'] is True
+        assert features["attendance_score"] > 50
+        assert features["academic_score"] > 80  # MPA=5.0 is above normal max
+        assert features["behavioral_score"] > 50  # Zero suspensions = mid-range
+        assert features["stability_score"] > 50  # Zero mobility = mid-range
+        assert features["graduated"] is True
 
     def test_worst_case_student(self):
         """Test student with worst possible scores."""
@@ -109,40 +109,40 @@ class TestFeatureEngineering:
 
         # Worst scores
         for year in range(1, 8):
-            student_data[f'absrate{year}'] = 40.0  # High absence
-            student_data[f'nsusp{year}'] = 1.5  # Many suspensions
-            student_data[f'mobility{year}'] = 4.0  # High mobility
+            student_data[f"absrate{year}"] = 40.0  # High absence
+            student_data[f"nsusp{year}"] = 1.5  # Many suspensions
+            student_data[f"mobility{year}"] = 4.0  # High mobility
             for quarter in range(1, 5):
-                student_data[f'q{quarter}mpa{year}'] = 0.0  # Failing
+                student_data[f"q{quarter}mpa{year}"] = 0.0  # Failing
 
-        student_data['nograd'] = 1  # Did not graduate
+        student_data["nograd"] = 1  # Did not graduate
 
         features = FeatureEngineer.calculate_all_features(student_data)
 
         # All scores should still be valid [0-100]
-        assert 0 <= features['attendance_score'] <= 100
-        assert 0 <= features['academic_score'] <= 100
-        assert 0 <= features['behavioral_score'] <= 100
-        assert 0 <= features['stability_score'] <= 100
-        assert features['graduated'] is False
+        assert 0 <= features["attendance_score"] <= 100
+        assert 0 <= features["academic_score"] <= 100
+        assert 0 <= features["behavioral_score"] <= 100
+        assert 0 <= features["stability_score"] <= 100
+        assert features["graduated"] is False
 
     def test_missing_data_handling(self):
         """Test handling of missing data."""
         student_data = {
-            'absrate1': 5.0,
+            "absrate1": 5.0,
             # Missing absrate2-7
-            'q1mpa1': 2.5,
+            "q1mpa1": 2.5,
             # Missing other quarters
-            'nograd': 0
+            "nograd": 0,
         }
 
         features = FeatureEngineer.calculate_all_features(student_data)
 
         # Should return valid scores even with missing data
-        assert 0 <= features['attendance_score'] <= 100
-        assert 0 <= features['academic_score'] <= 100
-        assert 0 <= features['behavioral_score'] <= 100
-        assert 0 <= features['stability_score'] <= 100
+        assert 0 <= features["attendance_score"] <= 100
+        assert 0 <= features["academic_score"] <= 100
+        assert 0 <= features["behavioral_score"] <= 100
+        assert 0 <= features["stability_score"] <= 100
 
 
 class TestRiskScoring:
@@ -152,10 +152,10 @@ class TestRiskScoring:
         """Ensure risk scores are always 0-100."""
         # Normal features
         features = {
-            'attendance_score': 50.0,
-            'academic_score': 50.0,
-            'behavioral_score': 50.0,
-            'stability_score': 50.0
+            "attendance_score": 50.0,
+            "academic_score": 50.0,
+            "behavioral_score": 50.0,
+            "stability_score": 50.0,
         }
 
         risk = RiskScorer.calculate_risk_score(features)
@@ -165,10 +165,10 @@ class TestRiskScoring:
     def test_perfect_student_low_risk(self):
         """Perfect student should have low risk."""
         features = {
-            'attendance_score': 100.0,
-            'academic_score': 100.0,
-            'behavioral_score': 100.0,
-            'stability_score': 100.0
+            "attendance_score": 100.0,
+            "academic_score": 100.0,
+            "behavioral_score": 100.0,
+            "stability_score": 100.0,
         }
 
         risk = RiskScorer.calculate_risk_score(features)
@@ -178,10 +178,10 @@ class TestRiskScoring:
     def test_failing_student_high_risk(self):
         """Failing student should have high risk."""
         features = {
-            'attendance_score': 0.0,
-            'academic_score': 0.0,
-            'behavioral_score': 0.0,
-            'stability_score': 0.0
+            "attendance_score": 0.0,
+            "academic_score": 0.0,
+            "behavioral_score": 0.0,
+            "stability_score": 0.0,
         }
 
         risk = RiskScorer.calculate_risk_score(features)
@@ -195,16 +195,16 @@ class TestRiskScoring:
         assert RiskScorer.validate_risk_score(100.0) is True
         assert RiskScorer.validate_risk_score(-1.0) is False
         assert RiskScorer.validate_risk_score(101.0) is False
-        assert RiskScorer.validate_risk_score(float('nan')) is False
+        assert RiskScorer.validate_risk_score(float("nan")) is False
 
     def test_dominant_risk_factor(self):
         """Test identification of dominant risk factor."""
         # Academic is worst
         features = {
-            'attendance_score': 80.0,
-            'academic_score': 20.0,  # Worst
-            'behavioral_score': 70.0,
-            'stability_score': 90.0
+            "attendance_score": 80.0,
+            "academic_score": 20.0,  # Worst
+            "behavioral_score": 70.0,
+            "stability_score": 90.0,
         }
 
         dominant = RiskScorer.get_dominant_risk_factor(features)
@@ -270,7 +270,9 @@ class TestProductionLMSFormula:
         score = RiskScorer.calculate_risk_score(features)
         category = RiskScorer.get_risk_category(score)
 
-        assert category == "high", f"All low features should be high risk, got {category} with score {score}"
+        assert (
+            category == "high"
+        ), f"All low features should be high risk, got {category} with score {score}"
         assert score >= 70.0, f"High risk should have score >= 70, got {score}"
 
     def test_low_risk_profile_all_features_high(self):
@@ -287,13 +289,15 @@ class TestProductionLMSFormula:
         score = RiskScorer.calculate_risk_score(features)
         category = RiskScorer.get_risk_category(score)
 
-        assert category == "low", f"All high features should be low risk, got {category} with score {score}"
+        assert (
+            category == "low"
+        ), f"All high features should be low risk, got {category} with score {score}"
         assert score <= 40.0, f"Low risk should have score <= 40, got {score}"
 
     def test_nan_input_does_not_crash(self):
         """TEST-4 + ML-3: NaN input should not crash, return a valid score."""
         features = self._create_lms_features(
-            content_completion_score=float('nan'),  # One NaN feature
+            content_completion_score=float("nan"),  # One NaN feature
             login_consistency_score=75.0,
             quiz_engagement_score=80.0,
             assignment_score=65.0,
@@ -307,7 +311,7 @@ class TestProductionLMSFormula:
         # Should return a valid score in range
         assert isinstance(score, float), f"Score should be float, got {type(score)}"
         assert 0.0 <= score <= 100.0, f"Score {score} out of valid range [0, 100]"
-        assert not __import__('math').isnan(score), "Score should not be NaN"
+        assert not __import__("math").isnan(score), "Score should not be NaN"
 
     def test_missing_features_handled_gracefully(self):
         """Missing some features should still produce a valid score."""

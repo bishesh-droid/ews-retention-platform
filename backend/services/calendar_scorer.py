@@ -110,13 +110,17 @@ def _is_exam_component(name: str) -> bool:
 def _infer_program_for_course(course_name: str) -> Optional[str]:
     if not course_name:
         return None
-    programs = {prog for (prog, cname) in COURSE_CALENDAR.keys() if cname == course_name}
+    programs = {
+        prog for (prog, cname) in COURSE_CALENDAR.keys() if cname == course_name
+    }
     if len(programs) == 1:
         return next(iter(programs))
     return None
 
 
-def get_expected_completion_pct(program: str, course_name: str, current_week: int) -> float | None:
+def get_expected_completion_pct(
+    program: str, course_name: str, current_week: int
+) -> float | None:
     """
     Baseline completion (0–1) expected by `current_week`, excluding exams.
     Returns None if course not found (was returning 0.0 which masked underperformance).
@@ -165,7 +169,9 @@ def get_overdue_components(
                     "weeks_overdue": cw - due_week,
                 }
             )
-    overdue.sort(key=lambda x: (x["weeks_overdue"], x["due_week"], x["component"]), reverse=True)
+    overdue.sort(
+        key=lambda x: (x["weeks_overdue"], x["due_week"], x["component"]), reverse=True
+    )
     return overdue
 
 
@@ -205,13 +211,15 @@ def calculate_calendar_adjusted_risk(
     current_week: int,
 ) -> Dict:
     per_course = student_features.get("per_course_breakdown") or []
-    course_names = [c.get("course_name") for c in per_course if c and c.get("course_name")]
+    course_names = [
+        c.get("course_name") for c in per_course if c and c.get("course_name")
+    ]
 
     # Map submissions by course: we only have component_type/number in DB output;
     # keep a best-effort component-name mapping for the schedule.
     submitted_by_course: Dict[str, List[str]] = {}
     pct_by_course: Dict[str, List[float]] = {}
-    for g in (graded_components or []):
+    for g in graded_components or []:
         cname = str(g.get("course_name") or "").strip()
         if not cname:
             continue
@@ -242,22 +250,28 @@ def calculate_calendar_adjusted_risk(
             overdue = []
         else:
             exp = get_expected_completion_pct(prog, str(cname), current_week)
-            overdue = get_overdue_components(
-                prog,
-                str(cname),
-                current_week,
-                submitted_by_course.get(str(cname), []),
-            ) if exp is not None else []
+            overdue = (
+                get_overdue_components(
+                    prog,
+                    str(cname),
+                    current_week,
+                    submitted_by_course.get(str(cname), []),
+                )
+                if exp is not None
+                else []
+            )
 
         # Skip courses where expected_pct is None — no calendar data, don't distort risk
         if exp is None:
             continue
 
-        overdue_all.extend(
-            [{"course_name": str(cname), **o} for o in overdue]
-        )
+        overdue_all.extend([{"course_name": str(cname), **o} for o in overdue])
 
-        actual = mean(pct_by_course.get(str(cname), [])) if pct_by_course.get(str(cname)) else 0.0
+        actual = (
+            mean(pct_by_course.get(str(cname), []))
+            if pct_by_course.get(str(cname))
+            else 0.0
+        )
         deficit = max(0.0, float(exp) - (float(actual) / 100.0))
 
         expected_pcts.append(float(exp))
@@ -265,7 +279,9 @@ def calculate_calendar_adjusted_risk(
         deficits.append(deficit)
 
     mean_deficit = mean(deficits) if deficits else 0.0
-    calendar_risk_score = min(100.0, (mean_deficit / 0.30) * 100.0) if mean_deficit > 0 else 0.0
+    calendar_risk_score = (
+        min(100.0, (mean_deficit / 0.30) * 100.0) if mean_deficit > 0 else 0.0
+    )
 
     return {
         "calendar_risk_score": round(float(calendar_risk_score), 2),

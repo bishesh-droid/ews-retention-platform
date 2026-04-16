@@ -26,7 +26,13 @@ from sqlalchemy.orm import Session
 from sqlalchemy.ext.asyncio import AsyncSession
 from redis.asyncio import Redis as AsyncRedis
 
-from backend.config import ALGORITHM, SECRET_KEY, EWS_SERVICE_NAME, EWS_TOKEN_AUDIENCE, REDIS_URL
+from backend.config import (
+    ALGORITHM,
+    SECRET_KEY,
+    EWS_SERVICE_NAME,
+    EWS_TOKEN_AUDIENCE,
+    REDIS_URL,
+)
 from backend.database.connection import get_db, get_db_async
 from backend.database.models.user import User
 from backend.database.models.student import Student
@@ -57,6 +63,7 @@ reusable_oauth2 = OAuth2PasswordBearer(tokenUrl="/api/v1/auth/login", auto_error
 # ---------------------------------------------------------------------------
 # Authentication
 # ---------------------------------------------------------------------------
+
 
 def get_current_user(
     db: Session = Depends(get_db),
@@ -94,7 +101,9 @@ def get_current_user(
 
         # Check if token has been revoked (SEC-4)
         if token_jti is not None:
-            revoked = db.query(RevokedToken).filter(RevokedToken.jti == token_jti).first()
+            revoked = (
+                db.query(RevokedToken).filter(RevokedToken.jti == token_jti).first()
+            )
             if revoked is not None:
                 raise HTTPException(
                     status_code=status.HTTP_401_UNAUTHORIZED,
@@ -134,7 +143,9 @@ async def _get_async_redis_client() -> Optional[AsyncRedis]:
         return None
 
 
-async def is_token_revoked(jti: str, redis_client: Optional[AsyncRedis], db: AsyncSession) -> bool:
+async def is_token_revoked(
+    jti: str, redis_client: Optional[AsyncRedis], db: AsyncSession
+) -> bool:
     """
     Check if a token is revoked using Redis first (O(1)), then fallback to DB.
 
@@ -235,6 +246,7 @@ async def get_current_user_async(
 # ---------------------------------------------------------------------------
 # Authorization
 # ---------------------------------------------------------------------------
+
 
 def require_role(required_roles: List[str]):
     """

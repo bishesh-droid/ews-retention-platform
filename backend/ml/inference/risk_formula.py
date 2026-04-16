@@ -33,7 +33,10 @@ IMPORTANT:
 from typing import Any, Dict, List
 
 from backend.config import FEATURE_WEIGHTS
-from backend.ml.utils.validation_utils import assert_risk_score_0_100, assert_signal_score_0_1
+from backend.ml.utils.validation_utils import (
+    assert_risk_score_0_100,
+    assert_signal_score_0_1,
+)
 
 SIGNAL_TO_FEATURE = {
     "academic": ["content_completion", "quiz_engagement", "assignment"],
@@ -177,7 +180,9 @@ def get_risk_contribution_breakdown(signals: Dict[str, float]) -> List[Dict]:
     # Calculate percentage contribution
     if total_contribution > 0:
         for item in breakdown:
-            item["percentage"] = round((item["contribution"] / total_contribution) * 100, 1)
+            item["percentage"] = round(
+                (item["contribution"] / total_contribution) * 100, 1
+            )
 
     # Sort by contribution descending
     breakdown.sort(key=lambda x: x["contribution"], reverse=True)
@@ -210,6 +215,7 @@ def explain_risk_score(risk_score: float, signals: Dict[str, float]) -> Dict:
     # Heuristic: if value is in (0, 1] range, it's likely a probability, not a percentage
     if 0.0 < risk_score <= 1.0:
         import logging
+
         logger = logging.getLogger(__name__)
         logger.warning(
             f"explain_risk_score: Auto-converting risk_score from 0-1 scale "
@@ -310,7 +316,9 @@ def simulate_what_if(
         "current_risk": round(current_risk, 3),  # 0-100 scale
         "simulated_risk": round(simulated_risk, 3),  # 0-100 scale
         "risk_change": round(simulated_risk - current_risk, 3),  # 0-100 scale
-        "risk_change_percentage": round((simulated_risk - current_risk), 1),  # Already 0-100
+        "risk_change_percentage": round(
+            (simulated_risk - current_risk), 1
+        ),  # Already 0-100
         "current_category": current_explanation["risk_category"],
         "simulated_category": simulated_explanation["risk_category"],
         "category_changed": current_explanation["risk_category"]

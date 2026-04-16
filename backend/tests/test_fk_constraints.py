@@ -22,7 +22,7 @@ from sqlalchemy.exc import IntegrityError
 # Skip all tests in this file if not running in PostgreSQL mode
 pytestmark = pytest.mark.skipif(
     os.getenv("TEST_MODE") != "postgres",
-    reason="PostgreSQL FK constraint tests require TEST_MODE=postgres environment variable"
+    reason="PostgreSQL FK constraint tests require TEST_MODE=postgres environment variable",
 )
 
 # Import fixtures from conftest_postgres
@@ -32,20 +32,20 @@ pytest_plugins = ["backend.tests.conftest_postgres"]
 class TestForeignKeyConstraints:
     """
     FK-1: Foreign Key Constraint Validation Tests
-    
+
     Tests proper enforcement of referential integrity constraints.
     """
 
     def test_enrollment_student_fk_constraint(self, postgres_session):
         """
         FK-1.1: Enrollment.student_id FK must reference valid Student.
-        
+
         Attempting to insert enrollment with non-existent student_id
         should raise IntegrityError.
         """
         from backend.database.models.enrollment import Enrollment
         from backend.database.models.course import Course
-        
+
         # Create a course first (need valid course_id too)
         course = Course(
             id="CS101",
@@ -56,7 +56,7 @@ class TestForeignKeyConstraints:
         )
         postgres_session.add(course)
         postgres_session.commit()
-        
+
         # Attempt to create enrollment with non-existent student
         invalid_enrollment = Enrollment(
             student_id="nonexistent_student@test.com",  # Invalid student
@@ -64,28 +64,31 @@ class TestForeignKeyConstraints:
             content_completed=10,
             content_required=20,
         )
-        
+
         postgres_session.add(invalid_enrollment)
-        
+
         # Should raise IntegrityError due to FK violation
         with pytest.raises(IntegrityError) as exc_info:
             postgres_session.commit()
-        
-        assert "foreign key" in str(exc_info.value).lower() or "violation" in str(exc_info.value).lower()
-        
+
+        assert (
+            "foreign key" in str(exc_info.value).lower()
+            or "violation" in str(exc_info.value).lower()
+        )
+
         # Rollback to clean state
         postgres_session.rollback()
 
     def test_enrollment_course_fk_constraint(self, postgres_session):
         """
         FK-1.2: Enrollment.course_id FK must reference valid Course.
-        
+
         Attempting to insert enrollment with non-existent course_id
         should raise IntegrityError.
         """
         from backend.database.models.enrollment import Enrollment
         from backend.database.models.student import Student
-        
+
         # Create a student
         student = Student(
             id="test_student_001",
@@ -98,7 +101,7 @@ class TestForeignKeyConstraints:
         )
         postgres_session.add(student)
         postgres_session.commit()
-        
+
         # Attempt to create enrollment with non-existent course
         invalid_enrollment = Enrollment(
             student_id=student.id,
@@ -106,27 +109,30 @@ class TestForeignKeyConstraints:
             content_completed=10,
             content_required=20,
         )
-        
+
         postgres_session.add(invalid_enrollment)
-        
+
         # Should raise IntegrityError due to FK violation
         with pytest.raises(IntegrityError) as exc_info:
             postgres_session.commit()
-        
-        assert "foreign key" in str(exc_info.value).lower() or "violation" in str(exc_info.value).lower()
-        
+
+        assert (
+            "foreign key" in str(exc_info.value).lower()
+            or "violation" in str(exc_info.value).lower()
+        )
+
         postgres_session.rollback()
 
     def test_valid_enrollment_with_existing_student_and_course(self, postgres_session):
         """
         FK-1.3: Valid enrollment should succeed when both FKs exist.
-        
+
         This is the happy path - valid student_id and course_id.
         """
         from backend.database.models.enrollment import Enrollment
         from backend.database.models.student import Student
         from backend.database.models.course import Course
-        
+
         # Create student and course
         student = Student(
             id="valid_student_001",
@@ -144,10 +150,10 @@ class TestForeignKeyConstraints:
             credits=4,
             is_active=True,
         )
-        
+
         postgres_session.add_all([student, course])
         postgres_session.commit()
-        
+
         # Create valid enrollment
         enrollment = Enrollment(
             student_id=student.id,
@@ -155,26 +161,28 @@ class TestForeignKeyConstraints:
             content_completed=15,
             content_required=20,
         )
-        
+
         postgres_session.add(enrollment)
         postgres_session.commit()
-        
+
         # Verify enrollment was created
-        result = postgres_session.query(Enrollment).filter(
-            Enrollment.student_id == student.id
-        ).first()
-        
+        result = (
+            postgres_session.query(Enrollment)
+            .filter(Enrollment.student_id == student.id)
+            .first()
+        )
+
         assert result is not None
         assert result.course_id == course.id
 
     def test_prediction_student_fk_constraint(self, postgres_session):
         """
         FK-1.4: Prediction.student_id FK must reference valid Student.
-        
+
         Predictions are linked to students via FK constraint.
         """
         from backend.database.models.prediction import Prediction
-        
+
         # Attempt to create prediction with non-existent student
         invalid_prediction = Prediction(
             student_id="nonexistent@example.com",
@@ -182,23 +190,23 @@ class TestForeignKeyConstraints:
             risk_level="medium",
             features_version="v1.0",
         )
-        
+
         postgres_session.add(invalid_prediction)
-        
+
         # Should raise IntegrityError
         with pytest.raises(IntegrityError):
             postgres_session.commit()
-        
+
         postgres_session.rollback()
 
     def test_graded_component_student_fk_constraint(self, postgres_session):
         """
         FK-1.5: GradedComponent.student_id FK must reference valid Student.
-        
+
         Graded components are linked to students via FK constraint.
         """
         from backend.database.models.academic import GradedComponent
-        
+
         # Attempt to create graded component with non-existent student
         invalid_component = GradedComponent(
             student_id="nonexistent@example.com",
@@ -207,23 +215,23 @@ class TestForeignKeyConstraints:
             score=85.0,
             max_score=100.0,
         )
-        
+
         postgres_session.add(invalid_component)
-        
+
         # Should raise IntegrityError
         with pytest.raises(IntegrityError):
             postgres_session.commit()
-        
+
         postgres_session.rollback()
 
     def test_exam_record_student_fk_constraint(self, postgres_session):
         """
         FK-1.6: ExamRecord.student_id FK must reference valid Student.
-        
+
         Exam records are linked to students via FK constraint.
         """
         from backend.database.models.academic import ExamRecord
-        
+
         # Attempt to create exam record with non-existent student
         invalid_record = ExamRecord(
             student_id="nonexistent@example.com",
@@ -232,32 +240,32 @@ class TestForeignKeyConstraints:
             marks_obtained=85.0,
             marks_total=100.0,
         )
-        
+
         postgres_session.add(invalid_record)
-        
+
         # Should raise IntegrityError
         with pytest.raises(IntegrityError):
             postgres_session.commit()
-        
+
         postgres_session.rollback()
 
 
 class TestCascadeBehaviors:
     """
     FK-2: ON DELETE/UPDATE CASCADE Behavior Tests
-    
+
     Tests that configured cascade behaviors work correctly.
     """
 
     def test_prediction_cascade_delete_on_student_delete(self, postgres_session):
         """
         FK-2.1: Deleting student should cascade delete related predictions.
-        
+
         Predictions have ON DELETE CASCADE on student_id.
         """
         from backend.database.models.prediction import Prediction
         from backend.database.models.student import Student
-        
+
         # Create student with prediction
         student = Student(
             id="cascade_test_student",
@@ -274,44 +282,48 @@ class TestCascadeBehaviors:
             risk_level="medium",
             features_version="v1.0",
         )
-        
+
         postgres_session.add_all([student, prediction])
         postgres_session.commit()
-        
+
         # Verify prediction exists
-        pred_count_before = postgres_session.query(Prediction).filter(
-            Prediction.student_id == student.id
-        ).count()
+        pred_count_before = (
+            postgres_session.query(Prediction)
+            .filter(Prediction.student_id == student.id)
+            .count()
+        )
         assert pred_count_before == 1
-        
+
         # Delete student - should cascade delete prediction
         postgres_session.delete(student)
         postgres_session.commit()
-        
+
         # Verify prediction was cascade deleted
-        pred_count_after = postgres_session.query(Prediction).filter(
-            Prediction.student_id == student.id
-        ).count()
+        pred_count_after = (
+            postgres_session.query(Prediction)
+            .filter(Prediction.student_id == student.id)
+            .count()
+        )
         assert pred_count_after == 0
 
 
 class TestReferentialIntegrity:
     """
     FK-3: Referential Integrity Constraint Tests
-    
+
     Tests that ensure data integrity in the database.
     """
 
     def test_cannot_delete_referenced_course_with_enrollments(self, postgres_session):
         """
         FK-3.1: Cannot delete course that has enrollments.
-        
+
         Without ON DELETE CASCADE, deletion should fail if FK references exist.
         """
         from backend.database.models.enrollment import Enrollment
         from backend.database.models.student import Student
         from backend.database.models.course import Course
-        
+
         # Create student, course, and enrollment
         student = Student(
             id="integrity_test_student",
@@ -335,27 +347,27 @@ class TestReferentialIntegrity:
             content_completed=10,
             content_required=20,
         )
-        
+
         postgres_session.add_all([student, course, enrollment])
         postgres_session.commit()
-        
+
         # Attempt to delete course with existing enrollment
         postgres_session.delete(course)
-        
+
         # Should raise IntegrityError due to FK reference
         with pytest.raises(IntegrityError):
             postgres_session.commit()
-        
+
         postgres_session.rollback()
 
     def test_database_tables_have_expected_fk_constraints(self, postgres_engine):
         """
         FK-3.2: Verify expected tables have FK constraints defined.
-        
+
         Uses SQLAlchemy inspector to verify schema.
         """
         inspector = inspect(postgres_engine)
-        
+
         # Tables that should have FK constraints
         expected_fk_tables = [
             "enrollments",
@@ -365,7 +377,7 @@ class TestReferentialIntegrity:
             "interventions",
             "goals",
         ]
-        
+
         for table_name in expected_fk_tables:
             fks = inspector.get_foreign_keys(table_name)
             assert len(fks) > 0, f"Table {table_name} should have FK constraints"
@@ -374,19 +386,19 @@ class TestReferentialIntegrity:
 class TestTransactionIsolation:
     """
     FK-4: Transaction Isolation Tests
-    
+
     Tests proper transaction behavior with FK constraints.
     """
 
     def test_fk_violation_allows_rollback(self, postgres_session):
         """
         FK-4.1: FK violation should allow transaction rollback.
-        
+
         After rollback, database should be in consistent state.
         """
         from backend.database.models.enrollment import Enrollment
         from backend.database.models.student import Student
-        
+
         # Create a valid student
         student = Student(
             id="rollback_test_student",
@@ -399,7 +411,7 @@ class TestTransactionIsolation:
         )
         postgres_session.add(student)
         postgres_session.commit()
-        
+
         # Attempt invalid operation
         invalid_enrollment = Enrollment(
             student_id="nonexistent@test.com",
@@ -408,17 +420,17 @@ class TestTransactionIsolation:
             content_required=20,
         )
         postgres_session.add(invalid_enrollment)
-        
+
         try:
             postgres_session.commit()
         except IntegrityError:
             postgres_session.rollback()
-        
+
         # Verify valid student still exists after rollback
-        result = postgres_session.query(Student).filter(
-            Student.id == student.id
-        ).first()
-        
+        result = (
+            postgres_session.query(Student).filter(Student.id == student.id).first()
+        )
+
         assert result is not None
         assert result.first_name == "Rollback"
 

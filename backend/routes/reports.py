@@ -66,7 +66,12 @@ REPORT_TEMPLATES: List[Dict[str, Any]] = [
         "formats": ["PDF"],
         "audience": ["Executive", "Faculty"],
         "estimated_time": "~45s",
-        "sections": ["Executive Summary", "Risk Trend", "Cohort Breakdown", "Top At-Risk List"],
+        "sections": [
+            "Executive Summary",
+            "Risk Trend",
+            "Cohort Breakdown",
+            "Top At-Risk List",
+        ],
     },
     {
         "id": 2,
@@ -106,7 +111,9 @@ class ReportGenerateRequest(BaseModel):
 
 @router.get("/templates", response_model=APIResponse)
 def list_report_templates(
-    current_user: User = Depends(deps.require_role([Role.RETENTION_TEAM, Role.ADMIN, Role.FACULTY])),
+    current_user: User = Depends(
+        deps.require_role([Role.RETENTION_TEAM, Role.ADMIN, Role.FACULTY])
+    ),
 ):
     """
     List available downloadable report templates.
@@ -117,7 +124,9 @@ def list_report_templates(
 @router.get("/generated", response_model=APIResponse)
 def list_generated_reports(
     db: Session = Depends(deps.get_db),
-    current_user: User = Depends(deps.require_role([Role.RETENTION_TEAM, Role.ADMIN, Role.FACULTY])),
+    current_user: User = Depends(
+        deps.require_role([Role.RETENTION_TEAM, Role.ADMIN, Role.FACULTY])
+    ),
     limit: int = Query(50, ge=1, le=500),
 ):
     """
@@ -154,7 +163,9 @@ def list_generated_reports(
 def generate_report(
     req: ReportGenerateRequest,
     db: Session = Depends(deps.get_db),
-    current_user: User = Depends(deps.require_role([Role.RETENTION_TEAM, Role.ADMIN, Role.FACULTY])),
+    current_user: User = Depends(
+        deps.require_role([Role.RETENTION_TEAM, Role.ADMIN, Role.FACULTY])
+    ),
 ):
     """
     Trigger report generation and return generated metadata.
@@ -171,12 +182,14 @@ def generate_report(
     if fmt not in template.get("formats", []):
         return error_response(
             "Unsupported format for template",
-            {"format": fmt, "supported": template.get("formats", [])}
+            {"format": fmt, "supported": template.get("formats", [])},
         )
 
     options = req.options or {}
     now = datetime.utcnow()
-    safe_name = "".join(ch if ch.isalnum() else "_" for ch in template["name"]).strip("_")
+    safe_name = "".join(ch if ch.isalnum() else "_" for ch in template["name"]).strip(
+        "_"
+    )
     ext = _ext_for_format(fmt)
     token = uuid.uuid4().hex[:10]
     file_name = f"{safe_name}_{now.strftime('%Y%m%d_%H%M%S')}_{token}.{ext}"
@@ -188,7 +201,9 @@ def generate_report(
 
     if req.template_id == 2:
         # High risk students
-        students = StudentService.get_all_students(db, skip=0, limit=200, sort_by="risk_score", order="desc")
+        students = StudentService.get_all_students(
+            db, skip=0, limit=200, sort_by="risk_score", order="desc"
+        )
         high = [s for s in students if float(s.get("risk_score") or 0) >= 70]
         rows = [
             {
@@ -205,7 +220,11 @@ def generate_report(
             rows = [{"note": "No high-risk students found for the selected criteria."}]
     elif req.template_id == 4:
         analytics = StudentService.get_analytics_data(db) or {}
-        dept_rows = analytics.get("department_summary", []) if isinstance(analytics, dict) else []
+        dept_rows = (
+            analytics.get("department_summary", [])
+            if isinstance(analytics, dict)
+            else []
+        )
         rows = [
             {
                 "department": d.get("department", "Unknown"),
@@ -283,13 +302,19 @@ def generate_report(
 def download_generated_report(
     report_id: int,
     db: Session = Depends(deps.get_db),
-    current_user: User = Depends(deps.require_role([Role.RETENTION_TEAM, Role.ADMIN, Role.FACULTY])),
+    current_user: User = Depends(
+        deps.require_role([Role.RETENTION_TEAM, Role.ADMIN, Role.FACULTY])
+    ),
 ):
     """
     Download a previously generated report file by audit log id.
     """
     _ensure_dirs()
-    audit = db.query(AuditLog).filter(AuditLog.id == report_id, AuditLog.action_type == "report_generated").first()
+    audit = (
+        db.query(AuditLog)
+        .filter(AuditLog.id == report_id, AuditLog.action_type == "report_generated")
+        .first()
+    )
     if not audit:
         return Response(status_code=404, content="Not found")
 
@@ -325,14 +350,18 @@ def download_generated_report(
 def export_students(
     format: str = Query("csv", enum=["csv", "excel", "pdf"]),
     db: Session = Depends(deps.get_db),
-    current_user: User = Depends(deps.require_role([Role.RETENTION_TEAM, Role.ADMIN]))
+    current_user: User = Depends(deps.require_role([Role.RETENTION_TEAM, Role.ADMIN])),
 ):
     """
     Export all students list in specified format.
     """
     students = db.query(Student).all()
     data = [
-        {"id": s.id, "name": f"{s.first_name} {s.last_name}", "department": s.parent_department_name}
+        {
+            "id": s.id,
+            "name": f"{s.first_name} {s.last_name}",
+            "department": s.parent_department_name,
+        }
         for s in students
     ]
 
@@ -369,14 +398,18 @@ def export_students(
 def export_risk_summary(
     format: str = Query("csv", enum=["csv", "excel", "pdf"]),
     db: Session = Depends(deps.get_db),
-    current_user: User = Depends(deps.require_role([Role.RETENTION_TEAM, Role.ADMIN]))
+    current_user: User = Depends(deps.require_role([Role.RETENTION_TEAM, Role.ADMIN])),
 ):
     """
     Export high-level risk summary.
     """
     predictions = db.query(Prediction).all()
     [
-        {"student_id": p.student_id, "risk_score": p.risk_score, "likelihood": p.retention_likelihood}
+        {
+            "student_id": p.student_id,
+            "risk_score": p.risk_score,
+            "likelihood": p.retention_likelihood,
+        }
         for p in predictions
     ]
 

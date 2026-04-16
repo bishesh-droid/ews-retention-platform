@@ -2,6 +2,7 @@
 Schema Management
 Type inference, schema locking, and validation
 """
+
 import json
 import re
 from pathlib import Path
@@ -15,6 +16,7 @@ import numpy as np
 
 class ColumnType(Enum):
     """Supported column types"""
+
     EMAIL = "EMAIL"
     PERCENTAGE = "PERCENTAGE"
     DATE = "DATE"
@@ -29,6 +31,7 @@ class ColumnType(Enum):
 @dataclass
 class ColumnConstraints:
     """Constraints for a column"""
+
     min_value: Optional[float] = None
     max_value: Optional[float] = None
     pattern: Optional[str] = None
@@ -42,6 +45,7 @@ class ColumnConstraints:
 @dataclass
 class ColumnDefinition:
     """Schema definition for a single column"""
+
     index: int
     name: str
     original_name: str
@@ -51,18 +55,19 @@ class ColumnDefinition:
 
     def to_dict(self) -> Dict:
         return {
-            'index': self.index,
-            'name': self.name,
-            'original_name': self.original_name,
-            'type': self.type.value,
-            'nullable': self.nullable,
-            'constraints': self.constraints.to_dict()
+            "index": self.index,
+            "name": self.name,
+            "original_name": self.original_name,
+            "type": self.type.value,
+            "nullable": self.nullable,
+            "constraints": self.constraints.to_dict(),
         }
 
 
 @dataclass
 class DataSchema:
     """Complete schema for a data file"""
+
     source_file: str
     sheet_name: Optional[str]
     schema_version: str
@@ -73,13 +78,13 @@ class DataSchema:
 
     def to_dict(self) -> Dict:
         return {
-            'source_file': self.source_file,
-            'sheet_name': self.sheet_name,
-            'schema_version': self.schema_version,
-            'inferred_at': self.inferred_at,
-            'total_columns': self.total_columns,
-            'total_rows_sampled': self.total_rows_sampled,
-            'columns': [col.to_dict() for col in self.columns]
+            "source_file": self.source_file,
+            "sheet_name": self.sheet_name,
+            "schema_version": self.schema_version,
+            "inferred_at": self.inferred_at,
+            "total_columns": self.total_columns,
+            "total_rows_sampled": self.total_rows_sampled,
+            "columns": [col.to_dict() for col in self.columns],
         }
 
     def save(self, schema_dir: str = "data/schemas"):
@@ -89,13 +94,15 @@ class DataSchema:
         filename = Path(self.source_file).stem
         schema_path = Path(schema_dir) / f"{filename}_schema.json"
 
-        with open(schema_path, 'w') as f:
+        with open(schema_path, "w") as f:
             json.dump(self.to_dict(), f, indent=2)
 
         return schema_path
 
     @classmethod
-    def load(cls, source_file: str, schema_dir: str = "data/schemas") -> Optional['DataSchema']:
+    def load(
+        cls, source_file: str, schema_dir: str = "data/schemas"
+    ) -> Optional["DataSchema"]:
         """Load schema from JSON file"""
         filename = Path(source_file).stem
         schema_path = Path(schema_dir) / f"{filename}_schema.json"
@@ -103,30 +110,32 @@ class DataSchema:
         if not schema_path.exists():
             return None
 
-        with open(schema_path, 'r') as f:
+        with open(schema_path, "r") as f:
             data = json.load(f)
 
         columns = []
-        for col_data in data['columns']:
-            col_type = ColumnType(col_data['type'])
-            constraints = ColumnConstraints(**col_data.get('constraints', {}))
-            columns.append(ColumnDefinition(
-                index=col_data['index'],
-                name=col_data['name'],
-                original_name=col_data['original_name'],
-                type=col_type,
-                nullable=col_data['nullable'],
-                constraints=constraints
-            ))
+        for col_data in data["columns"]:
+            col_type = ColumnType(col_data["type"])
+            constraints = ColumnConstraints(**col_data.get("constraints", {}))
+            columns.append(
+                ColumnDefinition(
+                    index=col_data["index"],
+                    name=col_data["name"],
+                    original_name=col_data["original_name"],
+                    type=col_type,
+                    nullable=col_data["nullable"],
+                    constraints=constraints,
+                )
+            )
 
         return cls(
-            source_file=data['source_file'],
-            sheet_name=data.get('sheet_name'),
-            schema_version=data['schema_version'],
-            inferred_at=data['inferred_at'],
-            total_columns=data['total_columns'],
-            total_rows_sampled=data['total_rows_sampled'],
-            columns=columns
+            source_file=data["source_file"],
+            sheet_name=data.get("sheet_name"),
+            schema_version=data["schema_version"],
+            inferred_at=data["inferred_at"],
+            total_columns=data["total_columns"],
+            total_rows_sampled=data["total_rows_sampled"],
+            columns=columns,
         )
 
 
@@ -135,9 +144,11 @@ class SchemaInferenceEngine:
 
     def __init__(self, sample_size: int = 1000):
         self.sample_size = sample_size
-        self.email_pattern = r'^[\w\.-]+@[\w\.-]+\.\w+$'
+        self.email_pattern = r"^[\w\.-]+@[\w\.-]+\.\w+$"
 
-    def infer_schema(self, df: pd.DataFrame, source_file: str, sheet_name: Optional[str] = None) -> DataSchema:
+    def infer_schema(
+        self, df: pd.DataFrame, source_file: str, sheet_name: Optional[str] = None
+    ) -> DataSchema:
         """
         Infer schema from DataFrame
 
@@ -164,14 +175,16 @@ class SchemaInferenceEngine:
             # Check nullability
             nullable = col_data.isnull().any()
 
-            columns.append(ColumnDefinition(
-                index=idx,
-                name=str(col_name),
-                original_name=str(col_name),
-                type=col_type,
-                nullable=nullable,
-                constraints=constraints
-            ))
+            columns.append(
+                ColumnDefinition(
+                    index=idx,
+                    name=str(col_name),
+                    original_name=str(col_name),
+                    type=col_type,
+                    nullable=nullable,
+                    constraints=constraints,
+                )
+            )
 
         return DataSchema(
             source_file=source_file,
@@ -180,10 +193,12 @@ class SchemaInferenceEngine:
             inferred_at=datetime.now().isoformat(),
             total_columns=len(columns),
             total_rows_sampled=sample_size,
-            columns=columns
+            columns=columns,
         )
 
-    def _infer_column_type(self, series: pd.Series, col_name: str) -> tuple[ColumnType, ColumnConstraints]:
+    def _infer_column_type(
+        self, series: pd.Series, col_name: str
+    ) -> tuple[ColumnType, ColumnConstraints]:
         """Infer type and constraints for a column"""
 
         # Remove nulls for type detection
@@ -198,16 +213,22 @@ class SchemaInferenceEngine:
 
         # Check for percentage
         if self._is_percentage_column(non_null, col_name):
-            return ColumnType.PERCENTAGE, ColumnConstraints(min_value=0.0, max_value=100.0)
+            return ColumnType.PERCENTAGE, ColumnConstraints(
+                min_value=0.0, max_value=100.0
+            )
 
         # Check for boolean
         if self._is_boolean_column(non_null):
-            return ColumnType.BOOLEAN, ColumnConstraints(allowed_values=['true', 'false'])
+            return ColumnType.BOOLEAN, ColumnConstraints(
+                allowed_values=["true", "false"]
+            )
 
         # Check for numeric BEFORE date to avoid numbers being parsed as timestamps
         if pd.api.types.is_numeric_dtype(non_null):
             # Integer vs float
-            if pd.api.types.is_integer_dtype(non_null) or all(non_null == non_null.astype(int)):
+            if pd.api.types.is_integer_dtype(non_null) or all(
+                non_null == non_null.astype(int)
+            ):
                 col_type = ColumnType.INTEGER
             else:
                 col_type = ColumnType.NUMERIC
@@ -218,8 +239,7 @@ class SchemaInferenceEngine:
             # Add 10% buffer
             buffer = (max_val - min_val) * 0.1
             return col_type, ColumnConstraints(
-                min_value=min_val - buffer,
-                max_value=max_val + buffer
+                min_value=min_val - buffer, max_value=max_val + buffer
             )
 
         # Check for date (string columns that might contain dates)
@@ -233,7 +253,9 @@ class SchemaInferenceEngine:
         unique_ratio = non_null.nunique() / len(non_null)
         if unique_ratio < 0.1 and non_null.nunique() < 50:
             allowed_values = [str(v) for v in non_null.unique()[:50]]
-            return ColumnType.CATEGORICAL, ColumnConstraints(allowed_values=allowed_values)
+            return ColumnType.CATEGORICAL, ColumnConstraints(
+                allowed_values=allowed_values
+            )
 
         # Default to string
         return ColumnType.STRING, ColumnConstraints()
@@ -252,13 +274,13 @@ class SchemaInferenceEngine:
         """Check if column contains percentages"""
 
         # Check column name
-        if any(kw in col_name.lower() for kw in ['percent', '%', 'pct', 'rate']):
+        if any(kw in col_name.lower() for kw in ["percent", "%", "pct", "rate"]):
             return True
 
         # Check for % symbols in string values
         if pd.api.types.is_string_dtype(series):
             sample = series.head(min(100, len(series))).astype(str)
-            has_percent = sample.str.contains('%').sum()
+            has_percent = sample.str.contains("%").sum()
             if has_percent / len(sample) > 0.5:
                 return True
 
@@ -268,7 +290,9 @@ class SchemaInferenceEngine:
             max_val = series.max()
 
             # 0-1 range or 0-100 range
-            if (0 <= min_val <= 1 and 0 <= max_val <= 1) or (0 <= min_val <= 100 and 0 <= max_val <= 100):
+            if (0 <= min_val <= 1 and 0 <= max_val <= 1) or (
+                0 <= min_val <= 100 and 0 <= max_val <= 100
+            ):
                 return True
 
         return False
@@ -279,7 +303,7 @@ class SchemaInferenceEngine:
         # Try pandas datetime parsing
         try:
             sample = series.head(min(100, len(series)))
-            parsed = pd.to_datetime(sample, errors='coerce')
+            parsed = pd.to_datetime(sample, errors="coerce")
             valid_ratio = parsed.notna().sum() / len(sample)
 
             if valid_ratio > 0.8:
@@ -298,7 +322,7 @@ class SchemaInferenceEngine:
             return True
 
         unique_values = set(str(v).lower() for v in series.unique())
-        bool_values = {'true', 'false', 't', 'f', 'yes', 'no', 'y', 'n', '1', '0'}
+        bool_values = {"true", "false", "t", "f", "yes", "no", "y", "n", "1", "0"}
 
         return unique_values.issubset(bool_values)
 
@@ -320,7 +344,9 @@ class SchemaValidator:
 
         # Column count check
         if len(row) != self.schema.total_columns:
-            errors.append(f"Column count mismatch: got {len(row)}, expected {self.schema.total_columns}")
+            errors.append(
+                f"Column count mismatch: got {len(row)}, expected {self.schema.total_columns}"
+            )
             return (False, errors)
 
         # Validate each cell
@@ -333,7 +359,9 @@ class SchemaValidator:
 
         return (len(errors) == 0, errors)
 
-    def validate_cell(self, value: Any, col_def: ColumnDefinition) -> tuple[bool, List[str]]:  # noqa: C901
+    def validate_cell(
+        self, value: Any, col_def: ColumnDefinition
+    ) -> tuple[bool, List[str]]:  # noqa: C901
         """Validate a single cell"""
         errors = []
 
@@ -345,7 +373,9 @@ class SchemaValidator:
 
         # Type-specific validation
         if col_def.type == ColumnType.EMAIL:
-            if col_def.constraints.pattern is not None and not re.match(col_def.constraints.pattern, str(value)):
+            if col_def.constraints.pattern is not None and not re.match(
+                col_def.constraints.pattern, str(value)
+            ):
                 errors.append(f"Invalid email format: '{value}'")
 
         elif col_def.type == ColumnType.PERCENTAGE:
@@ -353,9 +383,14 @@ class SchemaValidator:
                 num_val = float(value)
                 min_v = col_def.constraints.min_value
                 max_v = col_def.constraints.max_value
-                if min_v is not None and max_v is not None and (num_val < min_v or num_val > max_v):
+                if (
+                    min_v is not None
+                    and max_v is not None
+                    and (num_val < min_v or num_val > max_v)
+                ):
                     errors.append(
-                        f"{col_def.name} out of bounds: {num_val} (allowed: {min_v}-{max_v})")
+                        f"{col_def.name} out of bounds: {num_val} (allowed: {min_v}-{max_v})"
+                    )
             except (ValueError, TypeError):
                 errors.append(f"Non-numeric value in {col_def.name}: '{value}'")
 
@@ -368,17 +403,30 @@ class SchemaValidator:
                     errors.append(f"Invalid numeric value: {value}")
 
                 # Range check
-                if col_def.constraints.min_value is not None and num_val < col_def.constraints.min_value:
-                    errors.append(f"{col_def.name} below minimum: {num_val} < {col_def.constraints.min_value}")
+                if (
+                    col_def.constraints.min_value is not None
+                    and num_val < col_def.constraints.min_value
+                ):
+                    errors.append(
+                        f"{col_def.name} below minimum: {num_val} < {col_def.constraints.min_value}"
+                    )
 
-                if col_def.constraints.max_value is not None and num_val > col_def.constraints.max_value:
-                    errors.append(f"{col_def.name} above maximum: {num_val} > {col_def.constraints.max_value}")
+                if (
+                    col_def.constraints.max_value is not None
+                    and num_val > col_def.constraints.max_value
+                ):
+                    errors.append(
+                        f"{col_def.name} above maximum: {num_val} > {col_def.constraints.max_value}"
+                    )
 
             except (ValueError, TypeError):
                 errors.append(f"Non-numeric value in {col_def.name}: '{value}'")
 
         elif col_def.type == ColumnType.CATEGORICAL:
-            if col_def.constraints.allowed_values is not None and str(value) not in col_def.constraints.allowed_values:
+            if (
+                col_def.constraints.allowed_values is not None
+                and str(value) not in col_def.constraints.allowed_values
+            ):
                 errors.append(
                     f"Invalid category in {col_def.name}: '{value}' "
                     f"(allowed: {col_def.constraints.allowed_values})"
@@ -389,15 +437,15 @@ class SchemaValidator:
     def detect_schema_drift(self, df: pd.DataFrame) -> Dict[str, List[str]]:
         """Detect schema changes in new data"""
         drift: Dict[str, List[str]] = {
-            'new_columns': [],
-            'missing_columns': [],
-            'type_changes': []
+            "new_columns": [],
+            "missing_columns": [],
+            "type_changes": [],
         }
 
         current_columns = set(df.columns)
         schema_columns = set(col.name for col in self.schema.columns)
 
-        drift['new_columns'] = list(current_columns - schema_columns)
-        drift['missing_columns'] = list(schema_columns - current_columns)
+        drift["new_columns"] = list(current_columns - schema_columns)
+        drift["missing_columns"] = list(schema_columns - current_columns)
 
         return drift

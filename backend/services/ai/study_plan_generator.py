@@ -45,7 +45,7 @@ class StudyPlanGenerator:
         student_data: Dict[str, Any],
         prediction_data: Optional[Dict[str, Any]] = None,
         intervention_history: Optional[List[Dict]] = None,
-        preferences: Optional[Dict] = None
+        preferences: Optional[Dict] = None,
     ) -> Dict[str, Any]:
         """
         Generate a personalized 4-week study plan.
@@ -64,7 +64,7 @@ class StudyPlanGenerator:
             student_data=student_data,
             prediction_data=prediction_data,
             intervention_history=intervention_history,
-            include_sensitive=False  # Don't expose raw risk scores
+            include_sensitive=False,  # Don't expose raw risk scores
         )
 
         # Generate the plan
@@ -72,34 +72,31 @@ class StudyPlanGenerator:
             plan = await self._generate_with_llm(context, preferences)
             return {
                 "success": True,
-                "student_id": student_data.get('id'),
+                "student_id": student_data.get("id"),
                 "generated_at": datetime.now().isoformat(),
                 "plan_duration_weeks": self.plan_duration_weeks,
                 "plan": plan,
                 "context_summary": {
-                    "status": context['risk_assessment'].get('status'),
-                    "areas_of_focus": context['risk_assessment'].get('areas_of_focus', []),
-                    "strengths": context['academic_history'].get('strengths', [])
-                }
+                    "status": context["risk_assessment"].get("status"),
+                    "areas_of_focus": context["risk_assessment"].get(
+                        "areas_of_focus", []
+                    ),
+                    "strengths": context["academic_history"].get("strengths", []),
+                },
             }
         except Exception as e:
             logger.error(f"Failed to generate study plan: {e}")
             return self._get_fallback_plan(context)
 
     async def _generate_with_llm(
-        self,
-        context: Dict[str, Any],
-        preferences: Optional[Dict]
+        self, context: Dict[str, Any], preferences: Optional[Dict]
     ) -> Dict[str, Any]:
         """Generate study plan using LLM."""
         prompt = self._build_prompt(context, preferences)
 
         try:
             response = await self.llm.generate(
-                prompt=prompt,
-                context=context,
-                max_tokens=1500,
-                temperature=0.7
+                prompt=prompt, context=context, max_tokens=1500, temperature=0.7
             )
 
             # Parse LLM response
@@ -111,14 +108,12 @@ class StudyPlanGenerator:
             raise
 
     def _build_prompt(
-        self,
-        context: Dict[str, Any],
-        preferences: Optional[Dict]
+        self, context: Dict[str, Any], preferences: Optional[Dict]
     ) -> str:
         """Build the prompt for study plan generation."""
-        academic = context.get('academic_history', {})
-        risk = context.get('risk_assessment', {})
-        hints = context.get('advisor_hints', [])
+        academic = context.get("academic_history", {})
+        risk = context.get("risk_assessment", {})
+        hints = context.get("advisor_hints", [])
 
         prompt = f"""
 You are an AI Academic Advisor. Generate a personalized 4-week study plan for a student.
@@ -172,11 +167,11 @@ Respond ONLY with valid JSON in this exact structure. Be specific, practical, an
             # Try to extract JSON from response
             # Handle cases where LLM wraps JSON in markdown code blocks
             clean_response = response.strip()
-            if clean_response.startswith('```'):
-                clean_response = clean_response.split('```')[1]
-                if clean_response.startswith('json'):
+            if clean_response.startswith("```"):
+                clean_response = clean_response.split("```")[1]
+                if clean_response.startswith("json"):
                     clean_response = clean_response[4:]
-            if clean_response.endswith('```'):
+            if clean_response.endswith("```"):
                 clean_response = clean_response[:-3]
 
             plan = json.loads(clean_response.strip())
@@ -189,7 +184,7 @@ Respond ONLY with valid JSON in this exact structure. Be specific, practical, an
 
     def _validate_plan_structure(self, plan: Dict) -> Dict:
         """Ensure plan has required structure."""
-        required_keys = ['WEEKLY_PLAN', 'DAILY_SCHEDULE', 'ACTIONS', 'MILESTONES']
+        required_keys = ["WEEKLY_PLAN", "DAILY_SCHEDULE", "ACTIONS", "MILESTONES"]
 
         for key in required_keys:
             if key not in plan:
@@ -200,38 +195,38 @@ Respond ONLY with valid JSON in this exact structure. Be specific, practical, an
     def _get_default_section(self, section: str) -> Any:
         """Get default content for missing sections."""
         defaults = {
-            'WEEKLY_PLAN': [
+            "WEEKLY_PLAN": [
                 {
                     "week_number": i,
                     "theme": f"Week {i} Focus",
                     "focus_areas": ["Study habits", "Time management"],
                     "goals": ["Complete all assignments", "Attend all classes"],
-                    "success_metrics": "Track completion rate"
+                    "success_metrics": "Track completion rate",
                 }
                 for i in range(1, 5)
             ],
-            'DAILY_SCHEDULE': {
+            "DAILY_SCHEDULE": {
                 "morning_focus": "Review previous material",
                 "afternoon_focus": "New learning and practice",
                 "evening_focus": "Homework and preparation",
-                "study_hours_recommended": 3
+                "study_hours_recommended": 3,
             },
-            'ACTIONS': [
+            "ACTIONS": [
                 "Create a weekly study schedule",
                 "Set up a dedicated study space",
                 "Review notes within 24 hours of class",
                 "Use active recall techniques",
-                "Take regular breaks (Pomodoro technique)"
+                "Take regular breaks (Pomodoro technique)",
             ],
-            'MILESTONES': [
+            "MILESTONES": [
                 {
                     "week": i,
                     "milestone_description": f"Week {i} checkpoint",
-                    "how_to_verify": "Self-assessment"
+                    "how_to_verify": "Self-assessment",
                 }
                 for i in range(1, 5)
             ],
-            'ENCOURAGEMENT': "You have the ability to succeed. Take it one step at a time."
+            "ENCOURAGEMENT": "You have the ability to succeed. Take it one step at a time.",
         }
         return defaults.get(section, [])
 
@@ -239,56 +234,56 @@ Respond ONLY with valid JSON in this exact structure. Be specific, practical, an
         """Extract plan structure from unstructured text response."""
         # Fallback parser for when LLM doesn't return JSON
         return {
-            'WEEKLY_PLAN': self._get_default_section('WEEKLY_PLAN'),
-            'DAILY_SCHEDULE': self._get_default_section('DAILY_SCHEDULE'),
-            'ACTIONS': self._get_default_section('ACTIONS'),
-            'MILESTONES': self._get_default_section('MILESTONES'),
-            'ENCOURAGEMENT': response[:200] if len(response) > 200 else response,
-            'raw_response': response[:500]
+            "WEEKLY_PLAN": self._get_default_section("WEEKLY_PLAN"),
+            "DAILY_SCHEDULE": self._get_default_section("DAILY_SCHEDULE"),
+            "ACTIONS": self._get_default_section("ACTIONS"),
+            "MILESTONES": self._get_default_section("MILESTONES"),
+            "ENCOURAGEMENT": response[:200] if len(response) > 200 else response,
+            "raw_response": response[:500],
         }
 
     def _get_fallback_plan(self, context: Dict) -> Dict[str, Any]:
         """Return a reasonable fallback plan when LLM fails."""
-        areas = context.get('risk_assessment', {}).get('areas_of_focus', [])
+        areas = context.get("risk_assessment", {}).get("areas_of_focus", [])
 
         return {
             "success": False,
-            "student_id": context.get('student_id'),
+            "student_id": context.get("student_id"),
             "generated_at": datetime.now().isoformat(),
             "plan_duration_weeks": self.plan_duration_weeks,
             "plan": {
-                'WEEKLY_PLAN': self._get_default_section('WEEKLY_PLAN'),
-                'DAILY_SCHEDULE': self._get_default_section('DAILY_SCHEDULE'),
-                'ACTIONS': self._generate_actions_from_areas(areas),
-                'MILESTONES': self._get_default_section('MILESTONES'),
-                'ENCOURAGEMENT': "Every step forward is progress. You've got this!"
+                "WEEKLY_PLAN": self._get_default_section("WEEKLY_PLAN"),
+                "DAILY_SCHEDULE": self._get_default_section("DAILY_SCHEDULE"),
+                "ACTIONS": self._generate_actions_from_areas(areas),
+                "MILESTONES": self._get_default_section("MILESTONES"),
+                "ENCOURAGEMENT": "Every step forward is progress. You've got this!",
             },
-            "error": "AI generation unavailable, using template plan"
+            "error": "AI generation unavailable, using template plan",
         }
 
     def _generate_actions_from_areas(self, areas: List[str]) -> List[str]:
         """Generate specific actions based on areas of focus."""
         action_map = {
-            'academic_performance': [
+            "academic_performance": [
                 "Schedule tutoring sessions for challenging subjects",
                 "Create summary sheets for each chapter",
-                "Practice past exam questions"
+                "Practice past exam questions",
             ],
-            'course_engagement': [
+            "course_engagement": [
                 "Participate in at least one discussion per class",
                 "Visit office hours once per week",
-                "Join a study group"
+                "Join a study group",
             ],
-            'attendance': [
+            "attendance": [
                 "Set multiple alarms for class times",
                 "Prepare materials the night before",
-                "Identify and address barriers to attendance"
+                "Identify and address barriers to attendance",
             ],
-            'performance_trend': [
+            "performance_trend": [
                 "Review feedback from recent assignments",
                 "Identify patterns in mistakes",
-                "Create a revision schedule"
-            ]
+                "Create a revision schedule",
+            ],
         }
 
         actions = ["Create a weekly schedule and stick to it"]
@@ -310,7 +305,7 @@ async def generate_study_plan(
     prediction_data: Optional[Dict] = None,
     intervention_history: Optional[List] = None,
     preferences: Optional[Dict] = None,
-    db=None
+    db=None,
 ) -> Dict:
     """Convenience function for generating study plans."""
     generator = get_study_plan_generator(db=db)
@@ -318,5 +313,5 @@ async def generate_study_plan(
         student_data=student_data,
         prediction_data=prediction_data,
         intervention_history=intervention_history,
-        preferences=preferences
+        preferences=preferences,
     )

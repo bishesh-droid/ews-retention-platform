@@ -88,14 +88,20 @@ def get_student_advice(
 
     risk = student["risk_score"]
     if risk >= 70:
-        advice = ("Focus on catching up with course content and completing pending quizzes. "
-                  "Consider reaching out to your academic advisor for a structured study plan.")
+        advice = (
+            "Focus on catching up with course content and completing pending quizzes. "
+            "Consider reaching out to your academic advisor for a structured study plan."
+        )
     elif risk >= 40:
-        advice = ("You're making progress but there's room for improvement. "
-                  "Try to increase your login frequency and complete more course content each week.")
+        advice = (
+            "You're making progress but there's room for improvement. "
+            "Try to increase your login frequency and complete more course content each week."
+        )
     else:
-        advice = ("You're doing well! Keep up the consistent study habits. "
-                  "Consider helping peers in discussion forums to deepen your understanding.")
+        advice = (
+            "You're doing well! Keep up the consistent study habits. "
+            "Consider helping peers in discussion forums to deepen your understanding."
+        )
 
     data = {"content": advice, "confidence": "medium", "sources": ["engagement_data"]}
     return success_response(data, message="Student advice")
@@ -148,12 +154,35 @@ def get_intervention_suggestions(
     risk = student["risk_score"]
     recommendations = []
     if risk >= 70:
-        recommendations.append({"type": "mentor_meeting", "priority": "high",
-                               "description": "Schedule immediate mentor meeting"})
-        recommendations.append({"type": "study_plan", "priority": "high", "description": "Create structured study plan"})
+        recommendations.append(
+            {
+                "type": "mentor_meeting",
+                "priority": "high",
+                "description": "Schedule immediate mentor meeting",
+            }
+        )
+        recommendations.append(
+            {
+                "type": "study_plan",
+                "priority": "high",
+                "description": "Create structured study plan",
+            }
+        )
     elif risk >= 40:
-        recommendations.append({"type": "check_in", "priority": "medium", "description": "Weekly check-in email"})
-        recommendations.append({"type": "resources", "priority": "medium", "description": "Share study resources"})
+        recommendations.append(
+            {
+                "type": "check_in",
+                "priority": "medium",
+                "description": "Weekly check-in email",
+            }
+        )
+        recommendations.append(
+            {
+                "type": "resources",
+                "priority": "medium",
+                "description": "Share study resources",
+            }
+        )
 
     data = {
         "student_id": request.student_id,
@@ -175,10 +204,20 @@ def get_priority_queue(
     _rate_limit: None = Depends(require_llm_rate_limit()),
 ):
     """Get a priority queue of students needing intervention."""
-    students = StudentService.get_all_students(db, 0, limit, "risk_score", "desc", risk_min=40.0)
+    students = StudentService.get_all_students(
+        db, 0, limit, "risk_score", "desc", risk_min=40.0
+    )
     queue = [
-        {"student_id": s["id"], "risk_score": s["risk_score"], "priority": "critical" if s["risk_score"] >=
-            80 else "high" if s["risk_score"] >= 60 else "medium", "dominant_factor": s.get("dominant_risk_factor", "")}
+        {
+            "student_id": s["id"],
+            "risk_score": s["risk_score"],
+            "priority": (
+                "critical"
+                if s["risk_score"] >= 80
+                else "high" if s["risk_score"] >= 60 else "medium"
+            ),
+            "dominant_factor": s.get("dominant_risk_factor", ""),
+        }
         for s in students
     ]
     data = {
@@ -207,11 +246,24 @@ def find_similar_students(
         return success_response(data, message="Similar students")
 
     risk = student["risk_score"]
-    all_students = StudentService.get_all_students(db, 0, 2000, risk_min=max(0, risk - 10), risk_max=min(100, risk + 10))
-    similar = [{"student_id": s["id"], "risk_score": s["risk_score"], "similarity": round(
-        1 - abs(s["risk_score"] - risk) / 100, 2)} for s in all_students if s["id"] != student_id][:limit]
+    all_students = StudentService.get_all_students(
+        db, 0, 2000, risk_min=max(0, risk - 10), risk_max=min(100, risk + 10)
+    )
+    similar = [
+        {
+            "student_id": s["id"],
+            "risk_score": s["risk_score"],
+            "similarity": round(1 - abs(s["risk_score"] - risk) / 100, 2),
+        }
+        for s in all_students
+        if s["id"] != student_id
+    ][:limit]
 
-    data = {"student_id": student_id, "similar_students": similar, "count": len(similar)}
+    data = {
+        "student_id": student_id,
+        "similar_students": similar,
+        "count": len(similar),
+    }
     return success_response(
         data,
         message="Similar students",
@@ -228,7 +280,9 @@ def run_what_if_simulation(
     """Simulate what-if scenarios."""
     student = StudentService.get_student_by_id(db, request.student_id)
     if not student:
-        return success_response({"error": "Student not found"}, message="Student not found")
+        return success_response(
+            {"error": "Student not found"}, message="Student not found"
+        )
 
     current_risk = student["risk_score"]
     # Simple simulation: estimate impact of scenario changes
@@ -264,7 +318,11 @@ def get_weekly_brief(
     """Generate a weekly academic progress brief."""
     student = StudentService.get_student_by_id(db, student_id)
     if not student:
-        data = {"student_id": student_id, "brief": "Student not found.", "confidence": "low"}
+        data = {
+            "student_id": student_id,
+            "brief": "Student not found.",
+            "confidence": "low",
+        }
         return success_response(data, message="Weekly brief")
 
     data = {
@@ -344,7 +402,7 @@ def get_institutional_insights(
                     "description": f"{stats['at_risk_students']} students at high risk",
                     "severity": "high",
                 }
-                if stats['at_risk_students'] > 50
+                if stats["at_risk_students"] > 50
                 else {
                     "type": "healthy",
                     "description": "Student engagement is within expected range",

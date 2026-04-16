@@ -15,7 +15,6 @@ after implementation.
 """
 
 import pytest
-import sys
 import importlib.util
 from pathlib import Path
 
@@ -23,57 +22,57 @@ from pathlib import Path
 class TestGradedComponentImportError:
     """
     Property 1: Bug Condition - GradedComponent Import Path Error
-    
+
     Tests that the 4 specific files with incorrect import paths will fail
     to import GradedComponent from the non-existent module path.
-    
+
     This is a scoped property-based test approach that tests the exact
     files mentioned in the bug report.
     """
-    
+
     # The 4 files with incorrect import statements
     AFFECTED_FILES = [
         "backend/tests/test_fk_constraints.py",
-        "backend/tests/test_recommendations_idor.py", 
+        "backend/tests/test_recommendations_idor.py",
         "backend/tests/test_cohort_risk_profiles.py",
-        "backend/services/ai/rag_engine.py"
+        "backend/services/ai/rag_engine.py",
     ]
-    
+
     def test_graded_component_import_from_incorrect_path_fails(self):
         """
         Test that importing from the incorrect path raises ModuleNotFoundError.
-        
+
         This test WILL FAIL on unfixed code with ModuleNotFoundError, which is
         the expected outcome that proves the bug exists.
-        
+
         After the fix, this test should pass because the import statements
         will be corrected to use the actual module path.
         """
         # The incorrect import path that exists in the 4 files
         incorrect_module = "backend.database.models.graded_component"
-        
+
         # This should raise ModuleNotFoundError on unfixed code
         with pytest.raises(
             ModuleNotFoundError,
-            match=r"No module named 'backend\.database\.models\.graded_component'"
+            match=r"No module named 'backend\.database\.models\.graded_component'",
         ):
             __import__(incorrect_module)
-    
+
     def test_graded_component_import_from_correct_path_succeeds(self):
         """
         Test that importing from the correct path (academic.py) works.
-        
+
         This verifies that GradedComponent is actually defined in
         backend.database.models.academic, not in graded_component.
         """
         # The correct import path where GradedComponent is actually defined
         from backend.database.models.academic import GradedComponent
-        
+
         # Verify the class was imported successfully
         assert GradedComponent is not None
-        assert hasattr(GradedComponent, '__tablename__')
+        assert hasattr(GradedComponent, "__tablename__")
         assert GradedComponent.__tablename__ == "graded_components"
-    
+
     def test_affected_files_contain_incorrect_import(self):
         """
         Test that the 4 previously affected files no longer contain the incorrect
@@ -83,7 +82,9 @@ class TestGradedComponentImportError:
         correct path (backend.database.models.academic).
         """
         project_root = Path(__file__).parent.parent.parent
-        incorrect_import = "from backend.database.models.graded_component import GradedComponent"
+        incorrect_import = (
+            "from backend.database.models.graded_component import GradedComponent"
+        )
 
         files_with_bug = []
 
@@ -99,29 +100,27 @@ class TestGradedComponentImportError:
             f"Expected 0 files with incorrect import after fix, found {len(files_with_bug)}: "
             f"{files_with_bug}"
         )
-    
+
     def test_importing_affected_files_fails_on_unfixed_code(self):
         """
         Test that attempting to import the affected files raises ModuleNotFoundError.
-        
+
         This is the actual bug manifestation: the 4 files cannot be imported
         because they reference a non-existent module.
-        
+
         EXPECTED OUTCOME on unfixed code: This test FAILS because importing
         the files raises ModuleNotFoundError.
-        
+
         After fix: This test should pass because the import statements will
         be corrected.
         """
-        project_root = Path(__file__).parent.parent.parent
-        
         # Track which files fail to import
         failed_imports = []
-        
+
         for file_path in self.AFFECTED_FILES:
             # Convert file path to module name
             module_name = file_path.replace("/", ".").replace(".py", "")
-            
+
             try:
                 # Attempt to import the module
                 # This will fail on unfixed code with ModuleNotFoundError
@@ -138,12 +137,12 @@ class TestGradedComponentImportError:
             except Exception as e:
                 # Other errors might occur, document them
                 failed_imports.append((file_path, f"Other error: {str(e)}"))
-        
+
         # On unfixed code, all 4 files should fail to import
         # This assertion will FAIL on unfixed code, proving the bug exists
         assert len(failed_imports) == 0, (
-            f"Expected 0 failed imports after fix, but found {len(failed_imports)} failures:\n" +
-            "\n".join([f"  - {path}: {error}" for path, error in failed_imports])
+            f"Expected 0 failed imports after fix, but found {len(failed_imports)} failures:\n"
+            + "\n".join([f"  - {path}: {error}" for path, error in failed_imports])
         )
 
 

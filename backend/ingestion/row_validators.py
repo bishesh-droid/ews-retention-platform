@@ -2,6 +2,7 @@
 Row-Level Validation Guards
 Extended validation for row integrity, numeric bounds, and timestamps
 """
+
 from datetime import datetime, timedelta
 from typing import List, Tuple
 import pandas as pd
@@ -26,7 +27,9 @@ class RowValidator:
         actual_cols = len(row)
 
         if actual_cols != expected_cols:
-            errors.append(f"Column count mismatch: got {actual_cols}, expected {expected_cols}")
+            errors.append(
+                f"Column count mismatch: got {actual_cols}, expected {expected_cols}"
+            )
             return (False, errors)
 
         return (True, [])
@@ -60,7 +63,15 @@ class RowValidator:
         Returns:
             List of columns containing Excel errors
         """
-        excel_errors = ['#DIV/0!', '#VALUE!', '#REF!', '#NAME?', '#NUM!', '#N/A', '#NULL!']
+        excel_errors = [
+            "#DIV/0!",
+            "#VALUE!",
+            "#REF!",
+            "#NAME?",
+            "#NUM!",
+            "#N/A",
+            "#NULL!",
+        ]
 
         problematic_cols = []
 
@@ -77,7 +88,17 @@ class RowValidator:
 
         Converts: 'N/A', 'null', 'NULL', 'None', '', '  ' → None
         """
-        special_nulls = ['N/A', 'n/a', 'NA', '#N/A', 'null', 'NULL', 'None', 'none', '-']
+        special_nulls = [
+            "N/A",
+            "n/a",
+            "NA",
+            "#N/A",
+            "null",
+            "NULL",
+            "None",
+            "none",
+            "-",
+        ]
 
         normalized = row.copy()
 
@@ -87,7 +108,7 @@ class RowValidator:
                 trimmed = value.strip()
 
                 # Check if whitespace-only
-                if trimmed == '':
+                if trimmed == "":
                     normalized[idx] = None
                 # Check if special null value
                 elif trimmed in special_nulls:
@@ -131,12 +152,23 @@ class NumericGuard:
         """
         # Columns that should never be negative
         non_negative_patterns = [
-            'attendance', 'percentage', 'score', 'count', 'login',
-            'duration', 'time', 'session', 'view', 'post', 'read'
+            "attendance",
+            "percentage",
+            "score",
+            "count",
+            "login",
+            "duration",
+            "time",
+            "session",
+            "view",
+            "post",
+            "read",
         ]
 
         if value < 0:
-            return any(pattern in column_name.lower() for pattern in non_negative_patterns)
+            return any(
+                pattern in column_name.lower() for pattern in non_negative_patterns
+            )
 
         return False
 
@@ -148,7 +180,7 @@ class NumericGuard:
         Returns:
             (is_valid, error_message)
         """
-        if 'percent' in column_name.lower() or '%' in column_name:
+        if "percent" in column_name.lower() or "%" in column_name:
             if value < 0:
                 return (False, f"Percentage cannot be negative: {value}")
             if value > 100:
@@ -157,7 +189,9 @@ class NumericGuard:
         return (True, "")
 
     @staticmethod
-    def detect_unit_mismatch(series: pd.Series, expected_max: float, tolerance: float = 10.0) -> bool:
+    def detect_unit_mismatch(
+        series: pd.Series, expected_max: float, tolerance: float = 10.0
+    ) -> bool:
         """
         Detect if values are in wrong units (e.g., seconds instead of minutes)
 
@@ -197,7 +231,9 @@ class TimestampGuard:
         return date > max_future
 
     @staticmethod
-    def check_ancient_dates(date: datetime, earliest: datetime = datetime(2000, 1, 1)) -> bool:
+    def check_ancient_dates(
+        date: datetime, earliest: datetime = datetime(2000, 1, 1)
+    ) -> bool:
         """
         Check if date is unreasonably old
 
@@ -217,13 +253,15 @@ class TimestampGuard:
         excel_epochs = [
             datetime(1900, 1, 1),
             datetime(1904, 1, 1),
-            datetime(1899, 12, 31)  # Sometimes off by one
+            datetime(1899, 12, 31),  # Sometimes off by one
         ]
 
         return date in excel_epochs
 
     @staticmethod
-    def validate_date_range(date: datetime, min_date: datetime, max_date: datetime) -> Tuple[bool, str]:
+    def validate_date_range(
+        date: datetime, min_date: datetime, max_date: datetime
+    ) -> Tuple[bool, str]:
         """
         Validate date is within expected range
 
@@ -239,7 +277,9 @@ class TimestampGuard:
         return (True, "")
 
     @staticmethod
-    def check_chronological_order(dates: List[datetime], strict: bool = True) -> Tuple[bool, List[int]]:
+    def check_chronological_order(
+        dates: List[datetime], strict: bool = True
+    ) -> Tuple[bool, List[int]]:
         """
         Check if dates are in chronological order
 
@@ -268,14 +308,16 @@ class RequiredFieldValidator:
 
     # Define required fields per data type
     REQUIRED_FIELDS = {
-        'academic': ['student_id', 'course_id'],
-        'engagement': ['student_id', 'metric_date'],
-        'attendance': ['student_id', 'session_date'],
-        'roster': ['student_id', 'student_name']
+        "academic": ["student_id", "course_id"],
+        "engagement": ["student_id", "metric_date"],
+        "attendance": ["student_id", "session_date"],
+        "roster": ["student_id", "student_name"],
     }
 
     @staticmethod
-    def validate_required_fields(row: pd.Series, data_type: str) -> Tuple[bool, List[str]]:
+    def validate_required_fields(
+        row: pd.Series, data_type: str
+    ) -> Tuple[bool, List[str]]:
         """
         Validate that required fields are present
 
@@ -307,11 +349,11 @@ class RequiredFieldValidator:
             return (False, "Student identifier is null or empty")
 
         # Check for email format
-        if '@' not in str(value):
+        if "@" not in str(value):
             return (False, f"Student identifier missing @ symbol: '{value}'")
 
         # Check for domain
-        parts = str(value).split('@')
+        parts = str(value).split("@")
         if len(parts) != 2 or not parts[1]:
             return (False, f"Invalid email format: '{value}'")
 

@@ -29,7 +29,7 @@ class AuditLogger:
         input_data: Dict[str, Any],
         response: Any,
         confidence: str,
-        sources: List[str]
+        sources: List[str],
     ) -> int:
         """
         Log an LLM query for audit trail.
@@ -57,7 +57,7 @@ class AuditLogger:
             response=response_str,
             confidence=confidence,
             sources=json.dumps(sources),
-            timestamp=datetime.now().date()
+            timestamp=datetime.now().date(),
         )
 
         self.db.add(audit_entry)
@@ -68,9 +68,7 @@ class AuditLogger:
         return audit_entry.id  # type: ignore[return-value]
 
     def get_user_llm_history(
-        self,
-        user_id: str,
-        limit: int = 50
+        self, user_id: str, limit: int = 50
     ) -> List[Dict[str, Any]]:
         """
         Retrieve LLM interaction history for a user.
@@ -96,15 +94,13 @@ class AuditLogger:
                 "query_type": entry.query_type,
                 "confidence": entry.confidence,
                 "timestamp": entry.timestamp.isoformat() if entry.timestamp else None,
-                "sources": json.loads(str(entry.sources)) if entry.sources else []
+                "sources": json.loads(str(entry.sources)) if entry.sources else [],
             }
             for entry in entries
         ]
 
     def get_compliance_report(
-        self,
-        start_date: datetime,
-        end_date: datetime
+        self, start_date: datetime, end_date: datetime
     ) -> Dict[str, Any]:
         """
         Generate compliance report for LLM usage.
@@ -120,7 +116,7 @@ class AuditLogger:
             self.db.query(LLMQuery)
             .filter(
                 LLMQuery.timestamp >= start_date.date(),
-                LLMQuery.timestamp <= end_date.date()
+                LLMQuery.timestamp <= end_date.date(),
             )
             .all()
         )
@@ -146,15 +142,12 @@ class AuditLogger:
                 confidence_distribution[conf] += 1
 
         return {
-            "period": {
-                "start": start_date.isoformat(),
-                "end": end_date.isoformat()
-            },
+            "period": {"start": start_date.isoformat(), "end": end_date.isoformat()},
             "total_queries": total_queries,
             "queries_by_role": queries_by_role,
             "queries_by_type": queries_by_type,
             "confidence_distribution": confidence_distribution,
-            "unique_users": len(set(e.user_id for e in entries))
+            "unique_users": len(set(e.user_id for e in entries)),
         }
 
     def detect_anomalous_usage(self) -> List[Dict[str, Any]]:
@@ -176,23 +169,22 @@ class AuditLogger:
         from sqlalchemy import func
 
         low_confidence_users = (
-            self.db.query(
-                LLMQuery.user_id,
-                func.count(LLMQuery.id).label('count')
-            )
-            .filter(LLMQuery.confidence == 'low')
+            self.db.query(LLMQuery.user_id, func.count(LLMQuery.id).label("count"))
+            .filter(LLMQuery.confidence == "low")
             .group_by(LLMQuery.user_id)
             .having(func.count(LLMQuery.id) > 10)
             .all()
         )
 
         for user_id, count in low_confidence_users:
-            anomalies.append({
-                "type": "excessive_low_confidence",
-                "user_id": user_id,
-                "count": count,
-                "description": f"User has {count} low-confidence LLM queries"
-            })
+            anomalies.append(
+                {
+                    "type": "excessive_low_confidence",
+                    "user_id": user_id,
+                    "count": count,
+                    "description": f"User has {count} low-confidence LLM queries",
+                }
+            )
 
         return anomalies
 
@@ -208,7 +200,7 @@ class RoleBasedAccessControl:
         requesting_user_id: str,
         requesting_user_role: str,
         target_student_id: str,
-        assigned_students: Optional[List[str]] = None
+        assigned_students: Optional[List[str]] = None,
     ) -> bool:
         """
         Check if user can access another student's data.
@@ -223,21 +215,21 @@ class RoleBasedAccessControl:
             True if access is allowed, False otherwise
         """
         # Student can only see their own data
-        if requesting_user_role == 'student':
+        if requesting_user_role == "student":
             return requesting_user_id == target_student_id
 
         # Faculty can see assigned students
-        if requesting_user_role == 'faculty':
+        if requesting_user_role == "faculty":
             if assigned_students is None:
                 return False
             return target_student_id in assigned_students
 
         # Admin can see all student data
-        if requesting_user_role == 'admin':
+        if requesting_user_role == "admin":
             return True
 
         # Sales cannot see individual student data
-        if requesting_user_role == 'sales':
+        if requesting_user_role == "sales":
             return False
 
         # Default deny
@@ -246,17 +238,17 @@ class RoleBasedAccessControl:
     @staticmethod
     def can_access_cohort_data(user_role: str) -> bool:
         """Check if user can access cohort-level data."""
-        return user_role in ['admin', 'sales']
+        return user_role in ["admin", "sales"]
 
     @staticmethod
     def can_access_revenue_data(user_role: str) -> bool:
         """Check if user can access revenue/financial data."""
-        return user_role in ['admin', 'sales']
+        return user_role in ["admin", "sales"]
 
     @staticmethod
     def can_access_institutional_insights(user_role: str) -> bool:
         """Check if user can access system-wide insights."""
-        return user_role == 'admin'
+        return user_role == "admin"
 
     @staticmethod
     def get_allowed_query_types(user_role: str) -> List[str]:
@@ -267,30 +259,30 @@ class RoleBasedAccessControl:
             List of allowed query type strings
         """
         permissions = {
-            'student': [
-                'explain_risk',
-                'student_advice',
-                'what_if_simulation',
-                'weekly_brief'
+            "student": [
+                "explain_risk",
+                "student_advice",
+                "what_if_simulation",
+                "weekly_brief",
             ],
-            'faculty': [
-                'faculty_summary',
-                'intervention_suggestions',
-                'prioritize_students',
-                'similar_students'
+            "faculty": [
+                "faculty_summary",
+                "intervention_suggestions",
+                "prioritize_students",
+                "similar_students",
             ],
-            'admin': [
-                'institutional_insights',
-                'pattern_discovery',
-                'generate_report_narrative',
-                'intervention_effectiveness',
-                'cohort_analysis'
+            "admin": [
+                "institutional_insights",
+                "pattern_discovery",
+                "generate_report_narrative",
+                "intervention_effectiveness",
+                "cohort_analysis",
             ],
-            'sales': [
-                'revenue_risk_translation',
-                'dropout_pattern_explanation',
-                'cohort_analysis'
-            ]
+            "sales": [
+                "revenue_risk_translation",
+                "dropout_pattern_explanation",
+                "cohort_analysis",
+            ],
         }
 
         return permissions.get(user_role, [])

@@ -5,7 +5,17 @@ Tracks intervention recommendations, advisor actions, and outcome measurements.
 """
 
 from datetime import datetime, timezone
-from sqlalchemy import Column, Integer, String, Float, Boolean, ForeignKey, Text, DateTime, UniqueConstraint
+from sqlalchemy import (
+    Column,
+    Integer,
+    String,
+    Float,
+    Boolean,
+    ForeignKey,
+    Text,
+    DateTime,
+    UniqueConstraint,
+)
 from backend.database.connection import Base
 
 
@@ -13,19 +23,29 @@ class InterventionLog(Base):
     """
     Logs intervention recommendations and tracks advisor actions & outcomes.
     """
+
     __tablename__ = "intervention_logs"
 
     __table_args__ = (
         UniqueConstraint(
-            'student_org_id', 'week_number', 'semester_name', 'intervention_type',
-            name='uq_intervention_log_weekly'
+            "student_org_id",
+            "week_number",
+            "semester_name",
+            "intervention_type",
+            name="uq_intervention_log_weekly",
         ),
     )
 
     id = Column(Integer, primary_key=True)
-    student_org_id = Column(String(64), ForeignKey("students.org_defined_id"), nullable=False, index=True)
-    recommended_at = Column(DateTime, default=lambda: datetime.now(timezone.utc), index=True)
-    intervention_type = Column(String(64))  # "gentle_reminder"|"mentor_outreach"|"urgent"|etc.
+    student_org_id = Column(
+        String(64), ForeignKey("students.org_defined_id"), nullable=False, index=True
+    )
+    recommended_at = Column(
+        DateTime, default=lambda: datetime.now(timezone.utc), index=True
+    )
+    intervention_type = Column(
+        String(64)
+    )  # "gentle_reminder"|"mentor_outreach"|"urgent"|etc.
     engagement_pattern = Column(String(32), nullable=True)
     risk_score_at_recommendation = Column(Float)
     week_number = Column(Integer, nullable=True)
@@ -42,5 +62,7 @@ class InterventionLog(Base):
     # Outcome tracking (populated by next ingestion run, >= 7 days after recommendation)
     follow_up_risk_score = Column(Float, nullable=True)
     follow_up_at = Column(DateTime, nullable=True)
-    outcome = Column(String(32), nullable=True)  # "improved"|"unchanged"|"worsened"|"pending"
+    outcome = Column(
+        String(32), nullable=True
+    )  # "improved"|"unchanged"|"worsened"|"pending"
     outcome_delta = Column(Float, nullable=True)  # current_score - recommendation_score

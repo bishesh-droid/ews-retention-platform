@@ -21,16 +21,22 @@ class FeatureStoreService:
         """
         Computes features for a single student and saves to EngineeredFeatures.
         """
-        enrollments = db.query(Enrollment).filter(Enrollment.student_id == student_id).all()
-        graded = db.query(GradedComponent).filter(GradedComponent.student_id == student_id).all()
+        enrollments = (
+            db.query(Enrollment).filter(Enrollment.student_id == student_id).all()
+        )
+        graded = (
+            db.query(GradedComponent)
+            .filter(GradedComponent.student_id == student_id)
+            .all()
+        )
 
         # Calculate derived metrics
         attendance_rate = 0.0
         if enrollments:
             # Simple average across enrollments
-            attendance_rate = sum(
-                int(e.num_logins or 0) for e in enrollments
-            ) / len(enrollments)  # type: ignore[arg-type]
+            attendance_rate = sum(int(e.num_logins or 0) for e in enrollments) / len(
+                enrollments
+            )  # type: ignore[arg-type]
 
         grade_trend = 0.0
         if graded:
@@ -38,15 +44,18 @@ class FeatureStoreService:
             pass
 
         # Update or create features record
-        features = db.query(EngineeredFeatures).filter(
-            EngineeredFeatures.student_id == student_id,
-            EngineeredFeatures.computation_date == datetime.utcnow().date()
-        ).first()
+        features = (
+            db.query(EngineeredFeatures)
+            .filter(
+                EngineeredFeatures.student_id == student_id,
+                EngineeredFeatures.computation_date == datetime.utcnow().date(),
+            )
+            .first()
+        )
 
         if not features:
             features = EngineeredFeatures(
-                student_id=student_id,
-                computation_date=datetime.utcnow().date()
+                student_id=student_id, computation_date=datetime.utcnow().date()
             )
             db.add(features)
 

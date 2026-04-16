@@ -13,7 +13,7 @@ router = APIRouter()
 @router.get("/me", response_model=APIResponse)
 def get_my_profile(
     current_user: deps.User = Depends(deps.require_role([Role.STUDENT])),
-    db: Session = Depends(deps.get_db)
+    db: Session = Depends(deps.get_db),
 ):
     """
     Get current student's profile and disengagement risks.
@@ -25,7 +25,7 @@ def get_my_profile(
 @router.get("/goals", response_model=APIResponse)
 def get_my_goals(
     current_user: deps.User = Depends(deps.require_role([Role.STUDENT])),
-    db: Session = Depends(deps.get_db)
+    db: Session = Depends(deps.get_db),
 ):
     """
     Get current student's active goals.
@@ -41,12 +41,16 @@ def get_my_goals(
 @router.get("/risk-history", response_model=APIResponse)
 def get_my_risk_history(
     current_user: deps.User = Depends(deps.require_role([Role.STUDENT])),
-    db: Session = Depends(deps.get_db)
+    db: Session = Depends(deps.get_db),
 ):
     """
     Get current student's historical risk snapshots.
     """
-    history = db.query(RiskSnapshot).filter(RiskSnapshot.student_id == current_user.email).all()
+    history = (
+        db.query(RiskSnapshot)
+        .filter(RiskSnapshot.student_id == current_user.email)
+        .all()
+    )
     return success_response(
         history,
         message="Student risk history",

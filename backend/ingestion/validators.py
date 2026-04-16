@@ -1,6 +1,7 @@
 """
 Input validation classes for ETL pipeline
 """
+
 import re
 from typing import Tuple, List
 
@@ -13,7 +14,7 @@ class StudentValidator:
         """Ensure email follows expected format"""
         if not email:
             return False
-        pattern = r'^[\w\.-]+@[\w\.-]+\.\w+$'
+        pattern = r"^[\w\.-]+@[\w\.-]+\.\w+$"
         return bool(re.match(pattern, str(email).lower()))
 
     @staticmethod
@@ -22,13 +23,13 @@ class StudentValidator:
         errors = []
 
         # Required fields
-        if not record.get('student_id'):
+        if not record.get("student_id"):
             errors.append("Missing student_id")
-        elif not StudentValidator.validate_email(record['student_id']):
+        elif not StudentValidator.validate_email(record["student_id"]):
             errors.append(f"Invalid email format: {record['student_id']}")
 
         # Program validation
-        if record.get('program') and record.get('program') not in ['BS', 'MSc', None]:
+        if record.get("program") and record.get("program") not in ["BS", "MSc", None]:
             errors.append(f"Invalid program: {record.get('program')}")
 
         return (len(errors) == 0, errors)

@@ -19,6 +19,7 @@ from backend.database.models.user import User
 # Fixtures
 # =============================================================================
 
+
 @pytest.fixture
 def mock_session():
     """Returns a mocked SQLAlchemy Session for unit tests."""
@@ -103,6 +104,7 @@ def mock_msc_faculty():
 # Helper function (extracted from data_ingestion.py for testing)
 # =============================================================================
 
+
 def derive_program_from_org_id(org_id: str) -> str:
     """
     Derive program (BS/MSc) from Org_Defined_Id prefix.
@@ -117,10 +119,11 @@ def derive_program_from_org_id(org_id: str) -> str:
         "MSc" if org_id starts with any 4-digit year + "EM", otherwise "BS"
     """
     import re
+
     if not org_id:
         return "BS"
     oid = org_id.upper()
-    if re.match(r'^\d{4}EM', oid):
+    if re.match(r"^\d{4}EM", oid):
         return "MSc"
     return "BS"
 
@@ -129,21 +132,37 @@ def derive_program_from_org_id(org_id: str) -> str:
 # TEST 1 — Unit test for program detection logic
 # =============================================================================
 
-@pytest.mark.parametrize("org_id,email,expected_program", [
-    ("2025EB1100001", "2025eb1100001@bitspilani-digital.edu.in", "BS"),
-    ("2025EM1100001", "2025em1100001@bitspilani-digital.edu.in", "MSc"),
-    ("2024EB0900042", "2024eb0900042@bitspilani-digital.edu.in", "BS"),
-    ("2024EM0900042", "2024em0900042@bitspilani-digital.edu.in", "MSc"),
-    # Emails that would have tripped the old "em" substring match:
-    ("2025EB1100055", "student.semester@bitspilani-digital.edu.in", "BS"),  # "semester" contains "em"
-    ("2025EB1100066", "remote.learner@bitspilani-digital.edu.in", "BS"),    # "remote" contains "em"
-    ("2025EB1100077", "premium.user@bitspilani-digital.edu.in", "BS"),      # "premium" contains "em"
-    # Edge cases
-    ("", "some.email@example.com", "BS"),  # empty org_id
-    ("2025EB", "short@example.com", "BS"),  # short org_id (BS)
-    ("2025EM", "short@example.com", "MSc"),  # short org_id (MSc)
-    ("2023EM12345", "legacy@example.com", "MSc"),  # older year MSc
-])
+
+@pytest.mark.parametrize(
+    "org_id,email,expected_program",
+    [
+        ("2025EB1100001", "2025eb1100001@bitspilani-digital.edu.in", "BS"),
+        ("2025EM1100001", "2025em1100001@bitspilani-digital.edu.in", "MSc"),
+        ("2024EB0900042", "2024eb0900042@bitspilani-digital.edu.in", "BS"),
+        ("2024EM0900042", "2024em0900042@bitspilani-digital.edu.in", "MSc"),
+        # Emails that would have tripped the old "em" substring match:
+        (
+            "2025EB1100055",
+            "student.semester@bitspilani-digital.edu.in",
+            "BS",
+        ),  # "semester" contains "em"
+        (
+            "2025EB1100066",
+            "remote.learner@bitspilani-digital.edu.in",
+            "BS",
+        ),  # "remote" contains "em"
+        (
+            "2025EB1100077",
+            "premium.user@bitspilani-digital.edu.in",
+            "BS",
+        ),  # "premium" contains "em"
+        # Edge cases
+        ("", "some.email@example.com", "BS"),  # empty org_id
+        ("2025EB", "short@example.com", "BS"),  # short org_id (BS)
+        ("2025EM", "short@example.com", "MSc"),  # short org_id (MSc)
+        ("2023EM12345", "legacy@example.com", "MSc"),  # older year MSc
+    ],
+)
 def test_program_derived_from_org_id_not_email(org_id, email, expected_program):
     """
     Test that program is derived ONLY from Org_Defined_Id prefix, not from email.
@@ -152,14 +171,16 @@ def test_program_derived_from_org_id_not_email(org_id, email, expected_program):
     (like "semester", "remote", "premium") would incorrectly trigger MSc detection.
     """
     result = derive_program_from_org_id(org_id)
-    assert result == expected_program, \
-        f"org_id={org_id}: got {result}, expected {expected_program}. " \
+    assert result == expected_program, (
+        f"org_id={org_id}: got {result}, expected {expected_program}. "
         f"Old email heuristic may have been reintroduced."
+    )
 
 
 # =============================================================================
 # TEST 2 — Integration test: _ensure_student does not overwrite existing department
 # =============================================================================
+
 
 def test_ensure_student_does_not_overwrite_department(mock_session):
     """
@@ -175,7 +196,9 @@ def test_ensure_student_does_not_overwrite_department(mock_session):
     # Simulate: student already has correct department from engagement ingestion
     existing_student = MagicMock(spec=Student)
     existing_student.org_defined_id = "2025EB1100001"
-    existing_student.parent_department_name = "BS - Data Science & AI"  # correct, set by primary ingestion
+    existing_student.parent_department_name = (
+        "BS - Data Science & AI"  # correct, set by primary ingestion
+    )
     existing_student.parent_department_code = "dept_bs_dsai"
     existing_student.first_name = "Existing"
     existing_student.last_name = "Student"
@@ -193,17 +216,19 @@ def test_ensure_student_does_not_overwrite_department(mock_session):
         student_id="2025EB1100001@bitspilani-digital.edu.in",
         org_id="2025EB1100001",
         name="Test Student",
-        program="MSc"  # WRONG — should be ignored because student already has BS
+        program="MSc",  # WRONG — should be ignored because student already has BS
     )
 
     # Department should be unchanged
-    assert existing_student.parent_department_name == "BS - Data Science & AI", \
-        "_ensure_student overwrote an existing department — B-3 fix may not be applied correctly. " \
+    assert existing_student.parent_department_name == "BS - Data Science & AI", (
+        "_ensure_student overwrote an existing department — B-3 fix may not be applied correctly. "
         f"Got: {existing_student.parent_department_name}, expected: BS - Data Science & AI"
+    )
 
     # Department code should also be unchanged
-    assert existing_student.parent_department_code == "dept_bs_dsai", \
-        f"_ensure_student overwrote department code. Got: {existing_student.parent_department_code}"
+    assert (
+        existing_student.parent_department_code == "dept_bs_dsai"
+    ), f"_ensure_student overwrote department code. Got: {existing_student.parent_department_code}"
 
 
 def test_ensure_student_sets_department_for_new_student(mock_session):
@@ -232,27 +257,34 @@ def test_ensure_student_sets_department_for_new_student(mock_session):
     new_student.parent_department_code = None
 
     # Mock Student constructor to return our mock
-    with patch('backend.services.core.data_ingestion.Student', return_value=new_student):
+    with patch(
+        "backend.services.core.data_ingestion.Student", return_value=new_student
+    ):
         _ensure_student(
             db=mock_session,
             student_id="2025EB1100002@bitspilani-digital.edu.in",
             org_id="2025EB1100002",
             name="New Student",
-            program="BS"
+            program="BS",
         )
 
     # For new students, department SHOULD be set
-    assert new_student.parent_department_name == "BS - Data Science & AI", \
-        "_ensure_student should set department for new students"
-    assert new_student.parent_department_code == "dept_bs_dsai", \
-        "_ensure_student should set department code for new students"
+    assert (
+        new_student.parent_department_name == "BS - Data Science & AI"
+    ), "_ensure_student should set department for new students"
+    assert (
+        new_student.parent_department_code == "dept_bs_dsai"
+    ), "_ensure_student should set department code for new students"
 
 
 # =============================================================================
 # TEST 3 — Faculty scoping filter smoke test
 # =============================================================================
 
-def test_faculty_sees_only_own_department_students(mock_session_with_students, mock_bs_faculty):
+
+def test_faculty_sees_only_own_department_students(
+    mock_session_with_students, mock_bs_faculty
+):
     """
     Test that faculty users only see students from their own department.
 
@@ -270,18 +302,19 @@ def test_faculty_sees_only_own_department_students(mock_session_with_students, m
     filtered_students = all_students
     if role == "faculty" and not is_superuser and dept:
         filtered_students = [
-            s for s in all_students
-            if s.parent_department_name == dept
+            s for s in all_students if s.parent_department_name == dept
         ]
 
     # Verify BS faculty only sees BS students
     programs = {s.parent_department_name for s in filtered_students}
-    assert programs == {"BS - Data Science & AI"}, \
-        f"BS faculty saw non-BS students: {programs}. Department scoping filter may be bypassed."
+    assert programs == {
+        "BS - Data Science & AI"
+    }, f"BS faculty saw non-BS students: {programs}. Department scoping filter may be bypassed."
 
     # Verify count is correct (10 BS students)
-    assert len(filtered_students) == 10, \
-        f"Expected 10 BS students, got {len(filtered_students)}. Filtering may not work correctly."
+    assert (
+        len(filtered_students) == 10
+    ), f"Expected 10 BS students, got {len(filtered_students)}. Filtering may not work correctly."
 
 
 def test_superuser_faculty_sees_all_departments(mock_session_with_students):
@@ -303,18 +336,25 @@ def test_superuser_faculty_sees_all_departments(mock_session_with_students):
 
     filtered_students = all_students
     if role == "faculty" and not is_superuser and dept:
-        filtered_students = [s for s in all_students if s.parent_department_name == dept]
+        filtered_students = [
+            s for s in all_students if s.parent_department_name == dept
+        ]
 
     # Superuser should see all students (20 total: 10 BS + 10 MSc)
-    assert len(filtered_students) == 20, \
-        f"Superuser should see all 20 students, got {len(filtered_students)}"
+    assert (
+        len(filtered_students) == 20
+    ), f"Superuser should see all 20 students, got {len(filtered_students)}"
 
     programs = {s.parent_department_name for s in filtered_students}
-    assert programs == {"BS - Data Science & AI", "MSc - Data Science & AI"}, \
-        f"Superuser should see both departments: {programs}"
+    assert programs == {
+        "BS - Data Science & AI",
+        "MSc - Data Science & AI",
+    }, f"Superuser should see both departments: {programs}"
 
 
-def test_msc_faculty_sees_only_msc_students(mock_session_with_students, mock_msc_faculty):
+def test_msc_faculty_sees_only_msc_students(
+    mock_session_with_students, mock_msc_faculty
+):
     """
     Test that MSc faculty only see MSc students.
     """
@@ -327,11 +367,15 @@ def test_msc_faculty_sees_only_msc_students(mock_session_with_students, mock_msc
 
     filtered_students = all_students
     if role == "faculty" and not is_superuser and dept:
-        filtered_students = [s for s in all_students if s.parent_department_name == dept]
+        filtered_students = [
+            s for s in all_students if s.parent_department_name == dept
+        ]
 
     programs = {s.parent_department_name for s in filtered_students}
-    assert programs == {"MSc - Data Science & AI"}, \
-        f"MSc faculty saw non-MSc students: {programs}"
+    assert programs == {
+        "MSc - Data Science & AI"
+    }, f"MSc faculty saw non-MSc students: {programs}"
 
-    assert len(filtered_students) == 10, \
-        f"Expected 10 MSc students, got {len(filtered_students)}"
+    assert (
+        len(filtered_students) == 10
+    ), f"Expected 10 MSc students, got {len(filtered_students)}"

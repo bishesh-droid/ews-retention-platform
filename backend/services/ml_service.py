@@ -53,6 +53,7 @@ logger = sys_logger
 # the discrepancy is visible rather than silently swallowed.
 # ---------------------------------------------------------------------------
 
+
 def _try_load_joblib_models() -> Optional[Any]:  # noqa: C901
     """
     Try to load the XGBoost joblib model.
@@ -66,7 +67,10 @@ def _try_load_joblib_models() -> Optional[Any]:  # noqa: C901
 
         model_path = (
             Path(__file__).resolve().parent.parent
-            / "ml" / "models" / "saved" / "retention_model_xgboost.joblib"
+            / "ml"
+            / "models"
+            / "saved"
+            / "retention_model_xgboost.joblib"
         )
         features_path = model_path.parent / "feature_names.json"
         metrics_path = model_path.parent / "model_metrics.json"
@@ -119,7 +123,9 @@ def _try_load_joblib_models() -> Optional[Any]:  # noqa: C901
                 )
                 return None
         else:
-            logger.warning("Could not validate model feature schema. Using rule-based scoring.")
+            logger.warning(
+                "Could not validate model feature schema. Using rule-based scoring."
+            )
             return None
 
     except Exception as exc:
@@ -133,6 +139,7 @@ _JOBLIB_MODEL = _try_load_joblib_models()
 # ---------------------------------------------------------------------------
 # Public service class
 # ---------------------------------------------------------------------------
+
 
 class MLService:
     """
@@ -185,7 +192,9 @@ class MLService:
             values.append(float(val))
         return values
 
-    def _get_model_prediction(self, features: Dict[str, Any]) -> Tuple[Optional[float], Optional[float]]:
+    def _get_model_prediction(
+        self, features: Dict[str, Any]
+    ) -> Tuple[Optional[float], Optional[float]]:
         """
         Get prediction from XGBoost model if available.
 
@@ -288,7 +297,9 @@ class MLService:
                 risk_score = rule_based_score
                 model_used = False
                 model_type = "rule_based"
-                model_description = "Weighted engagement formula — not a trained ML model"
+                model_description = (
+                    "Weighted engagement formula — not a trained ML model"
+                )
                 score_basis = "rule_based_formula"
                 model_confidence = None
 
@@ -308,22 +319,32 @@ class MLService:
                 "model_used": model_used,
                 "model_type": model_type,
                 "model_description": model_description,
-                "model_confidence": round(model_confidence, 4) if model_confidence else None,
+                "model_confidence": (
+                    round(model_confidence, 4) if model_confidence else None
+                ),
                 "rule_based_score": round(rule_based_score, 2),
                 "ml_model_score": round(model_score, 2) if model_score else None,
                 "score_basis": score_basis,
                 "prediction_error": False,
                 "prediction_timestamp": datetime.now(timezone.utc).isoformat(),
                 "features": {
-                    "content_completion_score": features.get("content_completion_score", 0),
+                    "content_completion_score": features.get(
+                        "content_completion_score", 0
+                    ),
                     "quiz_engagement_score": features.get("quiz_engagement_score", 0),
                     "graded_quiz_score": features.get("graded_quiz_score", 0),
-                    "graded_assignment_score": features.get("graded_assignment_score", 0),
+                    "graded_assignment_score": features.get(
+                        "graded_assignment_score", 0
+                    ),
                     "exam_score": features.get("exam_score", 0),
                     "exam_attendance_rate": features.get("exam_attendance_rate", 0),
-                    "login_consistency_score": features.get("login_consistency_score", 0),
+                    "login_consistency_score": features.get(
+                        "login_consistency_score", 0
+                    ),
                     "time_investment_score": features.get("time_investment_score", 0),
-                    "discussion_engagement_score": features.get("discussion_engagement_score", 0),
+                    "discussion_engagement_score": features.get(
+                        "discussion_engagement_score", 0
+                    ),
                     "assignment_score": features.get("assignment_score", 0),
                 },
             }
@@ -384,7 +405,7 @@ class MLService:
         try:
             pred = Prediction(  # type: ignore[arg-type]
                 student_id=student_id,
-                risk_score=risk_score,                   # stored as 0-100 scale (DB-5)
+                risk_score=risk_score,  # stored as 0-100 scale (DB-5)
                 engagement_score=features.get("content_completion_score", 0) / 100.0,
                 retention_likelihood=RiskScorer.get_retention_likelihood(risk_score),
                 # Legacy fields (kept for backward compatibility with analytics endpoints)
@@ -393,10 +414,15 @@ class MLService:
                 assignments=features.get("graded_assignment_score", 0.0),
                 # Signal breakdown scores (0-1 scale)
                 academic_signal_score=features.get("graded_quiz_score", 0) / 100.0,
-                engagement_signal_score=features.get("quiz_engagement_score", 0) / 100.0,
-                consistency_signal_score=features.get("login_consistency_score", 0) / 100.0,
+                engagement_signal_score=features.get("quiz_engagement_score", 0)
+                / 100.0,
+                consistency_signal_score=features.get("login_consistency_score", 0)
+                / 100.0,
                 intent_signal_score=features.get("assignment_score", 0) / 100.0,
-                responsiveness_signal_score=features.get("discussion_engagement_score", 0) / 100.0,
+                responsiveness_signal_score=features.get(
+                    "discussion_engagement_score", 0
+                )
+                / 100.0,
                 model_version=settings.RISK_MODEL_VERSION,
                 prediction_timestamp=datetime.now(timezone.utc),
                 top_risk_factors=json.dumps(
@@ -446,7 +472,10 @@ class MLService:
         metrics = None
         model_path = (
             Path(__file__).resolve().parent.parent
-            / "ml" / "models" / "saved" / "retention_model_xgboost.joblib"
+            / "ml"
+            / "models"
+            / "saved"
+            / "retention_model_xgboost.joblib"
         )
         metrics_path = model_path.parent / "model_metrics.json"
 
@@ -490,7 +519,9 @@ class MLService:
             model_info["training_info"] = {
                 "n_samples": metrics.get("n_samples"),
                 "class_distribution": metrics.get("class_distribution"),
-                "cross_validation_folds": metrics.get("cross_validation", {}).get("folds"),
+                "cross_validation_folds": metrics.get("cross_validation", {}).get(
+                    "folds"
+                ),
                 "training_params": metrics.get("training_params"),
             }
             model_info["feature_importance"] = metrics.get("feature_importance", [])

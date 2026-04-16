@@ -2,6 +2,7 @@
 Run once during local development setup: python -m backend.scripts.seed_dev_data
 Creates a hashed admin user for local testing. Never runs automatically.
 """
+
 import asyncio
 from backend.database.session import get_session
 from backend.core.security import get_password_hash

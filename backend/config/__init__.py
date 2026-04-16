@@ -25,11 +25,12 @@ DATA_DIR = BACKEND_DIR / "data"
 # ---------------------------------------------------------------------------
 # API / Server
 # ---------------------------------------------------------------------------
-API_HOST: str = os.getenv("API_HOST", "0.0.0.0")  # nosec B104 - intentional default for container networking
+API_HOST: str = os.getenv(
+    "API_HOST", "0.0.0.0"
+)  # nosec B104 - intentional default for container networking
 API_PORT: int = int(os.getenv("API_PORT", "8000"))
 CORS_ORIGINS: list = os.getenv(
-    "CORS_ORIGINS",
-    "http://localhost:3000,http://localhost:5173,http://127.0.0.1:3000"
+    "CORS_ORIGINS", "http://localhost:3000,http://localhost:5173,http://127.0.0.1:3000"
 ).split(",")
 
 # ---------------------------------------------------------------------------
@@ -43,6 +44,7 @@ DATABASE_URL: str
 if TESTING:
     import tempfile
     import atexit
+
     _test_db_fd, _test_db_path = tempfile.mkstemp(suffix=".db", prefix="ews_test_")
     os.close(_test_db_fd)
     DATABASE_URL = f"sqlite:///{_test_db_path}"
@@ -81,8 +83,15 @@ def validate_security_config():
         )
     if len(SECRET_KEY) < 32:
         raise RuntimeError("SECRET_KEY must be at least 32 characters")
-    if ENVIRONMENT != "development" and SECRET_KEY in ("dev", "test", "changeme", "secret"):
-        raise RuntimeError("Insecure SECRET_KEY detected in non-development environment")
+    if ENVIRONMENT != "development" and SECRET_KEY in (
+        "dev",
+        "test",
+        "changeme",
+        "secret",
+    ):
+        raise RuntimeError(
+            "Insecure SECRET_KEY detected in non-development environment"
+        )
 
     # Validate against placeholder patterns in non-test environments
     if not TESTING and ENVIRONMENT != "development":
@@ -101,8 +110,18 @@ def _validate_no_placeholders(name: str, value: str):
 
     lower_value = value.lower()
     placeholder_patterns = [
-        "change-this", "example", "placeholder", "your-", "changeme",
-        "test", "dummy", "fake", "invalid", "none", "null", "0000000000000000"
+        "change-this",
+        "example",
+        "placeholder",
+        "your-",
+        "changeme",
+        "test",
+        "dummy",
+        "fake",
+        "invalid",
+        "none",
+        "null",
+        "0000000000000000",
     ]
 
     for pattern in placeholder_patterns:
@@ -210,7 +229,9 @@ FEATURE_WEIGHTS: dict = {
     "assignment": float(os.getenv("WEIGHT_ASSIGNMENT", "0.15")),
     "time_investment": float(os.getenv("WEIGHT_TIME_INVESTMENT", "0.08")),
     "discussion": float(os.getenv("WEIGHT_DISCUSSION", "0.02")),
-    "self_directed_learning": float(os.getenv("WEIGHT_SELF_DIRECTED_LEARNING", "0.05")),  # risk reducer
+    "self_directed_learning": float(
+        os.getenv("WEIGHT_SELF_DIRECTED_LEARNING", "0.05")
+    ),  # risk reducer
 }
 
 # ---------------------------------------------------------------------------
@@ -229,13 +250,17 @@ RISK_SPIKE_THRESHOLD: float = float(os.getenv("RISK_SPIKE_THRESHOLD", "15.0"))
 # Business / revenue
 AVERAGE_STUDENT_LTV: float = float(os.getenv("AVERAGE_STUDENT_LTV", "150000.0"))
 TUITION_PER_SEMESTER: float = float(os.getenv("TUITION_PER_SEMESTER", "75000.0"))
-INTERVENTION_COST_PER_STUDENT: float = float(os.getenv("INTERVENTION_COST_PER_STUDENT", "500.0"))
+INTERVENTION_COST_PER_STUDENT: float = float(
+    os.getenv("INTERVENTION_COST_PER_STUDENT", "500.0")
+)
 TARGET_RETENTION_RATE: float = float(os.getenv("TARGET_RETENTION_RATE", "0.90"))
 
 # ---------------------------------------------------------------------------
 # Feature flags (D12-3)
 # ---------------------------------------------------------------------------
-ENABLE_CALENDAR_SCORER: bool = os.getenv("ENABLE_CALENDAR_SCORER", "true").lower() == "true"
+ENABLE_CALENDAR_SCORER: bool = (
+    os.getenv("ENABLE_CALENDAR_SCORER", "true").lower() == "true"
+)
 ENABLE_LLM_FEATURES: bool = os.getenv("ENABLE_LLM_FEATURES", "true").lower() == "true"
 
 # ---------------------------------------------------------------------------
@@ -249,38 +274,27 @@ ENGAGEMENT_DATA_PATH = DATA_DIR / os.getenv(
 # Quiz / exam data
 QUIZ_EXAM_DATA_PATH = DATA_DIR / os.getenv(
     "QUIZ_EXAM_DATA_FILE",
-    "_Trimester-1 2025 Attendance Quiz-Assignment-Exam 5Jan2025.xlsx"
+    "_Trimester-1 2025 Attendance Quiz-Assignment-Exam 5Jan2025.xlsx",
 )
 
 # Additional snapshot files (may or may not exist — ingestion skips missing files)
 WEEK12_ENGAGEMENT_PATH = DATA_DIR / os.getenv(
-    "WEEK12_ENGAGEMENT_FILE",
-    "Week 1-2 Student Engagement Analysis.xlsx"
+    "WEEK12_ENGAGEMENT_FILE", "Week 1-2 Student Engagement Analysis.xlsx"
 )
 QUIZ_STATUS_9FEB_PATH = DATA_DIR / os.getenv(
-    "QUIZ_STATUS_9FEB_FILE",
-    "Graded Quiz 1 Status 9 Feb.xlsx"
+    "QUIZ_STATUS_9FEB_FILE", "Graded Quiz 1 Status 9 Feb.xlsx"
 )
 GRADED_QUIZ_10FEB_ORIG_PATH = DATA_DIR / os.getenv(
-    "GRADED_QUIZ_10FEB_ORIG_FILE",
-    "graded quiz 1 10 feb complete.xlsx"
+    "GRADED_QUIZ_10FEB_ORIG_FILE", "graded quiz 1 10 feb complete.xlsx"
 )
 GRADED_QUIZ_10FEB_1115AM_PATH = DATA_DIR / os.getenv(
-    "GRADED_QUIZ_10FEB_1115AM_FILE",
-    "graded quiz 1 10 feb 11 15 AM.xlsx"
+    "GRADED_QUIZ_10FEB_1115AM_FILE", "graded quiz 1 10 feb 11 15 AM.xlsx"
 )
 GRADED_QUIZ_10FEB_451PM_PATH = DATA_DIR / os.getenv(
-    "GRADED_QUIZ_10FEB_451PM_FILE",
-    "graded quiz 1 10 feb 4 51 PM.xlsx"
+    "GRADED_QUIZ_10FEB_451PM_FILE", "graded quiz 1 10 feb 4 51 PM.xlsx"
 )
-WEEK3_USAGE_PATH = DATA_DIR / os.getenv(
-    "WEEK3_USAGE_FILE",
-    "Learner usage week 3.xlsx"
-)
-WEEK5_USAGE_PATH = DATA_DIR / os.getenv(
-    "WEEK5_USAGE_FILE",
-    "Learner usage week 5.xlsx"
-)
+WEEK3_USAGE_PATH = DATA_DIR / os.getenv("WEEK3_USAGE_FILE", "Learner usage week 3.xlsx")
+WEEK5_USAGE_PATH = DATA_DIR / os.getenv("WEEK5_USAGE_FILE", "Learner usage week 5.xlsx")
 
 # ML training sample data
 SAMPLE_DATA_PATH = DATA_DIR / os.getenv("SAMPLE_DATA_FILE", "labels.csv")
@@ -295,7 +309,9 @@ CURRENT_SEMESTER_NAME: str = os.getenv("CURRENT_SEMESTER_NAME", "Trimester 2")
 _TRIMESTER_START_DATE_DATE: date = date.fromisoformat(TRIMESTER_START_DATE)
 
 # Calendar-based risk blending weight (0.0–1.0)
-CALENDAR_RISK_BLEND_WEIGHT: float = float(os.getenv("CALENDAR_RISK_BLEND_WEIGHT", "0.4"))
+CALENDAR_RISK_BLEND_WEIGHT: float = float(
+    os.getenv("CALENDAR_RISK_BLEND_WEIGHT", "0.4")
+)
 
 
 def trimester_week_number(at: Optional[Union[datetime, date]] = None) -> Optional[int]:

@@ -5,13 +5,23 @@ Time-indexed fact and dimension tables for the EWS data pipeline.
 These represent the canonical data model used by the ingestion pipeline.
 """
 
-from sqlalchemy import Column, Integer, String, Float, Date, DateTime, Boolean, ForeignKey
+from sqlalchemy import (
+    Column,
+    Integer,
+    String,
+    Float,
+    Date,
+    DateTime,
+    Boolean,
+    ForeignKey,
+)
 from datetime import datetime, timezone
 from backend.database.connection import Base
 
 
 class DimStudent(Base):
     """Canonical student dimension with unified identifiers"""
+
     __tablename__ = "dim_students"
 
     student_id = Column(String(255), primary_key=True)  # Canonical email
@@ -24,11 +34,16 @@ class DimStudent(Base):
     enrollment_status = Column(String(20), index=True)
     is_new_student = Column(Boolean)
     created_at = Column(DateTime, default=lambda: datetime.now(timezone.utc))
-    updated_at = Column(DateTime, default=lambda: datetime.now(timezone.utc), onupdate=lambda: datetime.now(timezone.utc))
+    updated_at = Column(
+        DateTime,
+        default=lambda: datetime.now(timezone.utc),
+        onupdate=lambda: datetime.now(timezone.utc),
+    )
 
 
 class DimCourse(Base):
     """Course dimension"""
+
     __tablename__ = "dim_courses"
 
     course_id = Column(String(50), primary_key=True)
@@ -43,10 +58,13 @@ class DimCourse(Base):
 
 class FactAcademicPerformance(Base):
     """Time-indexed academic performance facts"""
+
     __tablename__ = "fact_academic_performance"
 
     performance_id = Column(Integer, primary_key=True, autoincrement=True)
-    student_id = Column(String(255), ForeignKey("dim_students.student_id"), nullable=False, index=True)
+    student_id = Column(
+        String(255), ForeignKey("dim_students.student_id"), nullable=False, index=True
+    )
     course_id = Column(String(50), ForeignKey("dim_courses.course_id"))
     trimester = Column(String(20))
     assessment_type = Column(String(50), index=True)  # Quiz, Assignment, Exam
@@ -65,10 +83,13 @@ class FactAcademicPerformance(Base):
 
 class FactEngagement(Base):
     """Time-indexed engagement facts"""
+
     __tablename__ = "fact_engagement"
 
     engagement_id = Column(Integer, primary_key=True, autoincrement=True)
-    student_id = Column(String(255), ForeignKey("dim_students.student_id"), nullable=False, index=True)
+    student_id = Column(
+        String(255), ForeignKey("dim_students.student_id"), nullable=False, index=True
+    )
     course_id = Column(String(50), ForeignKey("dim_courses.course_id"), index=True)
     metric_date = Column(Date, index=True)
     metric_week = Column(Integer, index=True)
@@ -96,10 +117,13 @@ class FactEngagement(Base):
 
 class FactConsistency(Base):
     """Consistency tracking over time windows"""
+
     __tablename__ = "fact_consistency"
 
     consistency_id = Column(Integer, primary_key=True, autoincrement=True)
-    student_id = Column(String(255), ForeignKey("dim_students.student_id"), nullable=False, index=True)
+    student_id = Column(
+        String(255), ForeignKey("dim_students.student_id"), nullable=False, index=True
+    )
     course_id = Column(String(50), ForeignKey("dim_courses.course_id"))
     analysis_period_start = Column(Date)
     analysis_period_end = Column(Date)
@@ -126,10 +150,13 @@ class FactConsistency(Base):
 
 class FactIntentResponsiveness(Base):
     """Intent and responsiveness signals"""
+
     __tablename__ = "fact_intent_responsiveness"
 
     intent_id = Column(Integer, primary_key=True, autoincrement=True)
-    student_id = Column(String(255), ForeignKey("dim_students.student_id"), nullable=False, index=True)
+    student_id = Column(
+        String(255), ForeignKey("dim_students.student_id"), nullable=False, index=True
+    )
     course_id = Column(String(50), ForeignKey("dim_courses.course_id"))
 
     # Quiz responsiveness
@@ -150,7 +177,7 @@ class FactIntentResponsiveness(Base):
     response_received_date = Column(DateTime)
     response_received = Column(Boolean)
     message_priority = Column(String(50))  # normal, escalated, urgent
-    message_type = Column(String(50))      # email, sms, whatsapp
+    message_type = Column(String(50))  # email, sms, whatsapp
 
     # Early warning
     no_login_days = Column(Integer)
@@ -162,6 +189,7 @@ class FactIntentResponsiveness(Base):
 
 class DataLineage(Base):
     """Audit trail for the ETL pipeline"""
+
     __tablename__ = "data_lineage"
 
     lineage_id = Column(Integer, primary_key=True, autoincrement=True)

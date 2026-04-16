@@ -17,7 +17,9 @@ import numpy as np
 from backend.database import RawEvent, EngineeredFeatures, Student
 
 
-def compute_academic_signals(student_id: str, db: Session, lookback_days: int = 90) -> Dict[str, float]:  # noqa: C901
+def compute_academic_signals(
+    student_id: str, db: Session, lookback_days: int = 90
+) -> Dict[str, float]:  # noqa: C901
     """
     Compute academic performance signals from LMS events
 
@@ -30,31 +32,35 @@ def compute_academic_signals(student_id: str, db: Session, lookback_days: int = 
     cutoff_date = datetime.utcnow() - timedelta(days=lookback_days)
 
     # Get LMS assignment events
-    events = db.query(RawEvent).filter(
-        RawEvent.student_id == student_id,
-        RawEvent.event_source == "lms",
-        RawEvent.event_type.in_(["assignment_submit", "grade_posted"]),
-        RawEvent.timestamp >= cutoff_date
-    ).all()
+    events = (
+        db.query(RawEvent)
+        .filter(
+            RawEvent.student_id == student_id,
+            RawEvent.event_source == "lms",
+            RawEvent.event_type.in_(["assignment_submit", "grade_posted"]),
+            RawEvent.timestamp >= cutoff_date,
+        )
+        .all()
+    )
 
     if not events:
         # Fallback to existing student data
         student = db.query(Student).filter(Student.id == student_id).first()
         if student:
             # Use existing absrate and GPA data as proxy
-            avg_grade = getattr(student, 'q4mpa7', 0) * 20  # Scale 0-5 to 0-100
+            avg_grade = getattr(student, "q4mpa7", 0) * 20  # Scale 0-5 to 0-100
             return {
                 # Assume absrate relates to completion
-                "assignment_completion_rate": 1.0 - getattr(student, 'absrate7', 0.5),
+                "assignment_completion_rate": 1.0 - getattr(student, "absrate7", 0.5),
                 "average_grade": avg_grade,
                 "deadline_adherence_score": 0.8,  # Default
-                "grade_trend": 0.0
+                "grade_trend": 0.0,
             }
         return {
             "assignment_completion_rate": 0.5,
             "average_grade": 50.0,
             "deadline_adherence_score": 0.5,
-            "grade_trend": 0.0
+            "grade_trend": 0.0,
         }
 
     # Parse events
@@ -72,17 +78,16 @@ def compute_academic_signals(student_id: str, db: Session, lookback_days: int = 
                 on_time += 1
 
             if "score" in data:
-                assignments.append({
-                    "score": data["score"],
-                    "max_score": data.get("max_score", 100),
-                    "timestamp": event.timestamp
-                })
+                assignments.append(
+                    {
+                        "score": data["score"],
+                        "max_score": data.get("max_score", 100),
+                        "timestamp": event.timestamp,
+                    }
+                )
 
         if event.event_type == "grade_posted" and "grade" in data:
-            grades.append({
-                "grade": data["grade"],
-                "timestamp": event.timestamp
-            })
+            grades.append({"grade": data["grade"], "timestamp": event.timestamp})
 
     # Calculate metrics
     completion_rate = len(assignments) / max(total_assignments, 1)
@@ -108,11 +113,13 @@ def compute_academic_signals(student_id: str, db: Session, lookback_days: int = 
         "assignment_completion_rate": min(completion_rate, 1.0),
         "average_grade": avg_grade,
         "deadline_adherence_score": deadline_adherence,
-        "grade_trend": grade_trend / 100.0  # Normalize
+        "grade_trend": grade_trend / 100.0,  # Normalize
     }
 
 
-def compute_engagement_signals(student_id: str, db: Session, lookback_days: int = 30) -> Dict[str, float]:
+def compute_engagement_signals(
+    student_id: str, db: Session, lookback_days: int = 30
+) -> Dict[str, float]:
     """
     Compute engagement signals from LMS logins and website activity
 
@@ -125,19 +132,27 @@ def compute_engagement_signals(student_id: str, db: Session, lookback_days: int 
     cutoff_date = datetime.utcnow() - timedelta(days=lookback_days)
 
     # Get login events
-    login_events = db.query(RawEvent).filter(
-        RawEvent.student_id == student_id,
-        RawEvent.event_source == "lms",
-        RawEvent.event_type == "login",
-        RawEvent.timestamp >= cutoff_date
-    ).all()
+    login_events = (
+        db.query(RawEvent)
+        .filter(
+            RawEvent.student_id == student_id,
+            RawEvent.event_source == "lms",
+            RawEvent.event_type == "login",
+            RawEvent.timestamp >= cutoff_date,
+        )
+        .all()
+    )
 
     # Get website events
-    website_events = db.query(RawEvent).filter(
-        RawEvent.student_id == student_id,
-        RawEvent.event_source == "website",
-        RawEvent.timestamp >= cutoff_date
-    ).all()
+    website_events = (
+        db.query(RawEvent)
+        .filter(
+            RawEvent.student_id == student_id,
+            RawEvent.event_source == "website",
+            RawEvent.timestamp >= cutoff_date,
+        )
+        .all()
+    )
 
     # Login frequency
     login_count = len(login_events)
@@ -149,8 +164,10 @@ def compute_engagement_signals(student_id: str, db: Session, lookback_days: int 
 
     # Video completion rate
     video_events = [
-        e for e in website_events
-        if json.loads(str(e.event_data) if e.event_data else "{}").get("event_type") == "video_watch"
+        e
+        for e in website_events
+        if json.loads(str(e.event_data) if e.event_data else "{}").get("event_type")
+        == "video_watch"
     ]
     if video_events:
         completion_rates = []
@@ -169,11 +186,13 @@ def compute_engagement_signals(student_id: str, db: Session, lookback_days: int 
         "login_frequency": login_frequency,
         "avg_session_duration": avg_session_duration,
         "video_completion_rate": video_completion_rate,
-        "platform_interaction_score": platform_interaction_score
+        "platform_interaction_score": platform_interaction_score,
     }
 
 
-def compute_consistency_signals(student_id: str, db: Session, lookback_days: int = 60) -> Dict[str, Any]:
+def compute_consistency_signals(
+    student_id: str, db: Session, lookback_days: int = 60
+) -> Dict[str, Any]:
     """
     Compute consistency signals from Zoom attendance
 
@@ -186,23 +205,27 @@ def compute_consistency_signals(student_id: str, db: Session, lookback_days: int
     cutoff_date = datetime.utcnow() - timedelta(days=lookback_days)
 
     # Get Zoom attendance events
-    zoom_events = db.query(RawEvent).filter(
-        RawEvent.student_id == student_id,
-        RawEvent.event_source == "zoom",
-        RawEvent.event_type == "class_attend",
-        RawEvent.timestamp >= cutoff_date
-    ).all()
+    zoom_events = (
+        db.query(RawEvent)
+        .filter(
+            RawEvent.student_id == student_id,
+            RawEvent.event_source == "zoom",
+            RawEvent.event_type == "class_attend",
+            RawEvent.timestamp >= cutoff_date,
+        )
+        .all()
+    )
 
     # Fallback to existing student data
     student = db.query(Student).filter(Student.id == student_id).first()
 
     if not zoom_events and student:
-        absrate = getattr(student, 'absrate7', 0.3)
+        absrate = getattr(student, "absrate7", 0.3)
         return {
             "attendance_rate": 1.0 - absrate,
             "activity_regularity_score": 0.7,  # Default
             "missed_classes_count": int(absrate * 20),  # Estimate
-            "attendance_trend": 0.0
+            "attendance_trend": 0.0,
         }
 
     # Calculate metrics
@@ -230,11 +253,13 @@ def compute_consistency_signals(student_id: str, db: Session, lookback_days: int
         "attendance_rate": min(attendance_rate, 1.0),
         "activity_regularity_score": activity_regularity_score,
         "missed_classes_count": missed,
-        "attendance_trend": attendance_trend
+        "attendance_trend": attendance_trend,
     }
 
 
-def compute_intent_signals(student_id: str, db: Session, lookback_days: int = 30) -> Dict[str, Any]:
+def compute_intent_signals(
+    student_id: str, db: Session, lookback_days: int = 30
+) -> Dict[str, Any]:
     """
     Compute intent signals (declining trends, inactivity)
 
@@ -246,10 +271,12 @@ def compute_intent_signals(student_id: str, db: Session, lookback_days: int = 30
     cutoff_date = datetime.utcnow() - timedelta(days=lookback_days)
 
     # Get all recent events
-    all_events = db.query(RawEvent).filter(
-        RawEvent.student_id == student_id,
-        RawEvent.timestamp >= cutoff_date
-    ).order_by(RawEvent.timestamp.desc()).all()
+    all_events = (
+        db.query(RawEvent)
+        .filter(RawEvent.student_id == student_id, RawEvent.timestamp >= cutoff_date)
+        .order_by(RawEvent.timestamp.desc())
+        .all()
+    )
 
     # Days inactive
     days_inactive = 0
@@ -267,7 +294,9 @@ def compute_intent_signals(student_id: str, db: Session, lookback_days: int = 30
 
     engagement_trend = 0.0
     if first_half:
-        engagement_trend = (len(second_half) - len(first_half)) / max(len(first_half), 1)
+        engagement_trend = (len(second_half) - len(first_half)) / max(
+            len(first_half), 1
+        )
 
     # Declining performance flag
     # Get academic and engagement signals
@@ -279,11 +308,13 @@ def compute_intent_signals(student_id: str, db: Session, lookback_days: int = 30
     return {
         "engagement_trend": engagement_trend,
         "days_inactive": days_inactive,
-        "declining_performance_flag": declining_performance_flag
+        "declining_performance_flag": declining_performance_flag,
     }
 
 
-def compute_responsiveness_signals(student_id: str, db: Session, lookback_days: int = 30) -> Dict[str, float]:
+def compute_responsiveness_signals(
+    student_id: str, db: Session, lookback_days: int = 30
+) -> Dict[str, float]:
     """
     Compute responsiveness signals from communication events
 
@@ -295,17 +326,21 @@ def compute_responsiveness_signals(student_id: str, db: Session, lookback_days: 
     cutoff_date = datetime.utcnow() - timedelta(days=lookback_days)
 
     # Get communication events
-    comm_events = db.query(RawEvent).filter(
-        RawEvent.student_id == student_id,
-        RawEvent.event_source == "communication",
-        RawEvent.timestamp >= cutoff_date
-    ).all()
+    comm_events = (
+        db.query(RawEvent)
+        .filter(
+            RawEvent.student_id == student_id,
+            RawEvent.event_source == "communication",
+            RawEvent.timestamp >= cutoff_date,
+        )
+        .all()
+    )
 
     if not comm_events:
         return {
             "email_open_rate": 0.5,  # Default
             "message_reply_rate": 0.4,
-            "avg_response_time_hours": 24.0
+            "avg_response_time_hours": 24.0,
         }
 
     # Parse events
@@ -335,7 +370,7 @@ def compute_responsiveness_signals(student_id: str, db: Session, lookback_days: 
     return {
         "email_open_rate": email_open_rate,
         "message_reply_rate": message_reply_rate,
-        "avg_response_time_hours": avg_response_time
+        "avg_response_time_hours": avg_response_time,
     }
 
 
@@ -380,7 +415,7 @@ def compute_all_features(student_id: str, db: Session) -> Optional[EngineeredFea
             # Responsiveness
             email_open_rate=responsiveness["email_open_rate"],
             message_reply_rate=responsiveness["message_reply_rate"],
-            avg_response_time_hours=responsiveness["avg_response_time_hours"]
+            avg_response_time_hours=responsiveness["avg_response_time_hours"],
         )
 
         return features

@@ -85,7 +85,6 @@ def list_tasks(limit: int = 100) -> list:
     # Sort by started_at (or created implicitly by dict order as fallback)
     tasks = list(_tasks.values())
     tasks.sort(
-        key=lambda t: t.get("started_at") or t.get("finished_at") or "",
-        reverse=True
+        key=lambda t: t.get("started_at") or t.get("finished_at") or "", reverse=True
     )
     return tasks[:limit]

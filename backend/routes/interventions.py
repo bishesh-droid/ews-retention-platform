@@ -88,14 +88,16 @@ def _to_dict(i: Intervention) -> Dict[str, Any]:
         "threshold_category": i.threshold_category,
         "channels": _safe_parse_channels(i.channels),
         "assigned_team": i.assigned_team,
-        "student": None
-        if not s
-        else {
-            "id": s.id,
-            "first_name": s.first_name,
-            "last_name": s.last_name,
-            "department": s.parent_department_name,
-        },
+        "student": (
+            None
+            if not s
+            else {
+                "id": s.id,
+                "first_name": s.first_name,
+                "last_name": s.last_name,
+                "department": s.parent_department_name,
+            }
+        ),
     }
 
 
@@ -119,7 +121,12 @@ def list_interventions(
         q = q.filter(Intervention.student_id == student_id)
 
     total = q.count()
-    rows = q.order_by(desc(Intervention.date), desc(Intervention.id)).offset(skip).limit(limit).all()
+    rows = (
+        q.order_by(desc(Intervention.date), desc(Intervention.id))
+        .offset(skip)
+        .limit(limit)
+        .all()
+    )
 
     # Ensure relationship objects are available for serialization
     payload = {
@@ -143,7 +150,9 @@ def create_intervention(
     elif body.student_id:
         ids = [body.student_id]
     else:
-        raise HTTPException(status_code=400, detail="student_id or student_ids is required")
+        raise HTTPException(
+            status_code=400, detail="student_id or student_ids is required"
+        )
 
     created: List[Intervention] = []
     for sid in ids:

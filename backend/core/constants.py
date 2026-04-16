@@ -8,11 +8,12 @@ type-safe role checking across the codebase.
 
 class Role:
     """
-    Role constants for authorization.
+        Role constants for authorization.
 
-    All role checks should use these constants instead of hardcoded strings
-to prevent typos and enable IDE autocompletion.
+        All role checks should use these constants instead of hardcoded strings
+    to prevent typos and enable IDE autocompletion.
     """
+
     STUDENT = "student"
     FACULTY = "faculty"
     ADMIN = "admin"

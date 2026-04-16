@@ -18,8 +18,10 @@ router = APIRouter()
 # E-1: Notification Preferences Schemas
 # ============================================================================
 
+
 class NotificationPrefsResponse(BaseModel):
     """Faculty notification preferences response."""
+
     id: int
     user_id: int
     notify_on_high_risk: bool
@@ -35,6 +37,7 @@ class NotificationPrefsResponse(BaseModel):
 
 class NotificationPrefsUpdate(BaseModel):
     """Faculty notification preferences update request."""
+
     notify_on_high_risk: Optional[bool] = None
     notify_on_critical_risk: Optional[bool] = None
     notification_channel: Optional[str] = Field(None, pattern=r"^(email|webhook)$")
@@ -47,9 +50,12 @@ class NotificationPrefsUpdate(BaseModel):
 # E-1: Notification Preferences Endpoints
 # ============================================================================
 
+
 @router.get("/notification-prefs", response_model=APIResponse)
 def get_notification_preferences(
-    current_user: deps.User = Depends(deps.require_role([Role.FACULTY, Role.ADMIN, Role.RETENTION_TEAM])),
+    current_user: deps.User = Depends(
+        deps.require_role([Role.FACULTY, Role.ADMIN, Role.RETENTION_TEAM])
+    ),
     db: Session = Depends(deps.get_db),
 ) -> Dict[str, Any]:
     """
@@ -93,7 +99,9 @@ def get_notification_preferences(
 @router.put("/notification-prefs", response_model=APIResponse)
 def update_notification_preferences(
     update: NotificationPrefsUpdate,
-    current_user: deps.User = Depends(deps.require_role([Role.FACULTY, Role.ADMIN, Role.RETENTION_TEAM])),
+    current_user: deps.User = Depends(
+        deps.require_role([Role.FACULTY, Role.ADMIN, Role.RETENTION_TEAM])
+    ),
     db: Session = Depends(deps.get_db),
 ) -> Dict[str, Any]:
     """
@@ -140,15 +148,21 @@ def update_notification_preferences(
         pref = FacultyNotificationPref(
             user_id=current_user.id,
             notify_on_high_risk=(
-                update.notify_on_high_risk if update.notify_on_high_risk is not None else True
+                update.notify_on_high_risk
+                if update.notify_on_high_risk is not None
+                else True
             ),
             notify_on_critical_risk=(
-                update.notify_on_critical_risk if update.notify_on_critical_risk is not None else True
+                update.notify_on_critical_risk
+                if update.notify_on_critical_risk is not None
+                else True
             ),
             notification_channel=update.notification_channel or "email",
             webhook_url=update.webhook_url,
             email_override=update.email_override,
-            cooldown_hours=update.cooldown_hours if update.cooldown_hours is not None else 24,
+            cooldown_hours=(
+                update.cooldown_hours if update.cooldown_hours is not None else 24
+            ),
         )
         db.add(pref)
 
@@ -181,7 +195,9 @@ def get_faculty_students(
     Until explicit faculty-student mappings exist, this returns a
     risk-sorted slice of the global student list sized for the UI.
     """
-    students = StudentService.get_all_students(db, skip=0, limit=limit, sort_by="risk_score", order="desc")
+    students = StudentService.get_all_students(
+        db, skip=0, limit=limit, sort_by="risk_score", order="desc"
+    )
     return {
         "students": students,
         "count": len(students),
@@ -192,7 +208,9 @@ def get_faculty_students(
 def get_faculty_at_risk_students(
     current_user: deps.User = Depends(deps.require_role([Role.FACULTY])),
     db: Session = Depends(deps.get_db),
-    threshold: float = Query(60.0, ge=0, le=100, description="Risk score threshold for at-risk list"),
+    threshold: float = Query(
+        60.0, ge=0, le=100, description="Risk score threshold for at-risk list"
+    ),
     limit: int = Query(200, ge=1, le=1000),
 ) -> Dict[str, Any]:
     """
@@ -200,8 +218,12 @@ def get_faculty_at_risk_students(
 
     Threshold is applied to the 0–100 risk_score; higher = more risk.
     """
-    all_students = StudentService.get_all_students(db, skip=0, limit=5000, sort_by="risk_score", order="desc")
-    at_risk = [s for s in all_students if (s.get("risk_score") or 0) >= threshold][:limit]
+    all_students = StudentService.get_all_students(
+        db, skip=0, limit=5000, sort_by="risk_score", order="desc"
+    )
+    at_risk = [s for s in all_students if (s.get("risk_score") or 0) >= threshold][
+        :limit
+    ]
     return {
         "students": at_risk,
         "count": len(at_risk),
@@ -225,7 +247,9 @@ def get_engagement_alerts(
     - Low quiz performance
     - Low engagement / time investment
     """
-    students = StudentService.get_all_students(db, skip=0, limit=5000, sort_by="risk_score", order="desc")
+    students = StudentService.get_all_students(
+        db, skip=0, limit=5000, sort_by="risk_score", order="desc"
+    )
 
     alerts: List[Dict[str, Any]] = []
     for s in students:
@@ -248,7 +272,8 @@ def get_engagement_alerts(
         alerts.append(
             {
                 "student_id": s.get("id"),
-                "name": f"{s.get('first_name') or ''} {s.get('last_name') or ''}".strip() or s.get("id"),
+                "name": f"{s.get('first_name') or ''} {s.get('last_name') or ''}".strip()
+                or s.get("id"),
                 "risk_score": s.get("risk_score") or 0,
                 "exam_attendance_rate": exam_attendance,
                 "graded_quiz_score": quiz_score,
@@ -258,7 +283,9 @@ def get_engagement_alerts(
             }
         )
 
-    alerts_sorted = sorted(alerts, key=lambda a: (a["risk_score"], -(a["exam_attendance_rate"] or 0)))
+    alerts_sorted = sorted(
+        alerts, key=lambda a: (a["risk_score"], -(a["exam_attendance_rate"] or 0))
+    )
     alerts_trimmed = alerts_sorted[:limit]
 
     return {

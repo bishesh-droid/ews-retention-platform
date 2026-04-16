@@ -41,18 +41,21 @@ def get_student_features(
         "academic_signals": {
             "assignment_completion_rate": student.get("assignment_score", 0) / 100.0,
             "average_grade": student.get("graded_quiz_score", 0) / 100.0,
-            "deadline_adherence_score": student.get("graded_assignment_score", 0) / 100.0,
+            "deadline_adherence_score": student.get("graded_assignment_score", 0)
+            / 100.0,
             "grade_trend": 0.0,
         },
         "engagement_signals": {
             "login_frequency": student.get("login_consistency_score", 0) / 100.0,
             "avg_session_duration": student.get("time_investment_score", 0) / 100.0,
             "video_completion_rate": student.get("content_completion_score", 0) / 100.0,
-            "platform_interaction_score": student.get("discussion_engagement_score", 0) / 100.0,
+            "platform_interaction_score": student.get("discussion_engagement_score", 0)
+            / 100.0,
         },
         "consistency_signals": {
             "attendance_rate": student.get("exam_attendance_rate", 0) / 100.0,
-            "activity_regularity_score": student.get("login_consistency_score", 0) / 100.0,
+            "activity_regularity_score": student.get("login_consistency_score", 0)
+            / 100.0,
             "missed_classes_count": 0,
             "attendance_trend": 0.0,
         },
@@ -87,7 +90,10 @@ def compute_features(
         checker = require_resource_ownership("student_id")
         # Manually invoke checker with request context
         from fastapi import Request
-        request = Request(scope={"type": "http", "path_params": {"student_id": student_id}})
+
+        request = Request(
+            scope={"type": "http", "path_params": {"student_id": student_id}}
+        )
         checker(request=request, current_user=current_user)
 
         student = StudentService.get_student_by_id(db, student_id)
@@ -113,16 +119,19 @@ def compute_features(
 
 
 @router.get("/signal-summary/{signal_category}")
-def get_signal_summary(
-    signal_category: str,
-    db: Session = Depends(get_db)
-):
+def get_signal_summary(signal_category: str, db: Session = Depends(get_db)):
     """Get summary statistics for a signal category across all students."""
-    valid_categories = ["academic", "engagement", "consistency", "intent", "responsiveness"]
+    valid_categories = [
+        "academic",
+        "engagement",
+        "consistency",
+        "intent",
+        "responsiveness",
+    ]
     if signal_category not in valid_categories:
         raise HTTPException(
             status_code=400,
-            detail=f"Invalid signal category. Must be one of: {valid_categories}"
+            detail=f"Invalid signal category. Must be one of: {valid_categories}",
         )
 
     students = StudentService.get_all_students(db, 0, 2000)
@@ -138,7 +147,12 @@ def get_signal_summary(
     values = [signal_map[signal_category](s) for s in students]
 
     if not values:
-        data = {"signal_category": signal_category, "total_students": 0, "mean": 0, "median": 0}
+        data = {
+            "signal_category": signal_category,
+            "total_students": 0,
+            "mean": 0,
+            "median": 0,
+        }
         return success_response(data, message="Signal summary")
 
     values.sort()

@@ -37,17 +37,27 @@ class AppError(Exception):
 
 
 class NotFoundError(AppError):
-    def __init__(self, message: str = "Resource not found", details: Optional[Dict[str, Any]] = None):
+    def __init__(
+        self,
+        message: str = "Resource not found",
+        details: Optional[Dict[str, Any]] = None,
+    ):
         super().__init__(message, status_code=404, details=details)
 
 
 class ValidationError(AppError):
-    def __init__(self, message: str = "Validation error", details: Optional[Dict[str, Any]] = None):
+    def __init__(
+        self,
+        message: str = "Validation error",
+        details: Optional[Dict[str, Any]] = None,
+    ):
         super().__init__(message, status_code=422, details=details)
 
 
 class ConflictError(AppError):
-    def __init__(self, message: str = "Conflict", details: Optional[Dict[str, Any]] = None):
+    def __init__(
+        self, message: str = "Conflict", details: Optional[Dict[str, Any]] = None
+    ):
         super().__init__(message, status_code=409, details=details)
 
 
@@ -92,7 +102,9 @@ def success_response(
     }
 
 
-def error_response(message: str, details: Optional[Dict[str, Any]] = None) -> Dict[str, Any]:
+def error_response(
+    message: str, details: Optional[Dict[str, Any]] = None
+) -> Dict[str, Any]:
     """
     Build a standardized error response envelope.
     """

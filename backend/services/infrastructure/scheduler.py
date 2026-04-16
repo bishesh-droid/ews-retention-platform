@@ -82,7 +82,9 @@ def generate_daily_predictions() -> None:  # noqa: C901
             # Check DB is accessible before proceeding (handles in-memory SQLite issues)
             db.execute(text("SELECT 1"))
     except Exception as e:
-        logger.warning(f"[SCHEDULER] Database not ready, skipping daily prediction job: {e}")
+        logger.warning(
+            f"[SCHEDULER] Database not ready, skipping daily prediction job: {e}"
+        )
         return
 
     # E-1: Track students crossing risk thresholds for notifications
@@ -159,7 +161,9 @@ def generate_daily_predictions() -> None:  # noqa: C901
                 break
             last_id = batch[-1].id
             total_processed += len(batch)
-            logger.info(f"Starting batch prediction for {len(batch)} students (batch ending at id={last_id})")
+            logger.info(
+                f"Starting batch prediction for {len(batch)} students (batch ending at id={last_id})"
+            )
             processed = 0
             errors = 0
 
@@ -168,7 +172,11 @@ def generate_daily_predictions() -> None:  # noqa: C901
                     now_utc = datetime.now(timezone.utc).replace(tzinfo=None)
                     wn = trimester_week_number(now_utc)
                     is_new = (student.old_new_student or "").lower() == "new"
-                    program = "MSc" if "msc" in ((student.parent_department_name or "").lower()) else "BS"
+                    program = (
+                        "MSc"
+                        if "msc" in ((student.parent_department_name or "").lower())
+                        else "BS"
+                    )
                     current_week = get_current_week(settings.TRIMESTER_START_DATE)
                     features = FeatureEngineer.calculate_all_features(
                         enrollment_map.get(student.id, []),
@@ -198,19 +206,27 @@ def generate_daily_predictions() -> None:  # noqa: C901
                         float(features.get("content_completion_score", 0.0)) * 0.6
                         + float(attendance_rate or 0.0) * 0.4
                     )
-                    engagement_score = max(0.0, min(1.0, engagement_score_0_100 / 100.0))
+                    engagement_score = max(
+                        0.0, min(1.0, engagement_score_0_100 / 100.0)
+                    )
 
                     # Upsert: Check if prediction already exists for (student_id, today)
                     today = now_utc.date()
-                    existing_pred = db.query(Prediction).filter(
-                        Prediction.student_id == student.id,
-                        Prediction.prediction_date == today
-                    ).first()
+                    existing_pred = (
+                        db.query(Prediction)
+                        .filter(
+                            Prediction.student_id == student.id,
+                            Prediction.prediction_date == today,
+                        )
+                        .first()
+                    )
                     if existing_pred:
                         # Update existing prediction
                         existing_pred.risk_score = risk_score
                         existing_pred.engagement_score = engagement_score
-                        existing_pred.retention_likelihood = RiskScorer.get_retention_likelihood(risk_score)
+                        existing_pred.retention_likelihood = (
+                            RiskScorer.get_retention_likelihood(risk_score)
+                        )
                         existing_pred.model_version = settings.RISK_MODEL_VERSION
                         existing_pred.prediction_timestamp = now_utc
                     else:
@@ -220,7 +236,9 @@ def generate_daily_predictions() -> None:  # noqa: C901
                                 student_id=student.id,
                                 risk_score=risk_score,  # 0-100 scale (DB-5)
                                 engagement_score=engagement_score,
-                                retention_likelihood=RiskScorer.get_retention_likelihood(risk_score),
+                                retention_likelihood=RiskScorer.get_retention_likelihood(
+                                    risk_score
+                                ),
                                 model_version=settings.RISK_MODEL_VERSION,
                                 prediction_timestamp=now_utc,
                                 prediction_date=today,
@@ -232,11 +250,16 @@ def generate_daily_predictions() -> None:  # noqa: C901
                     # both SQLite and PostgreSQL without dialect-specific INSERT syntax)
                     # E-1: Capture previous score for threshold crossing detection
                     prev_score = None
-                    existing_snapshot = db.query(RiskSnapshot).filter(
-                        RiskSnapshot.student_id == student.id,
-                        RiskSnapshot.week_number == wn,
-                        RiskSnapshot.semester_name == settings.CURRENT_SEMESTER_NAME,
-                    ).first()
+                    existing_snapshot = (
+                        db.query(RiskSnapshot)
+                        .filter(
+                            RiskSnapshot.student_id == student.id,
+                            RiskSnapshot.week_number == wn,
+                            RiskSnapshot.semester_name
+                            == settings.CURRENT_SEMESTER_NAME,
+                        )
+                        .first()
+                    )
                     if existing_snapshot:
                         prev_score = existing_snapshot.risk_score
                         existing_snapshot.risk_score = risk_score
@@ -255,14 +278,16 @@ def generate_daily_predictions() -> None:  # noqa: C901
                         )
                         if prev_snapshot:
                             prev_score = prev_snapshot.risk_score
-                        db.add(RiskSnapshot(
-                            student_id=student.id,
-                            risk_score=risk_score,
-                            engagement_score=engagement_score,
-                            week_number=wn,
-                            semester_name=settings.CURRENT_SEMESTER_NAME,
-                            timestamp=now_utc,
-                        ))
+                        db.add(
+                            RiskSnapshot(
+                                student_id=student.id,
+                                risk_score=risk_score,
+                                engagement_score=engagement_score,
+                                week_number=wn,
+                                semester_name=settings.CURRENT_SEMESTER_NAME,
+                                timestamp=now_utc,
+                            )
+                        )
                     created_snapshots += 1
 
                     # E-1: Check for risk threshold crossing (HIGH=70, CRITICAL=85)
@@ -270,13 +295,11 @@ def generate_daily_predictions() -> None:  # noqa: C901
                     HIGH_THRESHOLD = 70.0
                     CRITICAL_THRESHOLD = 85.0
 
-                    crossed_high = (
-                        risk_score >= HIGH_THRESHOLD and
-                        (prev_score is None or prev_score < HIGH_THRESHOLD)
+                    crossed_high = risk_score >= HIGH_THRESHOLD and (
+                        prev_score is None or prev_score < HIGH_THRESHOLD
                     )
-                    crossed_critical = (
-                        risk_score >= CRITICAL_THRESHOLD and
-                        (prev_score is None or prev_score < CRITICAL_THRESHOLD)
+                    crossed_critical = risk_score >= CRITICAL_THRESHOLD and (
+                        prev_score is None or prev_score < CRITICAL_THRESHOLD
                     )
 
                     if crossed_high or crossed_critical:
@@ -285,21 +308,28 @@ def generate_daily_predictions() -> None:  # noqa: C901
 
                     # D5-2: Write features to EngineeredFeatures store for fast list queries
                     today = now_utc.date()
-                    feat_record = db.query(EngineeredFeatures).filter(
-                        EngineeredFeatures.student_id == student.id,
-                        EngineeredFeatures.computation_date == today
-                    ).first()
+                    feat_record = (
+                        db.query(EngineeredFeatures)
+                        .filter(
+                            EngineeredFeatures.student_id == student.id,
+                            EngineeredFeatures.computation_date == today,
+                        )
+                        .first()
+                    )
                     if feat_record:
                         feat_record.computation_date = today
                     else:
-                        db.add(EngineeredFeatures(
-                            student_id=student.id,
-                            computation_date=today,
-                        ))
+                        db.add(
+                            EngineeredFeatures(
+                                student_id=student.id,
+                                computation_date=today,
+                            )
+                        )
                     processed += 1
                 except Exception:
                     logger.exception(
-                        "[SCHEDULER] Failed creating prediction for student_id=%s", student.id
+                        "[SCHEDULER] Failed creating prediction for student_id=%s",
+                        student.id,
                     )
                     errors += 1
 
@@ -359,7 +389,9 @@ def _send_threshold_notifications(threshold_crossings: list) -> None:
     try:
         # Run async notification tasks from sync context
         asyncio.run(_notify_all())
-        logger.info(f"[SCHEDULER] Sent notifications for {len(threshold_crossings)} threshold crossings")
+        logger.info(
+            f"[SCHEDULER] Sent notifications for {len(threshold_crossings)} threshold crossings"
+        )
     except Exception as exc:
         logger.exception(f"[SCHEDULER] Notification dispatch failed: {exc}")
 
@@ -418,10 +450,12 @@ def purge_old_records(db_session_factory) -> None:
         # Rolling cap: keep only 52 most recent snapshots per student
         subq = db.query(
             RiskSnapshot.id,
-            func.row_number().over(
+            func.row_number()
+            .over(
                 partition_by=RiskSnapshot.student_id,
-                order_by=RiskSnapshot.timestamp.desc()
-            ).label('rn')
+                order_by=RiskSnapshot.timestamp.desc(),
+            )
+            .label("rn"),
         ).subquery()
         capped_snapshots = (
             db.query(RiskSnapshot)
@@ -441,7 +475,7 @@ def purge_old_records(db_session_factory) -> None:
                 "snapshots_deleted": deleted_snapshots,
                 "snapshots_capped": capped_snapshots,
                 "intervention_logs_deleted": deleted_logs,
-            }
+            },
         )
 
 
@@ -487,7 +521,9 @@ class SchedulerService:
     async def _run_daily_job_once(self, reason: str) -> None:
         # Skip if previous job still running (CROSS-4)
         if _prediction_job_lock.locked():
-            logger.warning("[SCHEDULER] Daily prediction job skipped — previous run still in progress")
+            logger.warning(
+                "[SCHEDULER] Daily prediction job skipped — previous run still in progress"
+            )
             return
         async with _prediction_job_lock:
             self._last_daily_run_at = datetime.now(timezone.utc)
@@ -499,7 +535,9 @@ class SchedulerService:
                 logger.info("[SCHEDULER] Daily prediction job finished successfully.")
             except Exception as exc:
                 self._last_daily_error = str(exc)
-                logger.exception("[SCHEDULER] Daily prediction job failed (%s).", reason)
+                logger.exception(
+                    "[SCHEDULER] Daily prediction job failed (%s).", reason
+                )
 
     async def _run_weekly_job_once(self, reason: str) -> None:
         self._last_weekly_run_at = datetime.now(timezone.utc)
@@ -541,11 +579,24 @@ class SchedulerService:
         while True:
             now = datetime.now(timezone.utc)
             if now.month == 12:
-                next_run = now.replace(year=now.year+1, month=1, day=1,
-                                       hour=2, minute=0, second=0, microsecond=0)
+                next_run = now.replace(
+                    year=now.year + 1,
+                    month=1,
+                    day=1,
+                    hour=2,
+                    minute=0,
+                    second=0,
+                    microsecond=0,
+                )
             else:
-                next_run = now.replace(month=now.month+1, day=1,
-                                       hour=2, minute=0, second=0, microsecond=0)
+                next_run = now.replace(
+                    month=now.month + 1,
+                    day=1,
+                    hour=2,
+                    minute=0,
+                    second=0,
+                    microsecond=0,
+                )
             await asyncio.sleep(max((next_run - now).total_seconds(), 1.0))
             await self._run_monthly_purge_once(reason="scheduled-monthly")
 
@@ -589,10 +640,14 @@ class SchedulerService:
 
     async def start(self, run_daily_on_startup: bool = True) -> None:
         if self._started:
-            logger.warning("[SCHEDULER] Start requested, but scheduler is already running.")
+            logger.warning(
+                "[SCHEDULER] Start requested, but scheduler is already running."
+            )
             return
 
-        self._daily_task = asyncio.create_task(self._run_daily_loop(), name="scheduler-daily")
+        self._daily_task = asyncio.create_task(
+            self._run_daily_loop(), name="scheduler-daily"
+        )
         self._weekly_task = asyncio.create_task(
             self._run_weekly_loop(), name="scheduler-weekly"
         )
@@ -625,9 +680,13 @@ class SchedulerService:
             return
 
         tasks = [
-            task for task in (
-                self._daily_task, self._weekly_task, self._monthly_purge_task,
-                self._backup_task, self._token_cleanup_task,
+            task
+            for task in (
+                self._daily_task,
+                self._weekly_task,
+                self._monthly_purge_task,
+                self._backup_task,
+                self._token_cleanup_task,
             )
             if task is not None
         ]
@@ -649,33 +708,67 @@ class SchedulerService:
         return {
             "started": self._started,
             "daily": {
-                "last_run_at": self._last_daily_run_at.isoformat() if self._last_daily_run_at else None,
-                "last_success_at": self._last_daily_success_at.isoformat() if self._last_daily_success_at else None,
+                "last_run_at": (
+                    self._last_daily_run_at.isoformat()
+                    if self._last_daily_run_at
+                    else None
+                ),
+                "last_success_at": (
+                    self._last_daily_success_at.isoformat()
+                    if self._last_daily_success_at
+                    else None
+                ),
                 "last_error": self._last_daily_error,
             },
             "weekly": {
-                "last_run_at": self._last_weekly_run_at.isoformat() if self._last_weekly_run_at else None,
-                "last_success_at": self._last_weekly_success_at.isoformat() if self._last_weekly_success_at else None,
+                "last_run_at": (
+                    self._last_weekly_run_at.isoformat()
+                    if self._last_weekly_run_at
+                    else None
+                ),
+                "last_success_at": (
+                    self._last_weekly_success_at.isoformat()
+                    if self._last_weekly_success_at
+                    else None
+                ),
                 "last_error": self._last_weekly_error,
             },
             "monthly_purge": {
-                "last_run_at": self._last_purge_run_at.isoformat() if self._last_purge_run_at else None,
-                "last_success_at": self._last_purge_success_at.isoformat() if self._last_purge_success_at else None,
+                "last_run_at": (
+                    self._last_purge_run_at.isoformat()
+                    if self._last_purge_run_at
+                    else None
+                ),
+                "last_success_at": (
+                    self._last_purge_success_at.isoformat()
+                    if self._last_purge_success_at
+                    else None
+                ),
                 "last_error": self._last_purge_error,
             },
             "backup": {
-                "last_run_at": self._last_backup_run_at.isoformat() if self._last_backup_run_at else None,
-                "last_success_at": self._last_backup_success_at.isoformat() if self._last_backup_success_at else None,
+                "last_run_at": (
+                    self._last_backup_run_at.isoformat()
+                    if self._last_backup_run_at
+                    else None
+                ),
+                "last_success_at": (
+                    self._last_backup_success_at.isoformat()
+                    if self._last_backup_success_at
+                    else None
+                ),
                 "last_error": self._last_backup_error,
             },
             "token_cleanup": {
                 "last_run_at": (
                     self._last_token_cleanup_run_at.isoformat()
-                    if self._last_token_cleanup_run_at else None
+                    if self._last_token_cleanup_run_at
+                    else None
                 ),
                 "last_success_at": (
                     self._last_token_cleanup_success_at.isoformat()
-                    if self._last_token_cleanup_success_at else None
+                    if self._last_token_cleanup_success_at
+                    else None
                 ),
                 "last_error": self._last_token_cleanup_error,
             },

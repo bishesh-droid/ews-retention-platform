@@ -63,7 +63,7 @@ async def trigger_ingestion(  # noqa: C901
         if len(content) > MAX_UPLOAD_SIZE:
             raise HTTPException(
                 status_code=status.HTTP_413_REQUEST_ENTITY_TOO_LARGE,
-                detail=f"File too large. Maximum allowed size is {MAX_UPLOAD_SIZE_MB}MB."
+                detail=f"File too large. Maximum allowed size is {MAX_UPLOAD_SIZE_MB}MB.",
             )
 
         # 3. Validate extension first (quick reject)
@@ -71,7 +71,7 @@ async def trigger_ingestion(  # noqa: C901
         if suffix not in ALLOWED_EXTENSIONS:
             raise HTTPException(
                 status_code=status.HTTP_400_BAD_REQUEST,
-                detail=f"File type not allowed. Accepted: {', '.join(ALLOWED_EXTENSIONS)}"
+                detail=f"File type not allowed. Accepted: {', '.join(ALLOWED_EXTENSIONS)}",
             )
 
         # 4. Validate actual MIME type using file magic bytes (SEC-3)
@@ -79,12 +79,14 @@ async def trigger_ingestion(  # noqa: C901
         if detected_mime not in ALLOWED_MIME_TYPES:
             raise HTTPException(
                 status_code=status.HTTP_400_BAD_REQUEST,
-                detail=f"File content does not match expected type. Detected: {detected_mime}"
+                detail=f"File content does not match expected type. Detected: {detected_mime}",
             )
 
         # 5. Path traversal sanitization (SEC-4)
         # NEVER use file.filename directly in a path
-        safe_basename = Path(file.filename or "upload").name  # strips any ../ or absolute path components
+        safe_basename = Path(
+            file.filename or "upload"
+        ).name  # strips any ../ or absolute path components
         # Extra safety: replace any remaining suspicious characters
         safe_basename = "".join(c for c in safe_basename if c.isalnum() or c in "._- ")
         safe_basename = safe_basename.strip()
@@ -96,6 +98,7 @@ async def trigger_ingestion(  # noqa: C901
 
         # Save to data directory (absolute path from config)
         from backend.config import settings
+
         data_dir = settings.DATA_DIR
         data_dir.mkdir(parents=True, exist_ok=True)
 
@@ -109,10 +112,13 @@ async def trigger_ingestion(  # noqa: C901
                 f"from upload: {file.filename!r} by {current_user.username}"
             )
         except Exception:
-            logger.exception(f"File upload failed for {file.filename!r}", extra={"filename": file.filename})
+            logger.exception(
+                f"File upload failed for {file.filename!r}",
+                extra={"filename": file.filename},
+            )
             raise HTTPException(
                 status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
-                detail="File upload failed. Please try again or contact support."
+                detail="File upload failed. Please try again or contact support.",
             )
 
     async def run_ingestion():
@@ -131,17 +137,16 @@ async def trigger_ingestion(  # noqa: C901
 
             # ingest_all_data is a synchronous function - run in threadpool
             await asyncio.to_thread(
-                ingest_all_data,
-                session,
-                f"api:{current_user.username}",
-                uploaded_path
+                ingest_all_data, session, f"api:{current_user.username}", uploaded_path
             )
             update_task(task_id, "success")
             logger.info(f"Background ingestion completed successfully (task {task_id})")
         except Exception as e:
             error_msg = "Background ingestion failed — see server logs for details"
             update_task(task_id, "failed", error=error_msg)
-            logger.exception(f"Background ingestion failed (task {task_id})", exc_info=e)
+            logger.exception(
+                f"Background ingestion failed (task {task_id})", exc_info=e
+            )
         finally:
             session.close()
 
@@ -174,8 +179,7 @@ async def get_ingestion_status(
     task = get_task(task_id)
     if not task:
         raise HTTPException(
-            status_code=status.HTTP_404_NOT_FOUND,
-            detail=f"Task {task_id} not found"
+            status_code=status.HTTP_404_NOT_FOUND, detail=f"Task {task_id} not found"
         )
     return task
 

@@ -11,6 +11,7 @@ from datetime import date, datetime
 
 class RawEventBase(BaseModel):
     """Base raw event schema."""
+
     student_id: str
     event_source: str  # 'lms', 'zoom', 'website', 'communication', 'marketing'
     event_type: str
@@ -23,6 +24,7 @@ class RawEventCreate(RawEventBase):
 
 class RawEvent(RawEventBase):
     """Full raw event schema."""
+
     id: int
     timestamp: datetime
 
@@ -31,6 +33,7 @@ class RawEvent(RawEventBase):
 
 class EngineeredFeaturesBase(BaseModel):
     """Base engineered features schema."""
+
     student_id: str
     computation_date: date
 
@@ -69,6 +72,7 @@ class EngineeredFeaturesCreate(EngineeredFeaturesBase):
 
 class EngineeredFeatures(EngineeredFeaturesBase):
     """Full engineered features schema."""
+
     id: int
 
     model_config = ConfigDict(from_attributes=True)
@@ -76,6 +80,7 @@ class EngineeredFeatures(EngineeredFeaturesBase):
 
 class StudentResponseBase(BaseModel):
     """Base student response schema for intervention feedback."""
+
     student_id: str
     intervention_id: int
     responded: bool
@@ -93,6 +98,7 @@ class StudentResponseCreate(StudentResponseBase):
 
 class StudentResponse(StudentResponseBase):
     """Full student response schema."""
+
     id: int
     recorded_at: datetime
 

@@ -72,11 +72,15 @@ def log_data_access(
     ip_address = None
     if request is not None:
         trusted_proxies = set(
-            ip.strip() for ip in os.getenv("TRUSTED_PROXY_IPS", "").split(",") if ip.strip()
+            ip.strip()
+            for ip in os.getenv("TRUSTED_PROXY_IPS", "").split(",")
+            if ip.strip()
         )
         if request.client and request.client.host in trusted_proxies:
             forwarded = request.headers.get("X-Forwarded-For", "")
-            ip_address = forwarded.split(",")[0].strip() if forwarded else request.client.host
+            ip_address = (
+                forwarded.split(",")[0].strip() if forwarded else request.client.host
+            )
         else:
             ip_address = request.client.host if request.client else "unknown"
 
@@ -144,11 +148,15 @@ def log_bulk_data_access(
     ip_address = None
     if request is not None:
         trusted_proxies = set(
-            ip.strip() for ip in os.getenv("TRUSTED_PROXY_IPS", "").split(",") if ip.strip()
+            ip.strip()
+            for ip in os.getenv("TRUSTED_PROXY_IPS", "").split(",")
+            if ip.strip()
         )
         if request.client and request.client.host in trusted_proxies:
             forwarded = request.headers.get("X-Forwarded-For", "")
-            ip_address = forwarded.split(",")[0].strip() if forwarded else request.client.host
+            ip_address = (
+                forwarded.split(",")[0].strip() if forwarded else request.client.host
+            )
         else:
             ip_address = request.client.host if request.client else "unknown"
 

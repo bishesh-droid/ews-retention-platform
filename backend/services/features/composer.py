@@ -36,7 +36,9 @@ class FeatureEngineer:
             registry_lookup: Optional callable for course content registry lookups
         """
         self.academic_extractor = AcademicFeatureExtractor()
-        self.engagement_extractor = EngagementFeatureExtractor(registry_lookup=registry_lookup)
+        self.engagement_extractor = EngagementFeatureExtractor(
+            registry_lookup=registry_lookup
+        )
         self.consistency_extractor = ConsistencyFeatureExtractor()
         self.intent_extractor = IntentFeatureExtractor()
 
@@ -45,7 +47,7 @@ class FeatureEngineer:
         student_id: str,
         db: Session,
         is_new_student: bool = False,
-        week_number: Optional[int] = None
+        week_number: Optional[int] = None,
     ) -> Dict[str, Any]:
         """
         Calculate all features for a student (PUBLIC INTERFACE - UNCHANGED).
@@ -84,13 +86,11 @@ class FeatureEngineer:
             graded_quiz_score=academic.graded_quiz_score,
             risk_score=0.0,  # Will be calculated separately by risk model
             total_login_count=total_logins,
-            total_time_seconds=total_time
+            total_time_seconds=total_time,
         )
 
         # Assemble final feature dictionary (maintains original structure)
-        features = self._assemble_features(
-            academic, engagement, consistency, intent
-        )
+        features = self._assemble_features(academic, engagement, consistency, intent)
 
         # Apply new student tolerance if applicable
         if is_new_student and week_number is not None and week_number <= 3:
@@ -103,7 +103,7 @@ class FeatureEngineer:
         academic: AcademicFeatures,
         engagement: EngagementFeatures,
         consistency: ConsistencyFeatures,
-        intent: IntentFeatures
+        intent: IntentFeatures,
     ) -> Dict[str, Any]:
         """Assemble domain features into the original feature dict structure."""
         return {
@@ -113,7 +113,6 @@ class FeatureEngineer:
             "exam_score": academic.exam_score,
             "exam_attendance_rate": academic.exam_attendance_rate,
             "academic_flags": academic.academic_flags,
-
             # Engagement features
             "content_completion_score": engagement.content_completion_score,
             "w1w2_completion_score": engagement.w1w2_completion_score,
@@ -126,7 +125,6 @@ class FeatureEngineer:
             "progress_category": engagement.progress_category,
             "per_course_breakdown": engagement.per_course_breakdown,
             "self_directed_learning_score": engagement.self_directed_learning_score,
-
             # Consistency features
             "engagement_trend": consistency.engagement_trend,
             "ghost_info": {
@@ -136,10 +134,8 @@ class FeatureEngineer:
                 "total_enrolled_courses": consistency.total_enrolled_courses,
                 "total_time_seconds": consistency.total_time_seconds,
             },
-
             # Intent features
             "engagement_pattern": intent.engagement_pattern,
-
             # Metadata
             "total_courses": consistency.total_enrolled_courses,
         }
@@ -155,8 +151,7 @@ class FeatureEngineer:
         for field in tolerance_fields:
             if features.get(field) is not None:
                 features[field] = min(
-                    100.0,
-                    features[field] * self.NEW_STUDENT_TOLERANCE_MULTIPLIER
+                    100.0, features[field] * self.NEW_STUDENT_TOLERANCE_MULTIPLIER
                 )
 
         return features
@@ -166,16 +161,19 @@ class FeatureEngineer:
         # This is a stub - implement based on your actual data access pattern
         # Example: return EnrollmentService.get_student_enrollments(db, student_id)
         from backend.services.student_service import StudentService
+
         return StudentService._get_enrollment_dicts(db, student_id)
 
     def _fetch_graded_components(self, student_id: str, db: Session) -> List[Dict]:
         """Fetch graded quiz/assignment records for a student."""
         from backend.services.student_service import StudentService
+
         return StudentService._get_graded_components(db, student_id)
 
     def _fetch_exam_records(self, student_id: str, db: Session) -> List[Dict]:
         """Fetch exam records for a student."""
         from backend.services.student_service import StudentService
+
         return StudentService._get_exam_records(db, student_id)
 
     # =========================================================================
@@ -185,8 +183,7 @@ class FeatureEngineer:
 
     @staticmethod
     def calculate_content_completion_score(
-        enrollments: List[Dict],
-        registry_lookup=None
+        enrollments: List[Dict], registry_lookup=None
     ) -> Optional[float]:
         """Backward-compatible static method."""
         extractor = EngagementFeatureExtractor(registry_lookup=registry_lookup)
@@ -208,7 +205,9 @@ class FeatureEngineer:
         to continue working without changes.
         """
         academic_extractor = AcademicFeatureExtractor()
-        engagement_extractor = EngagementFeatureExtractor(registry_lookup=registry_lookup)
+        engagement_extractor = EngagementFeatureExtractor(
+            registry_lookup=registry_lookup
+        )
         consistency_extractor = ConsistencyFeatureExtractor()
         intent_extractor = IntentFeatureExtractor()
 
@@ -227,11 +226,13 @@ class FeatureEngineer:
             graded_quiz_score=academic.graded_quiz_score,
             risk_score=0.0,
             total_login_count=total_logins,
-            total_time_seconds=total_time
+            total_time_seconds=total_time,
         )
 
         engineer = FeatureEngineer(registry_lookup=registry_lookup)
-        features = engineer._assemble_features(academic, engagement, consistency, intent)
+        features = engineer._assemble_features(
+            academic, engagement, consistency, intent
+        )
 
         if is_new_student and week_number is not None and week_number <= 3:
             features = engineer._apply_new_student_tolerance(features)

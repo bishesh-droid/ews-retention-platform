@@ -35,9 +35,7 @@ def purge_expired_revoked_tokens(db: Session) -> int:
     now = datetime.utcnow()
 
     # Query for expired tokens
-    expired_tokens = db.query(RevokedToken).filter(
-        RevokedToken.expires_at < now
-    )
+    expired_tokens = db.query(RevokedToken).filter(RevokedToken.expires_at < now)
 
     # Count before deletion
     count = expired_tokens.count()

@@ -40,7 +40,11 @@ def record_student_response(
     _user: User = Depends(require_role(FEEDBACK_ROLES)),
 ):
     """Record student response to an intervention."""
-    intervention = db.query(Intervention).filter(Intervention.id == response.intervention_id).first()
+    intervention = (
+        db.query(Intervention)
+        .filter(Intervention.id == response.intervention_id)
+        .first()
+    )
     if not intervention:
         raise HTTPException(status_code=404, detail="Intervention not found")
 
@@ -54,7 +58,7 @@ def record_student_response(
         attendance_change_7days=response.attendance_change_7days,  # type: ignore[arg-type]
         grade_change_next_assignment=response.grade_change_next_assignment,  # type: ignore[arg-type]
         retained=response.retained,
-        recorded_at=datetime.utcnow()
+        recorded_at=datetime.utcnow(),
     )
     db.add(db_response)
 
@@ -85,7 +89,7 @@ def get_effectiveness_deprecated():
     """D10-3: Deprecated stub endpoint — return 410 Gone."""
     raise HTTPException(
         status_code=410,
-        detail="This endpoint is no longer available. Use /api/v1/admin/intervention-effectiveness instead."
+        detail="This endpoint is no longer available. Use /api/v1/admin/intervention-effectiveness instead.",
     )
 
 
@@ -93,18 +97,20 @@ def get_effectiveness_deprecated():
 def get_intervention_effectiveness(
     threshold_category: Optional[str] = None,
     days_lookback: int = 90,
-    db: Session = Depends(get_db)
+    db: Session = Depends(get_db),
 ):
     """Get intervention effectiveness metrics."""
     cutoff_date = datetime.utcnow() - timedelta(days=days_lookback)
 
-    total_interventions = db.query(Intervention).filter(
-        Intervention.date >= cutoff_date.date()
-    ).count()
+    total_interventions = (
+        db.query(Intervention).filter(Intervention.date >= cutoff_date.date()).count()
+    )
 
-    total_responses = db.query(StudentResponse).filter(
-        StudentResponse.recorded_at >= cutoff_date
-    ).count()
+    total_responses = (
+        db.query(StudentResponse)
+        .filter(StudentResponse.recorded_at >= cutoff_date)
+        .count()
+    )
 
     if total_interventions == 0:
         return {
@@ -141,32 +147,43 @@ def get_student_feedback_history(
     role = (getattr(_user, "role", "") or "").lower()
     if role == "faculty" and not getattr(_user, "is_superuser", False):
         if target_student.parent_department_name != getattr(_user, "department", None):
-            raise HTTPException(403, "Access denied — student is not in your department")
+            raise HTTPException(
+                403, "Access denied — student is not in your department"
+            )
 
-    responses = db.query(StudentResponse).filter(
-        StudentResponse.student_id == student_id
-    ).order_by(StudentResponse.recorded_at.desc()).all()
+    responses = (
+        db.query(StudentResponse)
+        .filter(StudentResponse.student_id == student_id)
+        .order_by(StudentResponse.recorded_at.desc())
+        .all()
+    )
 
     history = []
     for response in responses:
-        intervention = db.query(Intervention).filter(
-            Intervention.id == response.intervention_id
-        ).first()
+        intervention = (
+            db.query(Intervention)
+            .filter(Intervention.id == response.intervention_id)
+            .first()
+        )
 
-        history.append({
-            "response_id": response.id,
-            "intervention_id": response.intervention_id,
-            "intervention_date": intervention.date if intervention else None,
-            "intervention_type": intervention.threshold_category if intervention else None,
-            "responded": response.responded,
-            "response_time_hours": response.response_time_hours,
-            "behavioral_change_detected": response.behavioral_change_detected,
-            "engagement_change": response.engagement_change_7days,
-            "attendance_change": response.attendance_change_7days,
-            "grade_change": response.grade_change_next_assignment,
-            "retained": response.retained,
-            "recorded_at": response.recorded_at,
-        })
+        history.append(
+            {
+                "response_id": response.id,
+                "intervention_id": response.intervention_id,
+                "intervention_date": intervention.date if intervention else None,
+                "intervention_type": (
+                    intervention.threshold_category if intervention else None
+                ),
+                "responded": response.responded,
+                "response_time_hours": response.response_time_hours,
+                "behavioral_change_detected": response.behavioral_change_detected,
+                "engagement_change": response.engagement_change_7days,
+                "attendance_change": response.attendance_change_7days,
+                "grade_change": response.grade_change_next_assignment,
+                "retained": response.retained,
+                "recorded_at": response.recorded_at,
+            }
+        )
 
     return {
         "student_id": student_id,

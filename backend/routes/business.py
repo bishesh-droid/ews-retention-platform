@@ -19,7 +19,7 @@ from backend.services.student_service import StudentService
 from backend.config import (
     AVERAGE_STUDENT_LTV,
     TARGET_RETENTION_RATE,
-    INTERVENTION_THRESHOLDS
+    INTERVENTION_THRESHOLDS,
 )
 from backend.utils.api import success_response
 
@@ -133,8 +133,7 @@ def _risk_tier(score: float) -> str:
 
 @router.get("/metrics/retention")
 def get_retention_metrics(
-    period: str = Query(default="current_semester"),
-    db: Session = Depends(get_db)
+    period: str = Query(default="current_semester"), db: Session = Depends(get_db)
 ):
     """Get retention rate and enrollment metrics."""
     stats = StudentService.get_overview_stats(db)
@@ -144,7 +143,11 @@ def get_retention_metrics(
     at_risk_count, high_risk_count, critical_risk_count = _get_risk_counts(students)
 
     estimated_dropouts = (high_risk_count * 0.25) + (critical_risk_count * 0.50)
-    retention_rate = (total_enrolled - estimated_dropouts) / total_enrolled if total_enrolled > 0 else 0
+    retention_rate = (
+        (total_enrolled - estimated_dropouts) / total_enrolled
+        if total_enrolled > 0
+        else 0
+    )
 
     data = RetentionMetricsResponse(
         total_enrolled=total_enrolled,
@@ -155,7 +158,7 @@ def get_retention_metrics(
         high_risk_count=high_risk_count,
         critical_risk_count=critical_risk_count,
         period=period,
-        calculated_at=datetime.now().isoformat()
+        calculated_at=datetime.now().isoformat(),
     )
     return success_response(data.dict(), message="Retention metrics")
 
@@ -185,7 +188,9 @@ def get_revenue_at_risk(db: Session = Depends(get_db)):
         else:
             cat = "low"
         revenue_breakdown[cat]["count"] += 1
-        revenue_breakdown[cat]["revenue"] += AVERAGE_STUDENT_LTV * revenue_breakdown[cat]["dropout_rate"]
+        revenue_breakdown[cat]["revenue"] += (
+            AVERAGE_STUDENT_LTV * revenue_breakdown[cat]["dropout_rate"]
+        )
 
     high_risk_revenue = revenue_breakdown["high"]["revenue"]
     critical_risk_revenue = revenue_breakdown["critical"]["revenue"]
@@ -196,7 +201,9 @@ def get_revenue_at_risk(db: Session = Depends(get_db)):
             "category": cat,
             "student_count": data["count"],
             "revenue_at_risk": round(data["revenue"], 2),
-            "avg_value_per_student": round(AVERAGE_STUDENT_LTV * data["dropout_rate"], 2),
+            "avg_value_per_student": round(
+                AVERAGE_STUDENT_LTV * data["dropout_rate"], 2
+            ),
             "dropout_probability": data["dropout_rate"],
         }
         for cat, data in revenue_breakdown.items()
@@ -208,19 +215,21 @@ def get_revenue_at_risk(db: Session = Depends(get_db)):
         revenue_at_risk=round(total_revenue_at_risk, 2),
         high_risk_revenue=round(high_risk_revenue, 2),
         critical_risk_revenue=round(critical_risk_revenue, 2),
-        percentage_at_risk=round((total_revenue_at_risk / total_enrolled_revenue)
-                                 * 100, 2) if total_enrolled_revenue > 0 else 0,
+        percentage_at_risk=(
+            round((total_revenue_at_risk / total_enrolled_revenue) * 100, 2)
+            if total_enrolled_revenue > 0
+            else 0
+        ),
         average_student_ltv=AVERAGE_STUDENT_LTV,
         risk_breakdown=breakdown_list,
-        calculated_at=datetime.now().isoformat()
+        calculated_at=datetime.now().isoformat(),
     )
     return success_response(data.dict(), message="Revenue at risk metrics")
 
 
 @router.get("/metrics/intervention-roi")
 def get_intervention_roi(
-    period: str = Query(default="quarterly"),
-    db: Session = Depends(get_db)
+    period: str = Query(default="quarterly"), db: Session = Depends(get_db)
 ):
     """Calculate ROI for retention interventions."""
     students = StudentService.get_all_students(db, 0, 5000)
@@ -238,7 +247,9 @@ def get_intervention_roi(
     training_cost = 3500
 
     total_cost = staff_time_cost + platform_cost + incentive_cost + training_cost
-    cost_per_student = total_cost / estimated_recovered if estimated_recovered > 0 else 0
+    cost_per_student = (
+        total_cost / estimated_recovered if estimated_recovered > 0 else 0
+    )
     revenue_saved = estimated_recovered * AVERAGE_STUDENT_LTV
     roi_multiple = (revenue_saved - total_cost) / total_cost if total_cost > 0 else 0
 
@@ -258,15 +269,14 @@ def get_intervention_roi(
             "recovery_rate": recovery_rate,
             "avg_student_ltv": AVERAGE_STUDENT_LTV,
         },
-        calculated_at=datetime.now().isoformat()
+        calculated_at=datetime.now().isoformat(),
     )
     return success_response(data.dict(), message="Intervention ROI metrics")
 
 
 @router.get("/funnel")
 def get_retention_funnel(
-    period: str = Query(default="current_semester"),
-    db: Session = Depends(get_db)
+    period: str = Query(default="current_semester"), db: Session = Depends(get_db)
 ):
     """Get retention funnel data."""
     students = StudentService.get_all_students(db, 0, 5000)
@@ -290,17 +300,19 @@ def get_retention_funnel(
     for i in range(1, len(stages) - 1):
         if stages[i - 1]["count"] > 0:
             rate = (stages[i]["count"] / stages[i - 1]["count"]) * 100
-            conversion_rates.append({
-                "from": stages[i - 1]["name"],
-                "to": stages[i]["name"],
-                "rate": round(rate, 1),
-            })
+            conversion_rates.append(
+                {
+                    "from": stages[i - 1]["name"],
+                    "to": stages[i]["name"],
+                    "rate": round(rate, 1),
+                }
+            )
 
     data = RetentionFunnelResponse(
         stages=stages,
         conversion_rates=conversion_rates,
         period=period,
-        calculated_at=datetime.now().isoformat()
+        calculated_at=datetime.now().isoformat(),
     )
     return success_response(data.dict(), message="Retention funnel")
 
@@ -315,22 +327,36 @@ def get_executive_summary(db: Session = Depends(get_db)):
     at_risk_count, high_risk_count, critical_risk_count = _get_risk_counts(students)
 
     estimated_dropouts = int(high_risk_count * 0.25)
-    retention_rate = (total_enrolled - estimated_dropouts) / total_enrolled if total_enrolled > 0 else 0
+    retention_rate = (
+        (total_enrolled - estimated_dropouts) / total_enrolled
+        if total_enrolled > 0
+        else 0
+    )
     revenue_at_risk = high_risk_count * AVERAGE_STUDENT_LTV * 0.25
 
     alerts = []
     if high_risk_count > total_enrolled * 0.15:
-        alerts.append({
-            "severity": "high",
-            "message": f"{high_risk_count} students ({(high_risk_count / total_enrolled) * 100:.1f}%) are high-risk",
-            "action": "Review intervention capacity",
-        })
+        alerts.append(
+            {
+                "severity": "high",
+                "message": (
+                    f"{high_risk_count} students "
+                    f"({(high_risk_count / total_enrolled) * 100:.1f}%) are high-risk"
+                ),
+                "action": "Review intervention capacity",
+            }
+        )
     if retention_rate < TARGET_RETENTION_RATE - 0.03:
-        alerts.append({
-            "severity": "medium",
-            "message": f"Retention rate {retention_rate * 100:.1f}% below target {TARGET_RETENTION_RATE * 100:.0f}%",
-            "action": "Increase intervention frequency",
-        })
+        alerts.append(
+            {
+                "severity": "medium",
+                "message": (
+                    f"Retention rate {retention_rate * 100:.1f}% "
+                    f"below target {TARGET_RETENTION_RATE * 100:.0f}%"
+                ),
+                "action": "Increase intervention frequency",
+            }
+        )
 
     actions = []
     if high_risk_count > 50:
@@ -353,7 +379,7 @@ def get_executive_summary(db: Session = Depends(get_db)):
         },
         alerts=alerts,
         recommended_actions=actions,
-        calculated_at=datetime.now().isoformat()
+        calculated_at=datetime.now().isoformat(),
     )
     return success_response(data.dict(), message="Executive summary")
 
@@ -366,7 +392,9 @@ def get_department_comparison(db: Session = Depends(get_db)):
     Returns student counts and average risk score per department.
     """
     analytics = StudentService.get_analytics_data(db)
-    dept_rows = analytics.get("department_summary", []) if isinstance(analytics, dict) else []
+    dept_rows = (
+        analytics.get("department_summary", []) if isinstance(analytics, dict) else []
+    )
     payload = [
         {
             "department": d.get("department", "Unknown"),
@@ -395,17 +423,25 @@ def get_retention_forecast(
     retention_data = retention.get("data") if isinstance(retention, dict) else None
     if isinstance(retention_data, dict) and "retention_rate" in retention_data:
         baseline_rate = float(retention_data.get("retention_rate") or 0)  # 0..1
-        target_rate = float(retention_data.get("target_retention_rate") or TARGET_RETENTION_RATE)
+        target_rate = float(
+            retention_data.get("target_retention_rate") or TARGET_RETENTION_RATE
+        )
     else:
         baseline_rate = 0.0
         target_rate = TARGET_RETENTION_RATE
 
-    total_enrolled = int(retention_data.get("total_enrolled") or 0) if isinstance(retention_data, dict) else 0
+    total_enrolled = (
+        int(retention_data.get("total_enrolled") or 0)
+        if isinstance(retention_data, dict)
+        else 0
+    )
     base_revenue = total_enrolled * AVERAGE_STUDENT_LTV
 
     # optimistic moves toward target; pessimistic decays modestly below baseline
     optimistic_rate = min(1.0, max(baseline_rate, target_rate))
-    pessimistic_rate = max(0.0, baseline_rate - max(0.02, abs(target_rate - baseline_rate) * 0.5))
+    pessimistic_rate = max(
+        0.0, baseline_rate - max(0.02, abs(target_rate - baseline_rate) * 0.5)
+    )
 
     points: List[Dict[str, Any]] = []
     for m in range(1, horizon_months + 1):

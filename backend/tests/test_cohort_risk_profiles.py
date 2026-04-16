@@ -18,19 +18,19 @@ import time
 from fastapi.testclient import TestClient
 from sqlalchemy.orm import Session
 
-from backend.database.models.user import User
 from backend.database.models.student import Student
-from backend.config import INTEGRATION_API_KEY_HASH
 
 
 # =============================================================================
 # Fixtures
 # =============================================================================
 
+
 @pytest.fixture
 def db_session():
     """Provide a database session for tests."""
     from backend.database.connection import SessionLocal
+
     db = SessionLocal()
     try:
         yield db
@@ -45,6 +45,7 @@ def integration_headers():
     api_key_hash = hashlib.sha256(api_key.encode()).hexdigest()
 
     import time
+
     timestamp = str(int(time.time()))
 
     return {
@@ -71,15 +72,25 @@ def cleanup_test_data(db_session: Session):
     from backend.database.models.feature import StudentResponse
 
     test_student_ids = [
-        "test1@test.com", "test2@test.com", "test3@test.com",
+        "test1@test.com",
+        "test2@test.com",
+        "test3@test.com",
         "null_fields@test.com",  # From test_student_with_null_fields_handled_gracefully
     ]
     for student_id in test_student_ids:
         # Delete all child records across every table with FK to students.id
         for model in (
-            Enrollment, GradedComponent, ExamRecord,
-            EngineeredFeatures, RawEvent, Prediction, PredictionLog,
-            RiskSnapshot, Goal, Intervention, StudentResponse,
+            Enrollment,
+            GradedComponent,
+            ExamRecord,
+            EngineeredFeatures,
+            RawEvent,
+            Prediction,
+            PredictionLog,
+            RiskSnapshot,
+            Goal,
+            Intervention,
+            StudentResponse,
         ):
             try:
                 db_session.query(model).filter(model.student_id == student_id).delete()
@@ -123,7 +134,7 @@ def sample_students(db_session: Session, cleanup_test_data):
             id="test3@test.com",
             org_defined_id="2025EB110003",
             first_name="",  # Empty first name
-            last_name="",   # Empty last name
+            last_name="",  # Empty last name
             parent_department_name=None,  # Null department
             old_new_student=None,
             is_active=True,
@@ -138,6 +149,7 @@ def sample_students(db_session: Session, cleanup_test_data):
 # =============================================================================
 # Crash Test Cases
 # =============================================================================
+
 
 class TestCohortRiskProfilesCrashTests:
     """
@@ -314,9 +326,7 @@ class TestCohortRiskProfilesCrashTests:
 
         assert response.status_code == 403
 
-    def test_expired_timestamp_rejected(
-        self, client: TestClient, db_session: Session
-    ):
+    def test_expired_timestamp_rejected(self, client: TestClient, db_session: Session):
         """
         CRASH-9: Expired timestamp should be rejected.
 
@@ -327,6 +337,7 @@ class TestCohortRiskProfilesCrashTests:
 
         # Timestamp from 10 minutes ago (expired)
         import time
+
         expired_timestamp = str(int(time.time()) - 600)
 
         headers = {
@@ -515,7 +526,11 @@ class TestCohortRiskProfilesOptimization:
     """
 
     def test_eager_loading_reduces_queries(
-        self, client: TestClient, integration_headers: dict, sample_students, db_session: Session
+        self,
+        client: TestClient,
+        integration_headers: dict,
+        sample_students,
+        db_session: Session,
     ):
         """
         OPT-1: Verify eager loading is configured correctly.
@@ -523,8 +538,6 @@ class TestCohortRiskProfilesOptimization:
         This test verifies the optimization by checking that the
         query uses selectinload options.
         """
-        from sqlalchemy.orm import selectinload
-        from backend.database.models.student import Student
 
         # Verify that the route imports and uses selectinload
         import backend.routes.integration as integration_module
@@ -532,8 +545,9 @@ class TestCohortRiskProfilesOptimization:
         # The optimized route should use selectinload
         # This is a static verification - the actual query count
         # reduction is tested via performance monitoring
-        assert hasattr(integration_module, 'selectinload') or \
-               'selectinload' in str(integration_module.__file__)
+        assert hasattr(integration_module, "selectinload") or "selectinload" in str(
+            integration_module.__file__
+        )
 
     def test_batch_queries_for_related_data(
         self, client: TestClient, integration_headers: dict, sample_students
@@ -546,9 +560,9 @@ class TestCohortRiskProfilesOptimization:
         from backend.infrastructure.student_repository import StudentRepository
 
         # Verify batch methods exist
-        assert hasattr(StudentRepository, 'fetch_enrollments_map')
-        assert hasattr(StudentRepository, 'fetch_graded_map')
-        assert hasattr(StudentRepository, 'fetch_exam_map')
+        assert hasattr(StudentRepository, "fetch_enrollments_map")
+        assert hasattr(StudentRepository, "fetch_graded_map")
+        assert hasattr(StudentRepository, "fetch_exam_map")
 
 
 if __name__ == "__main__":

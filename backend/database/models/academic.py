@@ -29,6 +29,8 @@ class ExamRecord(Base):
     present = Column(Boolean, default=True)
     mode = Column(String, nullable=True)  # "Online" or "Onsite"
     # High-signal academic flags
-    ufm_flagged = Column(Boolean, default=False, nullable=False)  # Unfair Means (academic misconduct)
+    ufm_flagged = Column(
+        Boolean, default=False, nullable=False
+    )  # Unfair Means (academic misconduct)
     defaulter_reason = Column(String, nullable=True)  # Mapped reason from FINAL_REMARKS
     student = relationship("Student", back_populates="exam_records")

@@ -9,7 +9,10 @@ Comprehensive tests for:
 - Academic flags extraction (UFM, deferred, etc.)
 """
 
-from backend.services.features.academic import AcademicFeatureExtractor, AcademicFeatures
+from backend.services.features.academic import (
+    AcademicFeatureExtractor,
+    AcademicFeatures,
+)
 
 
 class TestAcademicFeatureExtractor:
@@ -42,7 +45,12 @@ class TestAcademicFeatureExtractor:
         extractor = AcademicFeatureExtractor()
         graded_components = [
             {"component_type": "quiz", "score": 80, "max_score": 100, "missed": False},
-            {"component_type": "quiz", "score": 90, "max_score": 100, "missed": True},  # Missed = 0
+            {
+                "component_type": "quiz",
+                "score": 90,
+                "max_score": 100,
+                "missed": True,
+            },  # Missed = 0
         ]
         result = extractor.extract(graded_components, [])
 
@@ -53,7 +61,12 @@ class TestAcademicFeatureExtractor:
         extractor = AcademicFeatureExtractor()
         graded_components = [
             {"component_type": "quiz", "score": 100, "max_score": 100, "missed": False},
-            {"component_type": "quiz", "score": None, "max_score": 100, "missed": False},  # None = 0
+            {
+                "component_type": "quiz",
+                "score": None,
+                "max_score": 100,
+                "missed": False,
+            },  # None = 0
         ]
         result = extractor.extract(graded_components, [])
 
@@ -63,8 +76,18 @@ class TestAcademicFeatureExtractor:
         """Should calculate average assignment score correctly."""
         extractor = AcademicFeatureExtractor()
         graded_components = [
-            {"component_type": "assignment", "score": 75, "max_score": 100, "missed": False},
-            {"component_type": "assignment", "score": 85, "max_score": 100, "missed": False},
+            {
+                "component_type": "assignment",
+                "score": 75,
+                "max_score": 100,
+                "missed": False,
+            },
+            {
+                "component_type": "assignment",
+                "score": 85,
+                "max_score": 100,
+                "missed": False,
+            },
         ]
         result = extractor.extract(graded_components, [])
 
@@ -74,8 +97,20 @@ class TestAcademicFeatureExtractor:
         """Should factor in exam attendance for score calculation."""
         extractor = AcademicFeatureExtractor()
         exam_records = [
-            {"present": True, "marks_obtained": 80, "marks_total": 100, "ufm_flagged": False, "defaulter_reason": None},
-            {"present": False, "marks_obtained": 0, "marks_total": 100, "ufm_flagged": False, "defaulter_reason": "health_support"},
+            {
+                "present": True,
+                "marks_obtained": 80,
+                "marks_total": 100,
+                "ufm_flagged": False,
+                "defaulter_reason": None,
+            },
+            {
+                "present": False,
+                "marks_obtained": 0,
+                "marks_total": 100,
+                "ufm_flagged": False,
+                "defaulter_reason": "health_support",
+            },
         ]
         result = extractor.extract([], exam_records)
 
@@ -86,9 +121,27 @@ class TestAcademicFeatureExtractor:
         """Should calculate exam attendance rate correctly."""
         extractor = AcademicFeatureExtractor()
         exam_records = [
-            {"present": True, "marks_obtained": 80, "marks_total": 100, "ufm_flagged": False, "defaulter_reason": None},
-            {"present": True, "marks_obtained": 90, "marks_total": 100, "ufm_flagged": False, "defaulter_reason": None},
-            {"present": False, "marks_obtained": 0, "marks_total": 100, "ufm_flagged": False, "defaulter_reason": "health_support"},
+            {
+                "present": True,
+                "marks_obtained": 80,
+                "marks_total": 100,
+                "ufm_flagged": False,
+                "defaulter_reason": None,
+            },
+            {
+                "present": True,
+                "marks_obtained": 90,
+                "marks_total": 100,
+                "ufm_flagged": False,
+                "defaulter_reason": None,
+            },
+            {
+                "present": False,
+                "marks_obtained": 0,
+                "marks_total": 100,
+                "ufm_flagged": False,
+                "defaulter_reason": "health_support",
+            },
         ]
         result = extractor.extract([], exam_records)
 
@@ -99,7 +152,13 @@ class TestAcademicFeatureExtractor:
         """Should detect UFM (unfair means) flags in exam records."""
         extractor = AcademicFeatureExtractor()
         exam_records = [
-            {"present": True, "marks_obtained": 0, "marks_total": 100, "ufm_flagged": True, "defaulter_reason": None},
+            {
+                "present": True,
+                "marks_obtained": 0,
+                "marks_total": 100,
+                "ufm_flagged": True,
+                "defaulter_reason": None,
+            },
         ]
         result = extractor.extract([], exam_records)
 
@@ -109,7 +168,13 @@ class TestAcademicFeatureExtractor:
         """Should not flag UFM when not present."""
         extractor = AcademicFeatureExtractor()
         exam_records = [
-            {"present": True, "marks_obtained": 80, "marks_total": 100, "ufm_flagged": False, "defaulter_reason": None},
+            {
+                "present": True,
+                "marks_obtained": 80,
+                "marks_total": 100,
+                "ufm_flagged": False,
+                "defaulter_reason": None,
+            },
         ]
         result = extractor.extract([], exam_records)
 
@@ -119,7 +184,13 @@ class TestAcademicFeatureExtractor:
         """Should detect deferred status from exam records."""
         extractor = AcademicFeatureExtractor()
         exam_records = [
-            {"present": False, "marks_obtained": 0, "marks_total": 100, "ufm_flagged": False, "defaulter_reason": "deferred"},
+            {
+                "present": False,
+                "marks_obtained": 0,
+                "marks_total": 100,
+                "ufm_flagged": False,
+                "defaulter_reason": "deferred",
+            },
         ]
         result = extractor.extract([], exam_records)
 
@@ -129,7 +200,13 @@ class TestAcademicFeatureExtractor:
         """Should detect dropout intent from exam records."""
         extractor = AcademicFeatureExtractor()
         exam_records = [
-            {"present": False, "marks_obtained": 0, "marks_total": 100, "ufm_flagged": False, "defaulter_reason": "dropout_intent"},
+            {
+                "present": False,
+                "marks_obtained": 0,
+                "marks_total": 100,
+                "ufm_flagged": False,
+                "defaulter_reason": "dropout_intent",
+            },
         ]
         result = extractor.extract([], exam_records)
 
@@ -139,7 +216,13 @@ class TestAcademicFeatureExtractor:
         """Should detect health support needed from exam records."""
         extractor = AcademicFeatureExtractor()
         exam_records = [
-            {"present": False, "marks_obtained": 0, "marks_total": 100, "ufm_flagged": False, "defaulter_reason": "health_support"},
+            {
+                "present": False,
+                "marks_obtained": 0,
+                "marks_total": 100,
+                "ufm_flagged": False,
+                "defaulter_reason": "health_support",
+            },
         ]
         result = extractor.extract([], exam_records)
 
@@ -149,9 +232,27 @@ class TestAcademicFeatureExtractor:
         """Should correctly set all academic flags from multiple records."""
         extractor = AcademicFeatureExtractor()
         exam_records = [
-            {"present": True, "marks_obtained": 80, "marks_total": 100, "ufm_flagged": False, "defaulter_reason": None},
-            {"present": False, "marks_obtained": 0, "marks_total": 100, "ufm_flagged": False, "defaulter_reason": "deferred"},
-            {"present": False, "marks_obtained": 0, "marks_total": 100, "ufm_flagged": False, "defaulter_reason": "unknown_high_risk"},
+            {
+                "present": True,
+                "marks_obtained": 80,
+                "marks_total": 100,
+                "ufm_flagged": False,
+                "defaulter_reason": None,
+            },
+            {
+                "present": False,
+                "marks_obtained": 0,
+                "marks_total": 100,
+                "ufm_flagged": False,
+                "defaulter_reason": "deferred",
+            },
+            {
+                "present": False,
+                "marks_obtained": 0,
+                "marks_total": 100,
+                "ufm_flagged": False,
+                "defaulter_reason": "unknown_high_risk",
+            },
         ]
         result = extractor.extract([], exam_records)
 

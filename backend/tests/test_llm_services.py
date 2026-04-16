@@ -9,9 +9,12 @@ from unittest.mock import Mock, MagicMock
 from backend.services.ai.hallucination_guard import (
     HallucinationPrevention,
     ContentFilter,
-    ConfidenceScorer
+    ConfidenceScorer,
 )
-from backend.services.infrastructure.audit_logger import AuditLogger, RoleBasedAccessControl
+from backend.services.infrastructure.audit_logger import (
+    AuditLogger,
+    RoleBasedAccessControl,
+)
 
 
 class TestHallucinationPrevention:
@@ -23,10 +26,12 @@ class TestHallucinationPrevention:
 
     def test_valid_response_passes(self):
         """Test that valid, grounded response passes validation."""
-        response = "Student 1001 has a risk score of 75% based on recent attendance data."
+        response = (
+            "Student 1001 has a risk score of 75% based on recent attendance data."
+        )
         allowed_data = {
             "student_data": {"id": "1001", "risk_score": 75},
-            "attendance_rate": 0.80
+            "attendance_rate": 0.80,
         }
 
         result = self.prevention.validate_response(response, allowed_data)
@@ -37,14 +42,14 @@ class TestHallucinationPrevention:
     def test_fabricated_student_id_fails(self):
         """Test that fabricated student IDs are detected."""
         response = "Student 9999 needs immediate intervention."
-        allowed_data = {
-            "student_data": {"id": "1001"}
-        }
+        allowed_data = {"student_data": {"id": "1001"}}
 
         result = self.prevention.validate_response(response, allowed_data)
 
         assert result["is_valid"] is False
-        assert any("student IDs not in source data" in issue for issue in result["issues"])
+        assert any(
+            "student IDs not in source data" in issue for issue in result["issues"]
+        )
 
     def test_too_much_uncertainty_reduces_confidence(self):
         """Test that excessive hedge words reduce confidence."""
@@ -54,7 +59,9 @@ class TestHallucinationPrevention:
         result = self.prevention.validate_response(response, allowed_data)
 
         assert result["confidence"] < 0.8
-        assert any("uncertainty indicators" in warning for warning in result["warnings"])
+        assert any(
+            "uncertainty indicators" in warning for warning in result["warnings"]
+        )
 
 
 class TestContentFilter:
@@ -94,9 +101,7 @@ class TestConfidenceScorer:
     def test_high_confidence_score(self):
         """Test that complete, recent data yields high confidence."""
         result = ConfidenceScorer.calculate_confidence(
-            data_completeness=0.95,
-            data_recency=0.9,
-            sample_size=150
+            data_completeness=0.95, data_recency=0.9, sample_size=150
         )
 
         assert result["level"] == "high"
@@ -105,9 +110,7 @@ class TestConfidenceScorer:
     def test_low_confidence_score(self):
         """Test that incomplete data yields low confidence."""
         result = ConfidenceScorer.calculate_confidence(
-            data_completeness=0.3,
-            data_recency=0.4,
-            sample_size=10
+            data_completeness=0.3, data_recency=0.4, sample_size=10
         )
 
         assert result["level"] == "low"
@@ -122,7 +125,7 @@ class TestRoleBasedAccessControl:
         can_access = RoleBasedAccessControl.can_access_student_data(
             requesting_user_id="1001",
             requesting_user_role="student",
-            target_student_id="1001"
+            target_student_id="1001",
         )
 
         assert can_access is True
@@ -131,7 +134,7 @@ class TestRoleBasedAccessControl:
         cannot_access = RoleBasedAccessControl.can_access_student_data(
             requesting_user_id="1001",
             requesting_user_role="student",
-            target_student_id="1002"
+            target_student_id="1002",
         )
 
         assert cannot_access is False
@@ -142,7 +145,7 @@ class TestRoleBasedAccessControl:
             requesting_user_id="faculty_001",
             requesting_user_role="faculty",
             target_student_id="1001",
-            assigned_students=["1001", "1002", "1003"]
+            assigned_students=["1001", "1002", "1003"],
         )
 
         assert can_access is True
@@ -152,7 +155,7 @@ class TestRoleBasedAccessControl:
             requesting_user_id="faculty_001",
             requesting_user_role="faculty",
             target_student_id="9999",
-            assigned_students=["1001", "1002", "1003"]
+            assigned_students=["1001", "1002", "1003"],
         )
 
         assert cannot_access is False
@@ -162,7 +165,7 @@ class TestRoleBasedAccessControl:
         can_access = RoleBasedAccessControl.can_access_student_data(
             requesting_user_id="admin_001",
             requesting_user_role="admin",
-            target_student_id="1001"
+            target_student_id="1001",
         )
 
         assert can_access is True
@@ -172,7 +175,7 @@ class TestRoleBasedAccessControl:
         cannot_access = RoleBasedAccessControl.can_access_student_data(
             requesting_user_id="sales_001",
             requesting_user_role="sales",
-            target_student_id="1001"
+            target_student_id="1001",
         )
 
         assert cannot_access is False
@@ -204,7 +207,7 @@ class TestAuditLogger:
             input_data={"student_id": "1001", "time_period": "recent"},
             response={"content": "Risk increased due to attendance"},
             confidence="high",
-            sources=["attendance_records", "grade_data"]
+            sources=["attendance_records", "grade_data"],
         )
 
         # Verify db.add and db.flush were called
@@ -221,21 +224,20 @@ class TestAuditLogger:
                 user_id="1001",
                 user_role="student",
                 query_type="explain_risk",
-                confidence="high"
+                confidence="high",
             ),
             Mock(
                 user_id="1002",
                 user_role="faculty",
                 query_type="faculty_summary",
-                confidence="medium"
-            )
+                confidence="medium",
+            ),
         ]
 
         self.db.query.return_value.filter.return_value.all.return_value = mock_entries
 
         report = self.logger.get_compliance_report(
-            start_date=datetime(2026, 1, 1),
-            end_date=datetime(2026, 1, 31)
+            start_date=datetime(2026, 1, 1), end_date=datetime(2026, 1, 31)
         )
 
         assert "total_queries" in report

@@ -94,7 +94,9 @@ class RiskScorer:
         observed_weight = 0.0
 
         for logical_key, weight in FEATURE_WEIGHTS.items():
-            score = RiskScorer._to_valid_score(features.get(_feature_score_key(logical_key)))
+            score = RiskScorer._to_valid_score(
+                features.get(_feature_score_key(logical_key))
+            )
             if score is None:
                 continue
             # Self-directed learning is a risk REDUCER - invert the score
@@ -129,6 +131,7 @@ class RiskScorer:
         # ML-3: Sanitize input features - handle NaN/null values
         import math
         import logging
+
         logger = logging.getLogger(__name__)
 
         required_keys = set(FEATURE_WEIGHTS.keys())
@@ -163,7 +166,9 @@ class RiskScorer:
             )
 
         # Compute weighted engagement using production feature weights
-        weighted_engagement, observed_weight = RiskScorer._compute_weighted_engagement(features)
+        weighted_engagement, observed_weight = RiskScorer._compute_weighted_engagement(
+            features
+        )
         total_weight = sum(FEATURE_WEIGHTS.values())
 
         if observed_weight == 0.0 or total_weight <= 0.0:
@@ -173,11 +178,15 @@ class RiskScorer:
 
             # Confidence from feature coverage; avoids overconfident extremes when sparse.
             coverage = max(0.0, min(1.0, observed_weight / total_weight))
-            existing_score = (base_risk * coverage) + (RiskScorer.NEUTRAL_RISK_SCORE * (1.0 - coverage))
+            existing_score = (base_risk * coverage) + (
+                RiskScorer.NEUTRAL_RISK_SCORE * (1.0 - coverage)
+            )
 
             # Zero-progress adds bounded risk directly with nonlinear sensitivity.
             # This increases penalty only when zero-progress dominates course load.
-            zero_ratio = RiskScorer._to_valid_score((features.get("zero_progress_ratio", 0.0) or 0.0) * 100.0)
+            zero_ratio = RiskScorer._to_valid_score(
+                (features.get("zero_progress_ratio", 0.0) or 0.0) * 100.0
+            )
             if zero_ratio is not None:
                 z = zero_ratio / 100.0
                 existing_score += min(15.0, (z**1.5) * 15.0)
@@ -196,9 +205,8 @@ class RiskScorer:
             )
             calendar_risk_score = float(cal.get("calendar_risk_score") or 0.0)
             risk_score = (
-                (1.0 - CALENDAR_RISK_BLEND_WEIGHT) * existing_score +
-                CALENDAR_RISK_BLEND_WEIGHT * calendar_risk_score
-            )
+                1.0 - CALENDAR_RISK_BLEND_WEIGHT
+            ) * existing_score + CALENDAR_RISK_BLEND_WEIGHT * calendar_risk_score
 
             # Mutate features so callers can include these signals in responses.
             features["calendar_risk_score"] = round(calendar_risk_score, 2)
@@ -214,7 +222,9 @@ class RiskScorer:
         ghost_info = features.get("ghost_info", {})
         if ghost_info.get("is_ghost"):
             risk_score = 95.0
-            features["risk_override_reason"] = f"ghost_student:{ghost_info.get('ghost_type')}"
+            features["risk_override_reason"] = (
+                f"ghost_student:{ghost_info.get('ghost_type')}"
+            )
             features["requires_activation_outreach"] = True
 
         # Academic flags overrides (exam-based high-signal indicators)
@@ -249,7 +259,9 @@ class RiskScorer:
             # Do not change risk score — but route to welfare team
             features["health_referral_needed"] = True
 
-        final_score = round(max(0.0, min(100.0, risk_score)), 1)  # D6-2: Standardised to 1 decimal
+        final_score = round(
+            max(0.0, min(100.0, risk_score)), 1
+        )  # D6-2: Standardised to 1 decimal
 
         # ML-4: Log prediction to audit trail if student_id is available in features
         student_id = features.get("student_id")
@@ -325,7 +337,9 @@ class RiskScorer:
                 sum(
                     weight
                     for logical_key, weight in FEATURE_WEIGHTS.items()
-                    if RiskScorer._to_valid_score(features.get(_feature_score_key(logical_key)))
+                    if RiskScorer._to_valid_score(
+                        features.get(_feature_score_key(logical_key))
+                    )
                     is not None
                 )
                 / sum(FEATURE_WEIGHTS.values())
@@ -378,7 +392,9 @@ class RiskScorer:
                 db.commit()
             except Exception as e:
                 db.rollback()
-                logging.getLogger(__name__).warning(f"ML-4: Failed to log prediction: {e}")
+                logging.getLogger(__name__).warning(
+                    f"ML-4: Failed to log prediction: {e}"
+                )
             finally:
                 db.close()
         except Exception as e:
@@ -394,7 +410,9 @@ class RiskScorer:
           risk_old = 100 - weighted_engagement
           if zero_progress_ratio >= 0.8: weighted_engagement *= 0.5
         """
-        weighted_engagement, observed_weight = RiskScorer._compute_weighted_engagement(features)
+        weighted_engagement, observed_weight = RiskScorer._compute_weighted_engagement(
+            features
+        )
         if observed_weight == 0.0:
             old_risk = 100.0
         else:

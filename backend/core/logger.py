@@ -32,36 +32,34 @@ class PIIMaskingFilter(logging.Filter):
 
     # Pattern for JWT (header.payload.signature format)
     JWT_PATTERN = re.compile(
-        r'eyJ[a-zA-Z0-9_-]*\.eyJ[a-zA-Z0-9_-]*\.[a-zA-Z0-9_-]*',
-        re.IGNORECASE
+        r"eyJ[a-zA-Z0-9_-]*\.eyJ[a-zA-Z0-9_-]*\.[a-zA-Z0-9_-]*", re.IGNORECASE
     )
     # Pattern for "Bearer <token>" (captures various token formats)
-    BEARER_PATTERN = re.compile(
-        r'Bearer\s+[a-zA-Z0-9_\-\.=]+',
-        re.IGNORECASE
-    )
+    BEARER_PATTERN = re.compile(r"Bearer\s+[a-zA-Z0-9_\-\.=]+", re.IGNORECASE)
     # Pattern for email addresses
     EMAIL_PATTERN = re.compile(
-        r'([a-zA-Z0-9._%+-]{1,2})[a-zA-Z0-9._%+-]*@([a-zA-Z0-9.-]+\.[a-zA-Z]{2,})',
-        re.IGNORECASE
+        r"([a-zA-Z0-9._%+-]{1,2})[a-zA-Z0-9._%+-]*@([a-zA-Z0-9.-]+\.[a-zA-Z]{2,})",
+        re.IGNORECASE,
     )
     # Pattern for student IDs (alphanumeric, typically 6-20 chars)
     # Matches common formats: student_12345678, STU12345678, 12345678, etc.
     STUDENT_ID_PATTERN = re.compile(
-        r'(student[_-]?|stu[_-]?)?([a-zA-Z0-9]{6,20})',
-        re.IGNORECASE
+        r"(student[_-]?|stu[_-]?)?([a-zA-Z0-9]{6,20})", re.IGNORECASE
     )
 
     def mask_email(self, text: str) -> str:
         """Mask email: show first 2 chars + ***@domain.com"""
+
         def replace_email(match):
             prefix = match.group(1)
             domain = match.group(2)
             return f"{prefix}***@{domain}"
+
         return self.EMAIL_PATTERN.sub(replace_email, text)
 
     def mask_student_id(self, text: str) -> str:
         """Mask student ID: show last 4 chars only as ***XXXX"""
+
         def replace_id(match):
             prefix = match.group(1) or ""  # e.g., "student_" or "stu-"
             id_value = match.group(2)
@@ -71,14 +69,15 @@ class PIIMaskingFilter(logging.Filter):
             else:
                 # For short IDs, mask completely
                 return f"{prefix}***"
+
         return self.STUDENT_ID_PATTERN.sub(replace_id, text)
 
     def mask_jwt_tokens(self, text: str) -> str:
         """Strip JWT tokens and Bearer tokens from logs."""
         # First remove JWT format tokens
-        text = self.JWT_PATTERN.sub('[JWT_TOKEN_REDACTED]', text)
+        text = self.JWT_PATTERN.sub("[JWT_TOKEN_REDACTED]", text)
         # Then remove Bearer tokens
-        text = self.BEARER_PATTERN.sub('Bearer [TOKEN_REDACTED]', text)
+        text = self.BEARER_PATTERN.sub("Bearer [TOKEN_REDACTED]", text)
         return text
 
     def filter(self, record: logging.LogRecord) -> bool:
@@ -128,7 +127,9 @@ def setup_logger(name: str) -> logging.Logger:
     # Create PII masking filter (applied to all handlers)
     pii_filter = PIIMaskingFilter()
 
-    log_handler = RotatingFileHandler(LOG_FILE, maxBytes=50 * 1024 * 1024, backupCount=5)
+    log_handler = RotatingFileHandler(
+        LOG_FILE, maxBytes=50 * 1024 * 1024, backupCount=5
+    )
     stream_handler = logging.StreamHandler(sys.stdout)
     formatter = JSONFormatter()
 

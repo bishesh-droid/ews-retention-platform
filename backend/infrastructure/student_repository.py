@@ -49,7 +49,9 @@ class StudentRepository:
 
     @staticmethod
     def sort_expr_for_students(sort_by: str, order: str, pred_subq):
-        direction = {"asc": lambda x: x.asc(), "desc": lambda x: x.desc()}.get(order, lambda x: x.desc())
+        direction = {"asc": lambda x: x.asc(), "desc": lambda x: x.desc()}.get(
+            order, lambda x: x.desc()
+        )
         student_cols = {
             "id": Student.id,
             "first_name": Student.first_name,
@@ -65,11 +67,17 @@ class StudentRepository:
         return (case((risk.is_(None), 1), else_=0), direction(risk))
 
     @staticmethod
-    def get_interventions_by_student_id(db: Session, student_id: str) -> List[Intervention]:
-        return db.query(Intervention).filter(Intervention.student_id == student_id).all()
+    def get_interventions_by_student_id(
+        db: Session, student_id: str
+    ) -> List[Intervention]:
+        return (
+            db.query(Intervention).filter(Intervention.student_id == student_id).all()
+        )
 
     @staticmethod
-    def get_student_by_id_scoped(db: Session, student_id: str, current_user=None) -> Optional[Student]:
+    def get_student_by_id_scoped(
+        db: Session, student_id: str, current_user=None
+    ) -> Optional[Student]:
         query = db.query(Student).filter(Student.id == student_id)
         if current_user is not None:
             role = (getattr(current_user, "role", "") or "").lower()
@@ -81,7 +89,9 @@ class StudentRepository:
         return query.first()
 
     @staticmethod
-    def fetch_enrollments_map(db: Session, student_ids: List[str]) -> Dict[str, List[Dict]]:
+    def fetch_enrollments_map(
+        db: Session, student_ids: List[str]
+    ) -> Dict[str, List[Dict]]:
         if not student_ids:
             return {}
         rows = (
@@ -123,7 +133,11 @@ class StudentRepository:
     def fetch_graded_map(db: Session, student_ids: List[str]) -> Dict[str, List[Dict]]:
         if not student_ids:
             return {}
-        rows = db.query(GradedComponent).filter(GradedComponent.student_id.in_(student_ids)).all()
+        rows = (
+            db.query(GradedComponent)
+            .filter(GradedComponent.student_id.in_(student_ids))
+            .all()
+        )
         out: Dict[str, List[Dict]] = {sid: [] for sid in student_ids}
         for g in rows:
             sid = g.student_id or ""
@@ -189,7 +203,9 @@ class StudentRepository:
         return db.query(Course).filter(Course.id == course_id).first()
 
     @staticmethod
-    def get_latest_risk_scores_for_students(db: Session, student_ids: List[str]) -> Dict[str, float]:
+    def get_latest_risk_scores_for_students(
+        db: Session, student_ids: List[str]
+    ) -> Dict[str, float]:
         if not student_ids:
             return {}
         latest = (

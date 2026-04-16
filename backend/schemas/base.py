@@ -15,6 +15,7 @@ class BaseResponse(BaseModel):
     All response models should inherit from this class to ensure
     consistent ISO 8601 datetime formatting with timezone info.
     """
+
     model_config = ConfigDict(from_attributes=True)
 
     @field_validator("*", mode="before")

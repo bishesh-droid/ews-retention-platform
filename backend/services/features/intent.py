@@ -15,7 +15,8 @@ from typing import Optional
 @dataclass
 class IntentFeatures:
     """Typed dataclass for student intent/motivation features."""
-    engagement_pattern: str   # "disengaged", "struggling", "at_risk_normal", "on_track"
+
+    engagement_pattern: str  # "disengaged", "struggling", "at_risk_normal", "on_track"
 
 
 class IntentFeatureExtractor:
@@ -34,7 +35,7 @@ class IntentFeatureExtractor:
         graded_quiz_score: Optional[float],
         risk_score: float,
         total_login_count: int,
-        total_time_seconds: float
+        total_time_seconds: float,
     ) -> IntentFeatures:
         """
         Extract intent features by classifying engagement pattern.
@@ -56,7 +57,7 @@ class IntentFeatureExtractor:
             content_completion_rate=(content_completion_score or 0) / 100.0,
             total_time_seconds=total_time_seconds,
             graded_quiz_score=graded_quiz_score,
-            risk_score=risk_score
+            risk_score=risk_score,
         )
 
         return IntentFeatures(engagement_pattern=pattern)
@@ -67,7 +68,7 @@ class IntentFeatureExtractor:
         content_completion_rate: float,
         total_time_seconds: float,
         graded_quiz_score: Optional[float],
-        risk_score: float
+        risk_score: float,
     ) -> str:
         """
         Classify student into engagement pattern.

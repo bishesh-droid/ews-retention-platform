@@ -8,7 +8,11 @@ Currently inactive — the system uses a deterministic rule-based formula.
 See backend/ml/training/calibrate.py for the path to real ML.
 """
 
-from backend.config import RISK_THRESHOLD_HIGH, RISK_THRESHOLD_MEDIUM, RISK_THRESHOLD_LOW
+from backend.config import (
+    RISK_THRESHOLD_HIGH,
+    RISK_THRESHOLD_MEDIUM,
+    RISK_THRESHOLD_LOW,
+)
 import os
 from pathlib import Path
 
@@ -25,9 +29,7 @@ DEFAULT_MODEL_NAME = "retention_model.joblib"
 XGBOOST_MODEL_NAME = "retention_model_xgboost.joblib"
 
 # Feature engineering
-REQUIRED_STUDENT_FEATURES = [
-    'absrate7', 'q4mpa7', 'nsusp7', 'mobility7'
-]
+REQUIRED_STUDENT_FEATURES = ["absrate7", "q4mpa7", "nsusp7", "mobility7"]
 
 # Training parameters
 RANDOM_STATE = 42

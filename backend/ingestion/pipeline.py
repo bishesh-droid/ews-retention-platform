@@ -11,8 +11,10 @@ from pathlib import Path
 from datetime import datetime, date
 
 from backend.database import (
-    DimStudent, DimCourse,
-    FactAcademicPerformance, FactEngagement
+    DimStudent,
+    DimCourse,
+    FactAcademicPerformance,
+    FactEngagement,
 )
 from backend.ingestion.transformers import TypeCoercer
 from backend.ingestion.error_logger import IngestionErrorLogger
@@ -34,9 +36,9 @@ class EWSDataPipeline:
 
     def run(self):
         """Execute full pipeline"""
-        self.logger.info("="*80)
+        self.logger.info("=" * 80)
         self.logger.info("Starting EWS Data Ingestion Pipeline")
-        self.logger.info("="*80)
+        self.logger.info("=" * 80)
 
         start_time = datetime.now()
 
@@ -78,9 +80,14 @@ class EWSDataPipeline:
     def ingest_student_roster(self):  # noqa: C901
         """Load student dimension from enrollment files"""
         if self.db is None:
-            raise RuntimeError("No database session provided. Pass db_session to __init__.")
+            raise RuntimeError(
+                "No database session provided. Pass db_session to __init__."
+            )
         # Primary file: Trimester 1 attendance file (has Total_Enrolled sheet)
-        file_path = self.data_dir / "_Trimester-1 2025 Attendance Quiz-Assignment-Exam 5Jan2025.xlsx"
+        file_path = (
+            self.data_dir
+            / "_Trimester-1 2025 Attendance Quiz-Assignment-Exam 5Jan2025.xlsx"
+        )
 
         if not file_path.exists():
             self.logger.warning(f"File not found: {file_path}")
@@ -91,7 +98,11 @@ class EWSDataPipeline:
             xl = pd.ExcelFile(file_path)
 
             # Try to find enrollment/student list sheet
-            enrollment_sheets = [s for s in xl.sheet_names if 'enroll' in s.lower() or 'total' in s.lower()]
+            enrollment_sheets = [
+                s
+                for s in xl.sheet_names
+                if "enroll" in s.lower() or "total" in s.lower()
+            ]
 
             if not enrollment_sheets:
                 self.logger.warning("No enrollment sheet found")
@@ -103,7 +114,11 @@ class EWSDataPipeline:
             df.columns = [str(col).strip() for col in df.columns]
 
             # Find student ID columns
-            id_cols = [col for col in df.columns if any(x in col.lower() for x in ['username', 'email', 'student'])]
+            id_cols = [
+                col
+                for col in df.columns
+                if any(x in col.lower() for x in ["username", "email", "student"])
+            ]
 
             if not id_cols:
                 self.logger.warning("No student ID column found")
@@ -117,7 +132,7 @@ class EWSDataPipeline:
                     student_id = None
                     for col in id_cols:
                         val = row.get(col)
-                        if pd.notna(val) and '@' in str(val):
+                        if pd.notna(val) and "@" in str(val):
                             student_id = TypeCoercer.coerce_email(val)
                             break
 
@@ -125,17 +140,23 @@ class EWSDataPipeline:
                         continue
 
                     # Check if student exists
-                    existing = self.db.query(DimStudent).filter_by(student_id=student_id).first()
+                    existing = (
+                        self.db.query(DimStudent)
+                        .filter_by(student_id=student_id)
+                        .first()
+                    )
                     if existing:
                         continue
 
                     # Create student record
                     student = DimStudent(
                         student_id=student_id,
-                        student_name=str(row.get('first_name', '')) + ' ' + str(row.get('last_name', '')),
-                        program='BS',  # Default, can be refined
-                        enrollment_status='Active',
-                        is_new_student=True
+                        student_name=str(row.get("first_name", ""))
+                        + " "
+                        + str(row.get("last_name", "")),
+                        program="BS",  # Default, can be refined
+                        enrollment_status="Active",
+                        is_new_student=True,
                     )
 
                     self.db.add(student)
@@ -145,9 +166,9 @@ class EWSDataPipeline:
                     self.error_logger.log_error(
                         source_file=file_path.name,
                         row_number=idx,
-                        field='student_record',
-                        error_type='parsing_error',
-                        message=str(e)
+                        field="student_record",
+                        error_type="parsing_error",
+                        message=str(e),
                     )
 
             self.logger.info(f"  ✓ Added {students_added} students")
@@ -171,9 +192,10 @@ class EWSDataPipeline:
             enrollment_path = Path(self.data_dir) / "engagement_data.xlsx"
             if enrollment_path.exists():
                 import pandas as pd
+
                 df = pd.read_excel(enrollment_path, nrows=5)  # Read header only
-                if 'course_name' in df.columns:
-                    course_names = set(df['course_name'].dropna().unique())
+                if "course_name" in df.columns:
+                    course_names = set(df["course_name"].dropna().unique())
         except Exception as e:
             logger.warning(f"Could not extract course names from enrollment data: {e}")
 
@@ -188,9 +210,7 @@ class EWSDataPipeline:
             existing = self.db.query(DimCourse).filter_by(course_id=course_code).first()
             if not existing:
                 course = DimCourse(
-                    course_id=course_code,
-                    course_name=course_name,
-                    program='BS'
+                    course_id=course_code, course_name=course_name, program="BS"
                 )
                 self.db.add(course)
 
@@ -199,14 +219,16 @@ class EWSDataPipeline:
     def ingest_attendance(self):  # noqa: C901
         """Load attendance records from Live Summary sheets"""
         if self.db is None:
-            raise RuntimeError("No database session provided. Pass db_session to __init__.")
+            raise RuntimeError(
+                "No database session provided. Pass db_session to __init__."
+            )
         files_processed = 0
         records_added = 0
 
         # Process both trimester files
         attendance_files = [
             "B.S and M.Sc Live Summary Data C-1, Trimester 1.xlsx",
-            "B.S and M.Sc Summary Data Trimester 2.xlsx"
+            "B.S and M.Sc Summary Data Trimester 2.xlsx",
         ]
 
         for filename in attendance_files:
@@ -218,13 +240,19 @@ class EWSDataPipeline:
                 xl = pd.ExcelFile(file_path)
 
                 # Find attendance sheets
-                attendance_sheets = [s for s in xl.sheet_names if 'bs' in s.lower() or 'msc' in s.lower()]
+                attendance_sheets = [
+                    s for s in xl.sheet_names if "bs" in s.lower() or "msc" in s.lower()
+                ]
 
                 for sheet_name in attendance_sheets:
                     df = pd.read_excel(file_path, sheet_name=sheet_name)
 
                     # Look for student email and attendance columns
-                    email_cols = [col for col in df.columns if 'email' in str(col).lower() or 'username' in str(col).lower()]
+                    email_cols = [
+                        col
+                        for col in df.columns
+                        if "email" in str(col).lower() or "username" in str(col).lower()
+                    ]
 
                     if not email_cols:
                         continue
@@ -238,15 +266,21 @@ class EWSDataPipeline:
                             continue
 
                         # Check if student exists in dim
-                        student = self.db.query(DimStudent).filter_by(student_id=email).first()
+                        student = (
+                            self.db.query(DimStudent)
+                            .filter_by(student_id=email)
+                            .first()
+                        )
                         if not student:
                             continue
 
                         # Extract attendance percentage if available
                         attendance_pct = None
                         for col in df.columns:
-                            if 'attendance' in str(col).lower() or '%' in str(col):
-                                attendance_pct = TypeCoercer.coerce_percentage(row.get(col))
+                            if "attendance" in str(col).lower() or "%" in str(col):
+                                attendance_pct = TypeCoercer.coerce_percentage(
+                                    row.get(col)
+                                )
                                 if attendance_pct is not None:
                                     break
 
@@ -254,11 +288,11 @@ class EWSDataPipeline:
                             # Create engagement record
                             engagement = FactEngagement(
                                 student_id=email,
-                                course_id='DEFAULT_COURSE',
+                                course_id="DEFAULT_COURSE",
                                 metric_date=date.today(),
                                 attendance_percentage=attendance_pct,
                                 data_snapshot_date=date.today(),
-                                source_file=filename
+                                source_file=filename,
                             )
                             self.db.add(engagement)
                             records_added += 1
@@ -268,13 +302,21 @@ class EWSDataPipeline:
             except Exception as e:
                 self.logger.error(f"Error processing {filename}: {e}")
 
-        self.logger.info(f"  ✓ Processed {files_processed} files, added {records_added} attendance records")
+        self.logger.info(
+            f"  ✓ Processed {files_processed} files, added {records_added} attendance records"
+        )
 
     def ingest_assessments(self):
         """Load assessment records from quiz files"""
         if self.db is None:
-            raise RuntimeError("No database session provided. Pass db_session to __init__.")
-        quiz_files = [f for f in os.listdir(self.data_dir) if 'quiz' in f.lower() and f.endswith('.xlsx')]
+            raise RuntimeError(
+                "No database session provided. Pass db_session to __init__."
+            )
+        quiz_files = [
+            f
+            for f in os.listdir(self.data_dir)
+            if "quiz" in f.lower() and f.endswith(".xlsx")
+        ]
 
         records_added = 0
 
@@ -285,14 +327,22 @@ class EWSDataPipeline:
                 df = pd.read_excel(file_path)
 
                 # Look for student email column
-                email_cols = [col for col in df.columns if 'email' in str(col).lower() or 'username' in str(col).lower()]
+                email_cols = [
+                    col
+                    for col in df.columns
+                    if "email" in str(col).lower() or "username" in str(col).lower()
+                ]
                 if not email_cols:
                     continue
 
                 email_col = email_cols[0]
 
                 # Look for score columns
-                score_cols = [col for col in df.columns if 'score' in str(col).lower() or 'grade' in str(col).lower()]
+                score_cols = [
+                    col
+                    for col in df.columns
+                    if "score" in str(col).lower() or "grade" in str(col).lower()
+                ]
 
                 for idx, row in df.iterrows():
                     email = TypeCoercer.coerce_email(row.get(email_col))
@@ -300,7 +350,9 @@ class EWSDataPipeline:
                         continue
 
                     # Check if student exists
-                    student = self.db.query(DimStudent).filter_by(student_id=email).first()
+                    student = (
+                        self.db.query(DimStudent).filter_by(student_id=email).first()
+                    )
                     if not student:
                         continue
 
@@ -312,15 +364,15 @@ class EWSDataPipeline:
                     # Create academic performance record
                     perf = FactAcademicPerformance(
                         student_id=email,
-                        course_id='DEFAULT_COURSE',
-                        trimester='T1-2025',
-                        assessment_type='Quiz',
-                        assessment_name=filename.replace('.xlsx', ''),
+                        course_id="DEFAULT_COURSE",
+                        trimester="T1-2025",
+                        assessment_type="Quiz",
+                        assessment_name=filename.replace(".xlsx", ""),
                         scored=score if score else 0,
                         percentage=score if score else 0,
                         submitted=score is not None,
                         data_snapshot_date=date.today(),
-                        source_file=filename
+                        source_file=filename,
                     )
                     self.db.add(perf)
                     records_added += 1
@@ -328,7 +380,9 @@ class EWSDataPipeline:
             except Exception as e:
                 self.logger.error(f"Error processing quiz file {filename}: {e}")
 
-        self.logger.info(f"  ✓ Added {records_added} assessment records from {len(quiz_files)} quiz files")
+        self.logger.info(
+            f"  ✓ Added {records_added} assessment records from {len(quiz_files)} quiz files"
+        )
 
 
 def main():

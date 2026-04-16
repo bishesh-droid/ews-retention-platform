@@ -25,7 +25,9 @@ async def security_and_logging_middleware(request: Request, call_next):
     client_ip = request.client.host if request.client else "unknown"
 
     # Log Request
-    sys_logger.info(f"Incoming request: {request.method} {request.url.path} from {client_ip}")
+    sys_logger.info(
+        f"Incoming request: {request.method} {request.url.path} from {client_ip}"
+    )
 
     try:
         start_time = time.time()

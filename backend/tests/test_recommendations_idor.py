@@ -24,10 +24,12 @@ from backend.core.auth import get_password_hash, create_access_token
 # Fixtures
 # =============================================================================
 
+
 @pytest.fixture
 def db_session():
     """Provide a database session for tests."""
     from backend.database.connection import SessionLocal
+
     db = SessionLocal()
     try:
         yield db
@@ -47,16 +49,27 @@ def cleanup_test_users(db_session: Session):
     # Cleanup related student data first
     student_ids = ["student1@test.com", "student2@test.com"]
     for student_id in student_ids:
-        db_session.query(Enrollment).filter(Enrollment.student_id == student_id).delete()
-        db_session.query(GradedComponent).filter(GradedComponent.student_id == student_id).delete()
-        db_session.query(ExamRecord).filter(ExamRecord.student_id == student_id).delete()
+        db_session.query(Enrollment).filter(
+            Enrollment.student_id == student_id
+        ).delete()
+        db_session.query(GradedComponent).filter(
+            GradedComponent.student_id == student_id
+        ).delete()
+        db_session.query(ExamRecord).filter(
+            ExamRecord.student_id == student_id
+        ).delete()
         student = db_session.query(Student).filter(Student.id == student_id).first()
         if student:
             db_session.delete(student)
     db_session.commit()
 
     # Cleanup test users
-    for username in ["student1@test.com", "student2@test.com", "faculty@test.com", "admin@test.com"]:
+    for username in [
+        "student1@test.com",
+        "student2@test.com",
+        "faculty@test.com",
+        "admin@test.com",
+    ]:
         user = db_session.query(User).filter(User.username == username).first()
         if user:
             db_session.delete(user)
@@ -177,6 +190,7 @@ def get_auth_token(user: User) -> str:
 # IDOR Test Cases
 # =============================================================================
 
+
 class TestRecommendationsIDOR:
     """
     IDOR tests for recommendations endpoint.
@@ -186,7 +200,11 @@ class TestRecommendationsIDOR:
     """
 
     def test_student_accessing_own_recommendations_succeeds(
-        self, client: TestClient, student1_user: User, student1_student_record, db_session: Session
+        self,
+        client: TestClient,
+        student1_user: User,
+        student1_student_record,
+        db_session: Session,
     ):
         """
         IDOR-1: Student accessing their own recommendations should succeed (200).
@@ -196,7 +214,9 @@ class TestRecommendationsIDOR:
         token = get_auth_token(student1_user)
 
         # Mock the StudentService to return test data
-        with patch('backend.routes.recommendations.StudentService.get_student_by_id') as mock_get:
+        with patch(
+            "backend.routes.recommendations.StudentService.get_student_by_id"
+        ) as mock_get:
             mock_get.return_value = {
                 "id": "student1@test.com",
                 "risk_score": 45.0,
@@ -217,7 +237,11 @@ class TestRecommendationsIDOR:
         assert isinstance(response.json()["data"], list)
 
     def test_student_accessing_other_student_recommendations_fails_403(
-        self, client: TestClient, student1_user: User, student2_student_record, db_session: Session
+        self,
+        client: TestClient,
+        student1_user: User,
+        student2_student_record,
+        db_session: Session,
     ):
         """
         IDOR-2: Student accessing another student's recommendations should fail (403).
@@ -258,7 +282,11 @@ class TestRecommendationsIDOR:
         assert response.status_code == 403
 
     def test_faculty_accessing_any_student_recommendations_succeeds(
-        self, client: TestClient, faculty_user: User, student2_student_record, db_session: Session
+        self,
+        client: TestClient,
+        faculty_user: User,
+        student2_student_record,
+        db_session: Session,
     ):
         """
         IDOR-4: Faculty accessing any student's recommendations should succeed (200).
@@ -267,7 +295,9 @@ class TestRecommendationsIDOR:
         """
         token = get_auth_token(faculty_user)
 
-        with patch('backend.routes.recommendations.StudentService.get_student_by_id') as mock_get:
+        with patch(
+            "backend.routes.recommendations.StudentService.get_student_by_id"
+        ) as mock_get:
             mock_get.return_value = {
                 "id": "student2@test.com",
                 "risk_score": 45.0,
@@ -287,7 +317,11 @@ class TestRecommendationsIDOR:
         assert "data" in response.json()
 
     def test_admin_accessing_any_student_recommendations_succeeds(
-        self, client: TestClient, admin_user: User, student1_student_record, db_session: Session
+        self,
+        client: TestClient,
+        admin_user: User,
+        student1_student_record,
+        db_session: Session,
     ):
         """
         IDOR-5: Admin accessing any student's recommendations should succeed (200).
@@ -296,7 +330,9 @@ class TestRecommendationsIDOR:
         """
         token = get_auth_token(admin_user)
 
-        with patch('backend.routes.recommendations.StudentService.get_student_by_id') as mock_get:
+        with patch(
+            "backend.routes.recommendations.StudentService.get_student_by_id"
+        ) as mock_get:
             mock_get.return_value = {
                 "id": "student1@test.com",
                 "risk_score": 45.0,
@@ -324,9 +360,7 @@ class TestRecommendationsIDOR:
 
         assert response.status_code == 401
 
-    def test_invalid_token_fails_401(
-        self, client: TestClient, db_session: Session
-    ):
+    def test_invalid_token_fails_401(self, client: TestClient, db_session: Session):
         """
         IDOR-7: Invalid token should fail (401).
 
@@ -348,7 +382,12 @@ class TestRecommendationsLogging:
     """
 
     def test_access_attempt_is_logged(
-        self, client: TestClient, student1_user: User, student1_student_record, db_session: Session, caplog
+        self,
+        client: TestClient,
+        student1_user: User,
+        student1_student_record,
+        db_session: Session,
+        caplog,
     ):
         """
         LOG-1: Access attempts should be logged for audit trail.
@@ -356,11 +395,14 @@ class TestRecommendationsLogging:
         FERPA requires audit trail of who accessed what student data.
         """
         import logging
-        logging.getLogger('backend.routes.recommendations').setLevel(logging.INFO)
+
+        logging.getLogger("backend.routes.recommendations").setLevel(logging.INFO)
 
         token = get_auth_token(student1_user)
 
-        with patch('backend.routes.recommendations.StudentService.get_student_by_id') as mock_get:
+        with patch(
+            "backend.routes.recommendations.StudentService.get_student_by_id"
+        ) as mock_get:
             mock_get.return_value = {
                 "id": "student1@test.com",
                 "risk_score": 45.0,
@@ -375,7 +417,9 @@ class TestRecommendationsLogging:
 
         # Verify logging occurred
         assert response.status_code == 200
-        assert any("Recommendations access" in record.message for record in caplog.records)
+        assert any(
+            "Recommendations access" in record.message for record in caplog.records
+        )
 
 
 class TestRecommendationsEdgeCases:
@@ -411,7 +455,9 @@ class TestRecommendationsEdgeCases:
         # Token with malformed payload
         response = client.get(
             "/api/v1/recommendations/student1@test.com",
-            headers={"Authorization": "Bearer eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJzdWIiOiIifQ.invalid"},
+            headers={
+                "Authorization": "Bearer eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJzdWIiOiIifQ.invalid"
+            },
         )
 
         # Should fail with 401 (invalid token)

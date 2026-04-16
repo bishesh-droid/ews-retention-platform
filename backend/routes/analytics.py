@@ -15,7 +15,9 @@ def get_student_risk_trend(
     student_id: str,
     days: int = Query(30, ge=1, le=90),
     db: Session = Depends(deps.get_db),
-    current_user: deps.User = Depends(deps.require_role([Role.FACULTY, Role.RETENTION_TEAM, Role.ADMIN]))
+    current_user: deps.User = Depends(
+        deps.require_role([Role.FACULTY, Role.RETENTION_TEAM, Role.ADMIN])
+    ),
 ):
     """
     Get detailed risk trend metrics for a specific student.
@@ -28,7 +30,9 @@ def get_student_risk_trend(
 def get_top_risk_velocity(
     limit: int = Query(10, ge=1, le=50),
     db: Session = Depends(deps.get_db),
-    current_user: deps.User = Depends(deps.require_role([Role.FACULTY, Role.RETENTION_TEAM, Role.ADMIN]))
+    current_user: deps.User = Depends(
+        deps.require_role([Role.FACULTY, Role.RETENTION_TEAM, Role.ADMIN])
+    ),
 ):
     """
     Get top students with the highest risk velocity.
@@ -44,7 +48,9 @@ def get_top_risk_velocity(
 @router.get("/analytics/kpis", response_model=APIResponse)
 def get_kpi_cards(
     db: Session = Depends(deps.get_db),
-    current_user: deps.User = Depends(deps.require_role([Role.FACULTY, Role.RETENTION_TEAM, Role.ADMIN]))
+    current_user: deps.User = Depends(
+        deps.require_role([Role.FACULTY, Role.RETENTION_TEAM, Role.ADMIN])
+    ),
 ):
     """
     Get aggregated KPI metrics for dashboard cards.
@@ -57,7 +63,9 @@ def get_kpi_cards(
 def get_drill_down(
     metric: str = Query(..., description="The KPI metric to drill down into"),
     db: Session = Depends(deps.get_db),
-    current_user: deps.User = Depends(deps.require_role([Role.FACULTY, Role.RETENTION_TEAM, Role.ADMIN]))
+    current_user: deps.User = Depends(
+        deps.require_role([Role.FACULTY, Role.RETENTION_TEAM, Role.ADMIN])
+    ),
 ):
     """
     Get detailed data for a specific KPI metric.

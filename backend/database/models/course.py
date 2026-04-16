@@ -13,6 +13,7 @@ class Course(Base):
     """
     Course model derived from the 'Courses' sheet and 'Learner Usage main dump'.
     """
+
     __tablename__ = "courses"
 
     id = Column(String, primary_key=True, index=True)  # Course Offering Code

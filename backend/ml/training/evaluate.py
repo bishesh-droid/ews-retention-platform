@@ -5,6 +5,7 @@ Run with: python -m backend.ml.training.evaluate
 This script compares risk scores stored in RiskSnapshot against final_outcome
 labels in Enrollment to measure how well the rule-based scorer predicts dropouts.
 """
+
 from backend.database.models.goals_and_risks import RiskSnapshot
 from backend.database.models.enrollment import Enrollment
 from backend.database.connection import SessionLocal
@@ -18,6 +19,7 @@ from sklearn.metrics import roc_auc_score, confusion_matrix
 
 # Add project root to path for imports
 import os
+
 sys.path.insert(0, os.path.join(os.path.dirname(__file__), "..", "..", ".."))
 
 
@@ -55,9 +57,7 @@ def load_labeled_data(session) -> pd.DataFrame:
 
     # Get all enrollments with final outcomes
     enrollments_with_outcomes = (
-        session.query(Enrollment)
-        .filter(Enrollment.final_outcome.isnot(None))
-        .all()
+        session.query(Enrollment).filter(Enrollment.final_outcome.isnot(None)).all()
     )
 
     for enrollment in enrollments_with_outcomes:
@@ -85,16 +85,20 @@ def load_labeled_data(session) -> pd.DataFrame:
         dept = (student.parent_department_name or "").lower()
         program = "MSc" if "msc" in dept else "BS"
 
-        results.append({
-            "org_id": student.org_defined_id or student.id,
-            "risk_score": risk_val,
-            "final_outcome": enrollment.final_outcome,
-            "outcome_source": enrollment.outcome_source,
-            "program": program,
-            "old_new": student.old_new_student or "unknown",
-            "semester": enrollment.course.semester_name if enrollment.course else None,
-            "risk_timestamp": latest_snapshot.timestamp,
-        })
+        results.append(
+            {
+                "org_id": student.org_defined_id or student.id,
+                "risk_score": risk_val,
+                "final_outcome": enrollment.final_outcome,
+                "outcome_source": enrollment.outcome_source,
+                "program": program,
+                "old_new": student.old_new_student or "unknown",
+                "semester": (
+                    enrollment.course.semester_name if enrollment.course else None
+                ),
+                "risk_timestamp": latest_snapshot.timestamp,
+            }
+        )
 
     df = pd.DataFrame(results)
     return df
@@ -145,7 +149,9 @@ def run_evaluation(df: pd.DataFrame, threshold: float = 60.0) -> Dict[str, Any]:
     precision = tp / (tp + fp) if (tp + fp) > 0 else 0
     recall = tp / (tp + fn) if (tp + fn) > 0 else 0
     specificity = tn / (tn + fp) if (tn + fp) > 0 else 0
-    f1 = 2 * precision * recall / (precision + recall) if (precision + recall) > 0 else 0
+    f1 = (
+        2 * precision * recall / (precision + recall) if (precision + recall) > 0 else 0
+    )
 
     metrics["precision"] = round(precision, 3)
     metrics["recall"] = round(recall, 3)
@@ -166,19 +172,29 @@ def run_evaluation(df: pd.DataFrame, threshold: float = 60.0) -> Dict[str, Any]:
     return metrics
 
 
-def print_evaluation_report(metrics: Dict[str, Any], df: pd.DataFrame, threshold: float):
+def print_evaluation_report(
+    metrics: Dict[str, Any], df: pd.DataFrame, threshold: float
+):
     """Print a formatted evaluation report to console."""
     print(f"\n{'='*60}")
     print(f"  EWS Rule-Based Scorer Evaluation (threshold={threshold})")
     print(f"{'='*60}")
     print(f"Total students evaluated: {metrics['total_students']}")
-    print(f"Actual at-risk: {metrics['actual_at_risk']} ({metrics['actual_at_risk_pct']}%)")
-    print(f"Predicted at-risk: {metrics['predicted_at_risk']} ({metrics['predicted_at_risk_pct']}%)")
+    print(
+        f"Actual at-risk: {metrics['actual_at_risk']} ({metrics['actual_at_risk_pct']}%)"
+    )
+    print(
+        f"Predicted at-risk: {metrics['predicted_at_risk']} ({metrics['predicted_at_risk_pct']}%)"
+    )
 
     print("\n--- Classification Metrics ---")
-    print(f"Precision: {metrics['precision']:.3f} (of those flagged, how many were truly at-risk)")
+    print(
+        f"Precision: {metrics['precision']:.3f} (of those flagged, how many were truly at-risk)"
+    )
     print(f"Recall:    {metrics['recall']:.3f} (of all at-risk, how many did we catch)")
-    print(f"Specificity: {metrics['specificity']:.3f} (of not at-risk, how many did we correctly ignore)")
+    print(
+        f"Specificity: {metrics['specificity']:.3f} (of not at-risk, how many did we correctly ignore)"
+    )
     print(f"F1 Score:  {metrics['f1_score']:.3f}")
 
     if metrics.get("roc_auc"):
@@ -194,11 +210,14 @@ def print_evaluation_report(metrics: Dict[str, Any], df: pd.DataFrame, threshold
         f"Actual Not Risk    {cm['true_negatives']:4d}      {cm['false_positives']:4d}"
         f"   (specificity: {metrics['specificity']:.3f})"
     )
-    print(f"Actual At Risk     {cm['false_negatives']:4d}      {cm['true_positives']:4d}   (recall: {metrics['recall']:.3f})")
+    print(
+        f"Actual At Risk     {cm['false_negatives']:4d}      {cm['true_positives']:4d}   "
+        f"(recall: {metrics['recall']:.3f})"
+    )
 
     print("\n--- Outcome Breakdown ---")
     for outcome, count in metrics["outcome_breakdown"].items():
-        pct = count / metrics['total_students'] * 100
+        pct = count / metrics["total_students"] * 100
         print(f"  {outcome:12s}: {count:4d} ({pct:5.1f}%)")
 
     # By program breakdown
@@ -207,7 +226,9 @@ def print_evaluation_report(metrics: Dict[str, Any], df: pd.DataFrame, threshold
         sub = df[df["program"] == program]
         sub_actual = sub["actual_at_risk"].sum()
         sub_pred = sub["predicted_at_risk"].sum()
-        print(f"{program}: {len(sub)} students, {sub_actual} at-risk, {sub_pred} predicted")
+        print(
+            f"{program}: {len(sub)} students, {sub_actual} at-risk, {sub_pred} predicted"
+        )
 
     print(f"\n{'='*60}")
 
@@ -239,8 +260,12 @@ def main():
         df = load_labeled_data(session)
 
         if len(df) == 0:
-            print("No labeled outcomes found. Run data ingestion first to populate final_outcome fields.")
-            print("The infer_outcomes_from_exam_data() function must be called during ingestion.")
+            print(
+                "No labeled outcomes found. Run data ingestion first to populate final_outcome fields."
+            )
+            print(
+                "The infer_outcomes_from_exam_data() function must be called during ingestion."
+            )
             sys.exit(1)
 
         if args.compare_thresholds:
@@ -251,13 +276,16 @@ def main():
 
             for thresh in thresholds:
                 metrics = run_evaluation(df, threshold=thresh)
-                print(f"\nThreshold {thresh:4.1f}: Precision={metrics['precision']:.3f}, "
-                      f"Recall={metrics['recall']:.3f}, F1={metrics['f1_score']:.3f}")
+                print(
+                    f"\nThreshold {thresh:4.1f}: Precision={metrics['precision']:.3f}, "
+                    f"Recall={metrics['recall']:.3f}, F1={metrics['f1_score']:.3f}"
+                )
         else:
             metrics = run_evaluation(df, threshold=args.threshold)
 
             if args.json:
                 import json
+
                 print(json.dumps(metrics, indent=2))
             else:
                 print_evaluation_report(metrics, df, args.threshold)

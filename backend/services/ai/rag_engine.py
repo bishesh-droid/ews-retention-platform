@@ -27,16 +27,19 @@ class StudentDataRetriever:
         """Replace PII identifiers with session-scoped pseudonyms before LLM dispatch."""
         safe = context.copy()
         if "student_id" in safe:
-            safe["student_id"] = "STUDENT_" + hashlib.sha256(
-                (str(safe["student_id"]) + session_salt).encode()
-            ).hexdigest()[:8].upper()
+            safe["student_id"] = (
+                "STUDENT_"
+                + hashlib.sha256((str(safe["student_id"]) + session_salt).encode())
+                .hexdigest()[:8]
+                .upper()
+            )
         # Remove any raw email/PII fields
         for key in ["email", "username", "first_name", "last_name"]:
             safe.pop(key, None)
         return safe
 
     def retrieve_student_context(
-        self, student_id: str, depth: str = 'detailed', pseudonymise: bool = True
+        self, student_id: str, depth: str = "detailed", pseudonymise: bool = True
     ) -> Dict[str, Any]:  # noqa: C901
         """
         Retrieve comprehensive student data for LLM prompts.
@@ -57,7 +60,7 @@ class StudentDataRetriever:
         context: Dict[str, Any] = {
             "student_id": student.id,
             "data_sources": [],
-            "retrieved_at": datetime.now().isoformat()
+            "retrieved_at": datetime.now().isoformat(),
         }
 
         # Get latest prediction
@@ -69,7 +72,7 @@ class StudentDataRetriever:
                 "engagement_score": round(latest_prediction.engagement_score, 1),
                 "retention_likelihood": latest_prediction.retention_likelihood,
                 "attendance": round(latest_prediction.attendance, 1),
-                "grades": round(latest_prediction.grades, 2)
+                "grades": round(latest_prediction.grades, 2),
             }
             context["data_sources"].append("prediction_model")
 
@@ -81,13 +84,21 @@ class StudentDataRetriever:
             .limit(7)
             .all()
         )
-        risk_trend = [round(s.risk_score, 1) for s in reversed(latest_snapshots) if s.risk_score is not None]
+        risk_trend = [
+            round(s.risk_score, 1)
+            for s in reversed(latest_snapshots)
+            if s.risk_score is not None
+        ]
         context["risk_trend"] = risk_trend
         context["current_risk_score"] = risk_trend[-1] if risk_trend else None
         context["risk_trend_direction"] = (
-            "improving" if len(risk_trend) >= 2 and float(risk_trend[-1]) < float(risk_trend[-2])  # type: ignore[operator]  # noqa: E501
-            else "worsening" if len(risk_trend) >= 2 and float(risk_trend[-1]) > float(risk_trend[-2])  # type: ignore[operator]  # noqa: E501
-            else "stable"
+            "improving"
+            if len(risk_trend) >= 2 and float(risk_trend[-1]) < float(risk_trend[-2])  # type: ignore[operator]  # noqa: E501
+            else (
+                "worsening"
+                if len(risk_trend) >= 2 and float(risk_trend[-1]) > float(risk_trend[-2])  # type: ignore[operator]  # noqa: E501
+                else "stable"
+            )
         )
         if risk_trend:
             context["data_sources"].append("risk_history")
@@ -102,7 +113,9 @@ class StudentDataRetriever:
         )
         scores = [g.score for g in graded if g.score is not None]
         context["recent_quiz_scores"] = [round(s, 1) for s in scores[:5]]
-        context["avg_quiz_score"] = round(sum(scores) / len(scores), 1) if scores else None
+        context["avg_quiz_score"] = (
+            round(sum(scores) / len(scores), 1) if scores else None
+        )
         context["missed_component_count"] = sum(1 for g in graded if g.missed)
         if scores:
             context["data_sources"].append("grade_records")
@@ -111,11 +124,12 @@ class StudentDataRetriever:
         if student.interventions:
             context["interventions"] = [
                 {
-                    "date": str(getattr(intervention, 'date', None)),
-                    "user": getattr(intervention, 'user', None),
-                    "action": getattr(intervention, 'action', None)
+                    "date": str(getattr(intervention, "date", None)),
+                    "user": getattr(intervention, "user", None),
+                    "action": getattr(intervention, "action", None),
                 }
-                for intervention in list(student.interventions)[-5:]  # type: ignore[attr-defined]  # Last 5 interventions
+                for intervention in list(student.interventions)[-5:]
+                # type: ignore[attr-defined]  # Last 5 interventions
             ]
             context["data_sources"].append("intervention_history")
 
@@ -165,10 +179,7 @@ class StudentDataRetriever:
         change = recent - previous
         change_pct = (change / previous) * 100 if previous != 0 else 0
 
-        return {
-            "change": round(change, 2),
-            "change_pct": round(change_pct, 1)
-        }
+        return {"change": round(change, 2), "change_pct": round(change_pct, 1)}
 
 
 class CohortDataRetriever:
@@ -200,7 +211,9 @@ class CohortDataRetriever:
 
         # Calculate cohort metrics
         risk_scores = [s.predictions[0].risk_score for s in students_with_predictions]
-        engagement_scores = [s.predictions[0].engagement_score for s in students_with_predictions]
+        engagement_scores = [
+            s.predictions[0].engagement_score for s in students_with_predictions
+        ]
 
         context = {
             "total_students": len(students),
@@ -209,7 +222,7 @@ class CohortDataRetriever:
             "median_risk_score": round(statistics.median(risk_scores), 1),
             "average_engagement": round(statistics.mean(engagement_scores), 1),
             "data_sources": ["cohort_aggregates", "prediction_model"],
-            "retrieved_at": datetime.now().isoformat()
+            "retrieved_at": datetime.now().isoformat(),
         }
 
         # Risk distribution
@@ -217,12 +230,14 @@ class CohortDataRetriever:
             "critical": len([r for r in risk_scores if r > 75]),
             "high": len([r for r in risk_scores if 50 < r <= 75]),
             "moderate": len([r for r in risk_scores if 25 < r <= 50]),
-            "low": len([r for r in risk_scores if r <= 25])
+            "low": len([r for r in risk_scores if r <= 25]),
         }
 
         # At-risk percentage
         at_risk_count = len([r for r in risk_scores if r > 60])
-        context["at_risk_percentage"] = round((at_risk_count / len(risk_scores)) * 100, 1)
+        context["at_risk_percentage"] = round(
+            (at_risk_count / len(risk_scores)) * 100, 1
+        )
 
         return context
 
@@ -253,9 +268,11 @@ class InstitutionalDataRetriever:
         context = {
             "total_population": len(students),
             "retention_health_score": round(100 - avg_risk, 1),
-            "high_risk_population_pct": round((len([r for r in risk_scores if r > 60]) / len(risk_scores)) * 100, 1),
+            "high_risk_population_pct": round(
+                (len([r for r in risk_scores if r > 60]) / len(risk_scores)) * 100, 1
+            ),
             "data_sources": ["institutional_aggregates"],
-            "retrieved_at": datetime.now().isoformat()
+            "retrieved_at": datetime.now().isoformat(),
         }
 
         # Intervention coverage
@@ -265,7 +282,11 @@ class InstitutionalDataRetriever:
         context["intervention_metrics"] = {
             "total_interventions": total_interventions,
             "students_with_interventions": students_with_interventions,
-            "coverage_pct": round((students_with_interventions / len(students)) * 100, 1) if students else 0
+            "coverage_pct": (
+                round((students_with_interventions / len(students)) * 100, 1)
+                if students
+                else 0
+            ),
         }
 
         return context
@@ -293,11 +314,15 @@ class ContextAssembler:
         # Attendance trend
         if "attendance_trend" in student_context:
             trend = student_context["attendance_trend"]
-            context_parts.append(f"Attendance trend over last 7 periods: {trend['trend']}")
-            if trend['recent_change']['change'] != 0:
-                change = trend['recent_change']
-                direction = "increased" if change['change'] > 0 else "decreased"
-                context_parts.append(f"Recent attendance {direction} by {abs(change['change_pct'])}%")
+            context_parts.append(
+                f"Attendance trend over last 7 periods: {trend['trend']}"
+            )
+            if trend["recent_change"]["change"] != 0:
+                change = trend["recent_change"]
+                direction = "increased" if change["change"] > 0 else "decreased"
+                context_parts.append(
+                    f"Recent attendance {direction} by {abs(change['change_pct'])}%"
+                )
 
         # GPA trend
         if "gpa_trend" in student_context:
@@ -319,18 +344,22 @@ class ContextAssembler:
 
         context_parts = [
             f"Student ID: {student_context['student_id']}",
-            f"Risk Category: {student_context.get('risk_category', 'unknown').upper()}"
+            f"Risk Category: {student_context.get('risk_category', 'unknown').upper()}",
         ]
 
         if "current_metrics" in student_context:
             metrics = student_context["current_metrics"]
-            context_parts.append(f"Risk: {metrics['risk_score']}%, Engagement: {metrics['engagement_score']}%")
+            context_parts.append(
+                f"Risk: {metrics['risk_score']}%, Engagement: {metrics['engagement_score']}%"
+            )
 
         if "interventions" in student_context:
             intervention_count = len(student_context["interventions"])
             context_parts.append(f"Previous interventions: {intervention_count}")
             if intervention_count > 0:
                 latest = student_context["interventions"][-1]
-                context_parts.append(f"Latest action: {latest['action']} ({latest['date']})")
+                context_parts.append(
+                    f"Latest action: {latest['action']} ({latest['date']})"
+                )
 
         return "\n".join(context_parts)

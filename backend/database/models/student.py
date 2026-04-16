@@ -28,14 +28,15 @@ class Student(Base):
     Student model derived from the 'Learner Usage main dump' sheet.
     One row per unique student (username).
     """
+
     __tablename__ = "students"
 
     __table_args__ = (
-        Index('ix_student_department', 'parent_department_name'),
-        Index('ix_student_org_id', 'org_defined_id'),
-        Index('ix_student_is_active', 'is_active'),
+        Index("ix_student_department", "parent_department_name"),
+        Index("ix_student_org_id", "org_defined_id"),
+        Index("ix_student_is_active", "is_active"),
         # D5-3: Composite index for faculty-scoped active student queries
-        Index('ix_student_dept_active', 'parent_department_name', 'is_active'),
+        Index("ix_student_dept_active", "parent_department_name", "is_active"),
     )
 
     id = Column(String, primary_key=True, index=True)  # Username (email)
@@ -54,54 +55,43 @@ class Student(Base):
 
     # Relationships with cascade rules (DB-3)
     enrollments = relationship(
-        "Enrollment", back_populates="student",
+        "Enrollment",
+        back_populates="student",
         cascade="all, delete-orphan",
-        lazy="select"
+        lazy="select",
     )
     predictions = relationship(
-        "Prediction", back_populates="student",
-        cascade="all, delete-orphan"
+        "Prediction", back_populates="student", cascade="all, delete-orphan"
     )
     interventions = relationship(
-        "Intervention", back_populates="student",
-        cascade="all, delete-orphan"
+        "Intervention", back_populates="student", cascade="all, delete-orphan"
     )
     exam_records = relationship(
-        "ExamRecord", back_populates="student",
-        cascade="all, delete-orphan"
+        "ExamRecord", back_populates="student", cascade="all, delete-orphan"
     )
     raw_events = relationship(
-        "RawEvent", back_populates="student",
-        cascade="all, delete-orphan"
+        "RawEvent", back_populates="student", cascade="all, delete-orphan"
     )
     engineered_features = relationship(
-        "EngineeredFeatures", back_populates="student",
-        cascade="all, delete-orphan"
+        "EngineeredFeatures", back_populates="student", cascade="all, delete-orphan"
     )
     responses = relationship(
-        "StudentResponse", back_populates="student",
-        cascade="all, delete-orphan"
+        "StudentResponse", back_populates="student", cascade="all, delete-orphan"
     )
     risk_history = relationship(
-        "RiskSnapshot", back_populates="student",
-        cascade="all, delete-orphan"
+        "RiskSnapshot", back_populates="student", cascade="all, delete-orphan"
     )
-    goals = relationship(
-        "Goal", back_populates="student",
-        cascade="all, delete-orphan"
-    )
+    goals = relationship("Goal", back_populates="student", cascade="all, delete-orphan")
     graded_components = relationship(
-        "GradedComponent", back_populates="student",
-        cascade="all, delete-orphan"
+        "GradedComponent", back_populates="student", cascade="all, delete-orphan"
     )
     intervention_logs = relationship(
         "InterventionLog",
         cascade="all, delete-orphan",
         foreign_keys="[InterventionLog.student_org_id]",
         primaryjoin="Student.org_defined_id == foreign(InterventionLog.student_org_id)",
-        overlaps="student"
+        overlaps="student",
     )
     prediction_logs = relationship(
-        "PredictionLog", back_populates="student",
-        cascade="all, delete-orphan"
+        "PredictionLog", back_populates="student", cascade="all, delete-orphan"
     )

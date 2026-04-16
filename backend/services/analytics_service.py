@@ -23,9 +23,12 @@ class AnalyticsService:
         Creates a new risk snapshot and calculates velocity/acceleration.
         """
         # Get last snapshot
-        last_snapshot = db.query(RiskSnapshot).filter(
-            RiskSnapshot.student_id == student_id
-        ).order_by(RiskSnapshot.timestamp.desc()).first()
+        last_snapshot = (
+            db.query(RiskSnapshot)
+            .filter(RiskSnapshot.student_id == student_id)
+            .order_by(RiskSnapshot.timestamp.desc())
+            .first()
+        )
 
         velocity = 0.0
         acceleration = 0.0
@@ -59,10 +62,15 @@ class AnalyticsService:
         Calculates 7-day and 30-day trend slopes and identifies anomalies.
         """
         start_date = datetime.utcnow() - timedelta(days=days)
-        snapshots = db.query(RiskSnapshot).filter(
-            RiskSnapshot.student_id == student_id,
-            RiskSnapshot.timestamp >= start_date
-        ).order_by(RiskSnapshot.timestamp.asc()).all()
+        snapshots = (
+            db.query(RiskSnapshot)
+            .filter(
+                RiskSnapshot.student_id == student_id,
+                RiskSnapshot.timestamp >= start_date,
+            )
+            .order_by(RiskSnapshot.timestamp.asc())
+            .all()
+        )
 
         if not snapshots:
             return {"trend": "stable", "slope": 0, "snapshots": []}
@@ -75,7 +83,9 @@ class AnalyticsService:
         if len(x_values) > 1:
             mean_x = sum(x_values) / len(x_values)
             mean_y = sum(y_values) / len(y_values)
-            numerator = sum((x - mean_x) * (y - mean_y) for x, y in zip(x_values, y_values))
+            numerator = sum(
+                (x - mean_x) * (y - mean_y) for x, y in zip(x_values, y_values)
+            )
             denominator = sum((x - mean_x) ** 2 for x in x_values)
             slope = numerator / denominator if denominator != 0 else 0
         else:
@@ -93,7 +103,11 @@ class AnalyticsService:
             "student_id": student_id,
             "current_risk": y_values[-1],
             "slope": slope,
-            "trend": "increasing" if slope > 0.01 else "decreasing" if slope < -0.01 else "stable",
+            "trend": (
+                "increasing"
+                if slope > 0.01
+                else "decreasing" if slope < -0.01 else "stable"
+            ),
             "is_anomaly": is_anomaly,
             "snapshots": [
                 {
@@ -104,8 +118,9 @@ class AnalyticsService:
                     "acceleration": s.acceleration,
                     "week_number": s.week_number,
                     "semester": s.semester_name,
-                } for s in snapshots
-            ]
+                }
+                for s in snapshots
+            ],
         }
 
     @staticmethod
@@ -113,9 +128,12 @@ class AnalyticsService:
         """
         Identify students with the fastest growing risk scores.
         """
-        latest_snapshots = db.query(RiskSnapshot).order_by(
-            RiskSnapshot.student_id, RiskSnapshot.timestamp.desc()
-        ).distinct(RiskSnapshot.student_id).all()
+        latest_snapshots = (
+            db.query(RiskSnapshot)
+            .order_by(RiskSnapshot.student_id, RiskSnapshot.timestamp.desc())
+            .distinct(RiskSnapshot.student_id)
+            .all()
+        )
 
         sorted_snapshots = sorted(
             latest_snapshots,
@@ -143,23 +161,30 @@ class AnalyticsService:
             if (now - cached_at).total_seconds() <= _COHORT_CACHE_TTL_SECONDS:
                 return data
 
-        top_at_risk = db.query(Prediction).order_by(Prediction.risk_score.desc()).limit(10).all()
+        top_at_risk = (
+            db.query(Prediction).order_by(Prediction.risk_score.desc()).limit(10).all()
+        )
 
         # 2. Biggest Attendance Drop (Velocity in attendance)
         # We'd need historical attendance snapshots similarly to risk scores
 
         # 3. Engagement Decline Alerts (Anomalies)
-        anomalies_count = db.query(RiskSnapshot).filter(
-            RiskSnapshot.timestamp >= datetime.utcnow() - timedelta(days=7),
-            RiskSnapshot.velocity > 0.2  # Arbitrary spike threshold
-        ).count()
+        anomalies_count = (
+            db.query(RiskSnapshot)
+            .filter(
+                RiskSnapshot.timestamp >= datetime.utcnow() - timedelta(days=7),
+                RiskSnapshot.velocity > 0.2,  # Arbitrary spike threshold
+            )
+            .count()
+        )
 
         result = {
             "top_at_risk": [
-                {"student_id": p.student_id, "risk_score": p.risk_score} for p in top_at_risk
+                {"student_id": p.student_id, "risk_score": p.risk_score}
+                for p in top_at_risk
             ],
             "engagement_alerts": anomalies_count,
-            "system_health": "stable"  # Placeholder
+            "system_health": "stable",  # Placeholder
         }
 
         # Cache cohort summary for a short period to reduce DB load
@@ -172,6 +197,11 @@ class AnalyticsService:
         Provide detailed data for a specific KPI metric.
         """
         if metric == "top-risk":
-            return db.query(Prediction).order_by(Prediction.risk_score.desc()).limit(20).all()
+            return (
+                db.query(Prediction)
+                .order_by(Prediction.risk_score.desc())
+                .limit(20)
+                .all()
+            )
         # Add more drill-down logic
         return []

@@ -11,7 +11,11 @@ from sqlalchemy.dialects.postgresql import insert as pg_insert
 from sqlalchemy.orm import Session
 
 import backend.config as settings
-from backend.config import RISK_THRESHOLD_HIGH, RISK_THRESHOLD_MEDIUM, trimester_week_number
+from backend.config import (
+    RISK_THRESHOLD_HIGH,
+    RISK_THRESHOLD_MEDIUM,
+    trimester_week_number,
+)
 from backend.database import Course, Enrollment, Student
 from backend.domain.student import build_intervention_recommendation
 from backend.infrastructure.student_repository import StudentRepository
@@ -83,13 +87,18 @@ class StudentApplicationService:
         }
 
     @staticmethod
-    def _build_student_metrics_response(student: Student, features: Dict, risk_fields: Dict) -> Dict:
+    def _build_student_metrics_response(
+        student: Student, features: Dict, risk_fields: Dict
+    ) -> Dict:
         engagement_pattern = features.get("engagement_pattern", "on_track")
         return {
             "id": student.id,
             "first_name": student.first_name,
             "last_name": student.last_name,
-            "name": " ".join(filter(None, [student.first_name, student.last_name])).strip() or student.id,
+            "name": " ".join(
+                filter(None, [student.first_name, student.last_name])
+            ).strip()
+            or student.id,
             "org_defined_id": student.org_defined_id,
             "department": student.parent_department_name,
             "old_new_student": student.old_new_student,
@@ -117,7 +126,9 @@ class StudentApplicationService:
             "per_course_breakdown": features["per_course_breakdown"],
             # BREAKING_CHANGE: renamed from attendance_score in v1.1
             "exam_attendance_score": features.get("exam_attendance_rate"),
-            "attendance_score": features.get("exam_attendance_rate"),  # DEPRECATED — remove in v1.2
+            "attendance_score": features.get(
+                "exam_attendance_rate"
+            ),  # DEPRECATED — remove in v1.2
             "academic_score": features["content_completion_score"],
             "behavioral_score": features["discussion_engagement_score"],
             "stability_score": features["time_investment_score"],
@@ -130,7 +141,9 @@ class StudentApplicationService:
             }.get(engagement_pattern, "Unknown"),
             "is_ghost": features.get("ghost_info", {}).get("is_ghost", False),
             "ghost_type": features.get("ghost_info", {}).get("ghost_type"),
-            "requires_activation_outreach": features.get("requires_activation_outreach", False),
+            "requires_activation_outreach": features.get(
+                "requires_activation_outreach", False
+            ),
             "score_basis": "rule_based_formula",
         }
 
@@ -158,17 +171,31 @@ class StudentApplicationService:
             program=program,
             current_week=current_week,
         )
-        return StudentApplicationService._build_student_metrics_response(student, features, risk_fields)
+        return StudentApplicationService._build_student_metrics_response(
+            student, features, risk_fields
+        )
 
     @staticmethod
-    def get_student_by_id(db: Session, student_id: str, current_user=None) -> Optional[Dict]:
-        student = StudentRepository.get_student_by_id_scoped(db, student_id, current_user=current_user)
+    def get_student_by_id(
+        db: Session, student_id: str, current_user=None
+    ) -> Optional[Dict]:
+        student = StudentRepository.get_student_by_id_scoped(
+            db, student_id, current_user=current_user
+        )
         if not student:
             return None
-        enrollment_dicts = StudentRepository.fetch_enrollments_map(db, [student_id]).get(student_id, [])
-        graded_dicts = StudentRepository.fetch_graded_map(db, [student_id]).get(student_id, [])
-        exam_dicts = StudentRepository.fetch_exam_map(db, [student_id]).get(student_id, [])
-        return StudentApplicationService.calculate_student_metrics(student, enrollment_dicts, graded_dicts, exam_dicts)
+        enrollment_dicts = StudentRepository.fetch_enrollments_map(
+            db, [student_id]
+        ).get(student_id, [])
+        graded_dicts = StudentRepository.fetch_graded_map(db, [student_id]).get(
+            student_id, []
+        )
+        exam_dicts = StudentRepository.fetch_exam_map(db, [student_id]).get(
+            student_id, []
+        )
+        return StudentApplicationService.calculate_student_metrics(
+            student, enrollment_dicts, graded_dicts, exam_dicts
+        )
 
     @staticmethod
     def get_all_students(  # noqa: C901
@@ -195,7 +222,9 @@ class StudentApplicationService:
             semester_name = settings.CURRENT_SEMESTER_NAME
 
         pred_subq = StudentRepository.latest_prediction_rows_subquery(db)
-        base = db.query(Student, pred_subq).outerjoin(pred_subq, pred_subq.c.student_id == Student.id)
+        base = db.query(Student, pred_subq).outerjoin(
+            pred_subq, pred_subq.c.student_id == Student.id
+        )
 
         if current_user is not None:
             role = (getattr(current_user, "role", "") or "").lower()
@@ -210,7 +239,11 @@ class StudentApplicationService:
         # and works even when Prediction table is empty.
 
         sort_expr = StudentRepository.sort_expr_for_students(sort_by, order, pred_subq)
-        base = base.order_by(*sort_expr) if isinstance(sort_expr, tuple) else base.order_by(sort_expr)
+        base = (
+            base.order_by(*sort_expr)
+            if isinstance(sort_expr, tuple)
+            else base.order_by(sort_expr)
+        )
         rows = base.offset(skip).limit(limit).all()
 
         students: List[Student] = [r[0] for r in rows]
@@ -281,7 +314,11 @@ class StudentApplicationService:
                 current_week=current_week,
                 pred_row=pred_row,
             )
-            result.append(StudentApplicationService._build_student_metrics_response(student, features, risk_fields))
+            result.append(
+                StudentApplicationService._build_student_metrics_response(
+                    student, features, risk_fields
+                )
+            )
 
         # Post-computation filters for derived fields (risk_score, activation_required)
         # These use LIVE computed values, not stale Prediction table data
@@ -292,7 +329,11 @@ class StudentApplicationService:
             rx = float(risk_max)  # Always 0-100 scale, no normalization needed
             result = [s for s in result if s.get("risk_score", 0) <= rx]
         if activation_required is not None:
-            result = [s for s in result if s.get("requires_activation_outreach") == activation_required]
+            result = [
+                s
+                for s in result
+                if s.get("requires_activation_outreach") == activation_required
+            ]
 
         reverse = order == "desc"
         computed_fields = [
@@ -376,7 +417,12 @@ class StudentApplicationService:
         pred = StudentRepository.latest_prediction_rows_subquery(db)
         risk = cast(pred.c.risk_score, Float)
         risk_0_100 = case((risk <= 1.0, risk * 100.0), else_=risk)
-        avg_risk = db.query(func.avg(risk_0_100)).select_from(pred).filter(risk.isnot(None)).scalar()
+        avg_risk = (
+            db.query(func.avg(risk_0_100))
+            .select_from(pred)
+            .filter(risk.isnot(None))
+            .scalar()
+        )
 
         low_count = (
             db.query(func.count(pred.c.student_id))
@@ -404,16 +450,27 @@ class StudentApplicationService:
             or 0
         )
         # Calculate ghost student statistics
-        ghost_stats = {"never_logged_in": 0, "logged_in_never_started": 0, "total_ghosts": 0}
+        ghost_stats = {
+            "never_logged_in": 0,
+            "logged_in_never_started": 0,
+            "total_ghosts": 0,
+        }
         students_with_enrollments = db.query(Student).all()
         for student in students_with_enrollments:
             enrollment_dicts = StudentRepository.fetch_enrollments_map(
                 db, [student.id]
-            ).get(student.id, [])  # type: ignore[arg-type, list-item]
+            ).get(
+                student.id, []
+            )  # type: ignore[arg-type, list-item]
             if enrollment_dicts:
                 from backend.services.feature_engineering import FeatureEngineer
-                total_logins = sum(e.get("num_logins", 0) or 0 for e in enrollment_dicts)
-                ghost_info = FeatureEngineer.detect_ghost_student(enrollment_dicts, total_logins)
+
+                total_logins = sum(
+                    e.get("num_logins", 0) or 0 for e in enrollment_dicts
+                )
+                ghost_info = FeatureEngineer.detect_ghost_student(
+                    enrollment_dicts, total_logins
+                )
                 if ghost_info.get("is_ghost"):
                     ghost_stats["total_ghosts"] += 1
                     ghost_type = ghost_info.get("ghost_type")
@@ -424,7 +481,11 @@ class StudentApplicationService:
             "total_students": int(total_students),
             "at_risk_students": int(high_count),
             "average_risk_score": round(float(avg_risk or 0.0), 2),
-            "risk_distribution": {"low": int(low_count), "medium": int(medium_count), "high": int(high_count)},
+            "risk_distribution": {
+                "low": int(low_count),
+                "medium": int(medium_count),
+                "high": int(high_count),
+            },
             "total_enrollments": int(total_enrollments),
             "total_courses": int(total_courses),
             "activation_required_count": ghost_stats["total_ghosts"],
@@ -435,7 +496,9 @@ class StudentApplicationService:
         }
 
     @staticmethod
-    def get_cohort_engagement_patterns(db: Session, current_user=None) -> Dict[str, int]:
+    def get_cohort_engagement_patterns(
+        db: Session, current_user=None
+    ) -> Dict[str, int]:
         """
         Calculate engagement pattern distribution across the cohort.
 
@@ -444,7 +507,9 @@ class StudentApplicationService:
         """
 
         pred_subq = StudentRepository.latest_prediction_rows_subquery(db)
-        base = db.query(Student).outerjoin(pred_subq, pred_subq.c.student_id == Student.id)
+        base = db.query(Student).outerjoin(
+            pred_subq, pred_subq.c.student_id == Student.id
+        )
 
         if current_user is not None:
             role = (getattr(current_user, "role", "") or "").lower()
@@ -456,14 +521,24 @@ class StudentApplicationService:
 
         students = base.all()
         if not students:
-            return {"disengaged": 0, "struggling": 0, "at_risk_normal": 0, "on_track": 0}
+            return {
+                "disengaged": 0,
+                "struggling": 0,
+                "at_risk_normal": 0,
+                "on_track": 0,
+            }
 
         student_ids = [s.id for s in students]
         enrollment_map = StudentRepository.fetch_enrollments_map(db, student_ids)  # type: ignore[arg-type]
         graded_map = StudentRepository.fetch_graded_map(db, student_ids)  # type: ignore[arg-type]
         exam_map = StudentRepository.fetch_exam_map(db, student_ids)  # type: ignore[arg-type]
 
-        patterns = {"disengaged": 0, "struggling": 0, "at_risk_normal": 0, "on_track": 0}
+        patterns = {
+            "disengaged": 0,
+            "struggling": 0,
+            "at_risk_normal": 0,
+            "on_track": 0,
+        }
 
         for student in students:
             is_new = (student.old_new_student or "").lower() == "new"
@@ -491,11 +566,21 @@ class StudentApplicationService:
         if not course:
             return None
         e = Enrollment
-        total_enrolled = db.query(func.count(e.id)).filter(e.course_id == course_id).scalar() or 0
-        sum_completed = db.query(func.coalesce(func.sum(e.content_completed), 0)
-                                 ).filter(e.course_id == course_id).scalar() or 0
-        sum_time = db.query(func.coalesce(func.sum(e.total_time_spent_seconds), 0)
-                            ).filter(e.course_id == course_id).scalar() or 0
+        total_enrolled = (
+            db.query(func.count(e.id)).filter(e.course_id == course_id).scalar() or 0
+        )
+        sum_completed = (
+            db.query(func.coalesce(func.sum(e.content_completed), 0))
+            .filter(e.course_id == course_id)
+            .scalar()
+            or 0
+        )
+        sum_time = (
+            db.query(func.coalesce(func.sum(e.total_time_spent_seconds), 0))
+            .filter(e.course_id == course_id)
+            .scalar()
+            or 0
+        )
         zero_progress = (
             db.query(func.count(e.id))
             .filter(e.course_id == course_id)
@@ -508,7 +593,10 @@ class StudentApplicationService:
             .filter(e.course_id == course_id)
             .filter(func.coalesce(e.content_completed, 0) > 0)
             .filter(func.coalesce(e.content_required, 1) > 0)
-            .filter(func.coalesce(e.content_completed, 0) <= (func.coalesce(e.content_required, 1) * 0.1))
+            .filter(
+                func.coalesce(e.content_completed, 0)
+                <= (func.coalesce(e.content_required, 1) * 0.1)
+            )
             .scalar()
             or 0
         )
@@ -520,8 +608,12 @@ class StudentApplicationService:
             "zero_progress": int(zero_progress),
             "low_progress_0_10": int(low_progress),
             "active_above_10": int(active),
-            "avg_content_completed": round(float(sum_completed) / max(int(total_enrolled), 1), 2),
-            "avg_time_spent_hours": round(float(sum_time) / max(int(total_enrolled), 1) / 3600.0, 2),
+            "avg_content_completed": round(
+                float(sum_completed) / max(int(total_enrolled), 1), 2
+            ),
+            "avg_time_spent_hours": round(
+                float(sum_time) / max(int(total_enrolled), 1) / 3600.0, 2
+            ),
         }
 
     @staticmethod
@@ -529,7 +621,13 @@ class StudentApplicationService:
         pred = StudentRepository.latest_prediction_rows_subquery(db)
         risk = cast(pred.c.risk_score, Float)
         risk_0_100 = case((risk <= 1.0, risk * 100.0), else_=risk)
-        n = db.query(func.count(pred.c.student_id)).select_from(pred).filter(risk.isnot(None)).scalar() or 0
+        n = (
+            db.query(func.count(pred.c.student_id))
+            .select_from(pred)
+            .filter(risk.isnot(None))
+            .scalar()
+            or 0
+        )
         if n == 0:
             return {"histogram": [], "percentiles": {}}
 
@@ -543,7 +641,10 @@ class StudentApplicationService:
             .order_by(bucket_start.asc())
             .all()
         )
-        histogram = [{"range": f"{int(start)}-{int(start) + 10}", "count": int(count)} for start, count in bucket_rows]
+        histogram = [
+            {"range": f"{int(start)}-{int(start) + 10}", "count": int(count)}
+            for start, count in bucket_rows
+        ]
 
         def kth_value(pct: int) -> float:
             k = int((n - 1) * pct / 100)
@@ -575,7 +676,9 @@ class StudentApplicationService:
         risk_0_100 = case((risk <= 1.0, risk * 100.0), else_=risk)
         dept_rows = (
             db.query(
-                func.coalesce(Student.parent_department_name, "Unknown").label("department"),
+                func.coalesce(Student.parent_department_name, "Unknown").label(
+                    "department"
+                ),
                 func.count(Student.id).label("student_count"),
                 func.avg(risk_0_100).label("avg_risk_score"),
             )
@@ -585,12 +688,20 @@ class StudentApplicationService:
             .all()
         )
         department_summary = [
-            {"department": dept, "student_count": int(count or 0), "avg_risk_score": round(float(avg or 0.0), 2)}
+            {
+                "department": dept,
+                "student_count": int(count or 0),
+                "avg_risk_score": round(float(avg or 0.0), 2),
+            }
             for dept, count, avg in dept_rows
         ]
         course_stats = (
-            db.query(Course.name, func.count(Enrollment.id), func.avg(
-                Enrollment.content_completed), func.sum(Enrollment.total_time_spent_seconds))
+            db.query(
+                Course.name,
+                func.count(Enrollment.id),
+                func.avg(Enrollment.content_completed),
+                func.sum(Enrollment.total_time_spent_seconds),
+            )
             .join(Enrollment, Course.id == Enrollment.course_id, isouter=True)
             .group_by(Course.name)
             .all()
@@ -644,13 +755,28 @@ class StudentApplicationService:
             "score_basis": "rule_based_formula",
             "signal_breakdown": {
                 # Signal breakdown: normalize 0-100 feature scores to 0-1 probability scale
-                "academic_signal_score": student_metrics.get("content_completion_score", 0) / 100.0,
-                "engagement_signal_score": student_metrics.get("quiz_engagement_score", 0) / 100.0,
-                "consistency_signal_score": student_metrics.get("login_consistency_score", 0) / 100.0,
-                "intent_signal_score": student_metrics.get("assignment_score", 0) / 100.0,
-                "responsiveness_signal_score": student_metrics.get("discussion_engagement_score", 0) / 100.0,
+                "academic_signal_score": student_metrics.get(
+                    "content_completion_score", 0
+                )
+                / 100.0,
+                "engagement_signal_score": student_metrics.get(
+                    "quiz_engagement_score", 0
+                )
+                / 100.0,
+                "consistency_signal_score": student_metrics.get(
+                    "login_consistency_score", 0
+                )
+                / 100.0,
+                "intent_signal_score": student_metrics.get("assignment_score", 0)
+                / 100.0,
+                "responsiveness_signal_score": student_metrics.get(
+                    "discussion_engagement_score", 0
+                )
+                / 100.0,
             },
-            "top_risk_factors": [student_metrics.get("dominant_risk_factor", "Unknown")],
+            "top_risk_factors": [
+                student_metrics.get("dominant_risk_factor", "Unknown")
+            ],
             "prediction_error": False,
         }
 
@@ -694,18 +820,27 @@ class StudentApplicationService:
         # Upsert: insert or ignore on conflict
         stmt = pg_insert(InterventionLog).values(**log_data)
         stmt = stmt.on_conflict_do_nothing(
-            index_elements=['student_org_id', 'week_number', 'semester_name', 'intervention_type']
+            index_elements=[
+                "student_org_id",
+                "week_number",
+                "semester_name",
+                "intervention_type",
+            ]
         )
         db.execute(stmt)
         db.commit()
 
         # Return the existing or newly created log
-        return db.query(InterventionLog).filter(
-            InterventionLog.student_org_id == student_org_id,
-            InterventionLog.week_number == week_number,
-            InterventionLog.semester_name == semester,
-            InterventionLog.intervention_type == intervention_type,
-        ).first()
+        return (
+            db.query(InterventionLog)
+            .filter(
+                InterventionLog.student_org_id == student_org_id,
+                InterventionLog.week_number == week_number,
+                InterventionLog.semester_name == semester,
+                InterventionLog.intervention_type == intervention_type,
+            )
+            .first()
+        )
 
     @staticmethod
     def build_and_log_intervention_recommendation(
@@ -726,7 +861,9 @@ class StudentApplicationService:
         Returns:
             Intervention recommendation dictionary
         """
-        from backend.services.core.decision_engine import get_intervention_recommendation
+        from backend.services.core.decision_engine import (
+            get_intervention_recommendation,
+        )
 
         engagement_pattern = features.get("engagement_pattern")
         intervention = get_intervention_recommendation(

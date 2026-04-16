@@ -24,15 +24,15 @@ from .composer import FeatureEngineer
 
 __all__ = [
     # Composer (public interface)
-    'FeatureEngineer',
+    "FeatureEngineer",
     # Extractors
-    'AcademicFeatureExtractor',
-    'EngagementFeatureExtractor',
-    'ConsistencyFeatureExtractor',
-    'IntentFeatureExtractor',
+    "AcademicFeatureExtractor",
+    "EngagementFeatureExtractor",
+    "ConsistencyFeatureExtractor",
+    "IntentFeatureExtractor",
     # Dataclasses
-    'AcademicFeatures',
-    'EngagementFeatures',
-    'ConsistencyFeatures',
-    'IntentFeatures',
+    "AcademicFeatures",
+    "EngagementFeatures",
+    "ConsistencyFeatures",
+    "IntentFeatures",
 ]

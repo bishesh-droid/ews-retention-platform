@@ -45,7 +45,9 @@ class TestIntegrationAuth:
 
     def test_missing_api_key_returns_422(self, client):
         """Request without API key should fail."""
-        response = client.get("/api/v1/integration/student-risk-profile/test@example.com")
+        response = client.get(
+            "/api/v1/integration/student-risk-profile/test@example.com"
+        )
         assert response.status_code == 422  # Missing required header
 
     def test_invalid_api_key_returns_401(self, client):
@@ -109,10 +111,18 @@ class TestStudentRiskProfile:
 
         # Verify contract fields exist
         required_fields = [
-            "student_id", "student_name", "risk_score", "risk_level",
-            "academic_signals", "engagement_signals", "consistency_signals",
-            "trend_summary", "dominant_risk_factor", "risk_breakdown",
-            "exported_at", "api_version",
+            "student_id",
+            "student_name",
+            "risk_score",
+            "risk_level",
+            "academic_signals",
+            "engagement_signals",
+            "consistency_signals",
+            "trend_summary",
+            "dominant_risk_factor",
+            "risk_breakdown",
+            "exported_at",
+            "api_version",
         ]
         for field in required_fields:
             assert field in profile, f"Missing field: {field}"

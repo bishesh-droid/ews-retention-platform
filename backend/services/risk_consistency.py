@@ -16,6 +16,7 @@ Responsibilities (when ML is available)
    - If ML fails: fall back to rule-based, flag the fallback.
 5. Never crash the API.
 """
+
 from __future__ import annotations
 
 import json
@@ -50,11 +51,11 @@ def _rule_based_score(features: Dict[str, Any]) -> float:  # noqa: C901
     Uses the SAME feature keys as the ML model to ensure consistency.
     """
     att = _safe_float(features.get("attendance_rate"), 50.0)
-    quiz = _safe_float(features.get("avg_quiz_score"),  50.0)
-    assign = _safe_float(features.get("assignment_avg"),  50.0)
-    logins = _safe_float(features.get("num_logins"),      10.0)
+    quiz = _safe_float(features.get("avg_quiz_score"), 50.0)
+    assign = _safe_float(features.get("assignment_avg"), 50.0)
+    logins = _safe_float(features.get("num_logins"), 10.0)
     freq = _safe_float(features.get("engagement_frequency"), 0.5)
-    decay = _safe_float(features.get("engagement_decay"),  1.0)
+    decay = _safe_float(features.get("engagement_decay"), 1.0)
 
     score = 0.0
 
@@ -93,6 +94,7 @@ def _rule_based_score(features: Dict[str, Any]) -> float:  # noqa: C901
 def _safe_float(val: Any, default: float = 0.0) -> float:
     try:
         import numpy as np
+
         v = float(val)
         return v if np.isfinite(v) else default
     except (TypeError, ValueError):
@@ -141,18 +143,18 @@ def get_unified_risk(
             )
 
         return {
-            "student_id":             student_id,
-            "final_risk_label":       ml_label,       # ML is primary
-            "final_risk_score":       ml_prob,
-            "ml_probability":         ml_prob,
-            "rule_based_score":       rule_score,
-            "rule_based_label":       rule_label,
-            "ml_available":           True,
-            "discrepancy":            round(discrepancy, 4),
-            "discrepancy_flagged":    discrepancy >= CONTRADICTION_THRESHOLD,
-            "model_version":          ml_result.get("model_version", "unknown"),
+            "student_id": student_id,
+            "final_risk_label": ml_label,  # ML is primary
+            "final_risk_score": ml_prob,
+            "ml_probability": ml_prob,
+            "rule_based_score": rule_score,
+            "rule_based_label": rule_label,
+            "ml_available": True,
+            "discrepancy": round(discrepancy, 4),
+            "discrepancy_flagged": discrepancy >= CONTRADICTION_THRESHOLD,
+            "model_version": ml_result.get("model_version", "unknown"),
             "top_contributing_features": ml_result.get("top_contributing_features", []),
-            "prediction_timestamp":   ml_result.get("prediction_timestamp", timestamp),
+            "prediction_timestamp": ml_result.get("prediction_timestamp", timestamp),
         }
 
     # Case 2: ML unavailable / fallback → use rule-based
@@ -160,19 +162,23 @@ def get_unified_risk(
         f"ML unavailable for student={student_id} — returning rule-based risk only"
     )
     return {
-        "student_id":             student_id,
-        "final_risk_label":       rule_label,
-        "final_risk_score":       rule_score,
-        "ml_probability":         None,
-        "rule_based_score":       rule_score,
-        "rule_based_label":       rule_label,
-        "ml_available":           False,
-        "discrepancy":            None,
-        "discrepancy_flagged":    False,
-        "model_version":          "rule-based-only",
+        "student_id": student_id,
+        "final_risk_label": rule_label,
+        "final_risk_score": rule_score,
+        "ml_probability": None,
+        "rule_based_score": rule_score,
+        "rule_based_label": rule_label,
+        "ml_available": False,
+        "discrepancy": None,
+        "discrepancy_flagged": False,
+        "model_version": "rule-based-only",
         "top_contributing_features": [],
-        "prediction_timestamp":   timestamp,
-        "fallback_reason":        ml_result.get("fallback_reason", "ML not available") if ml_result else "ML not called",
+        "prediction_timestamp": timestamp,
+        "fallback_reason": (
+            ml_result.get("fallback_reason", "ML not available")
+            if ml_result
+            else "ML not called"
+        ),
     }
 
 
@@ -194,13 +200,13 @@ def _log_discrepancy(
 ):
     """Write a structured discrepancy record to the discrepancy log."""
     record = {
-        "student_id":  student_id,
-        "ml_prob":     round(ml_prob, 4),
-        "ml_label":    ml_label,
-        "rule_score":  round(rule_score, 4),
-        "rule_label":  rule_label,
+        "student_id": student_id,
+        "ml_prob": round(ml_prob, 4),
+        "ml_label": ml_label,
+        "rule_score": round(rule_score, 4),
+        "rule_label": rule_label,
         "discrepancy": round(discrepancy, 4),
-        "severity":    "HIGH" if discrepancy >= 0.50 else "MEDIUM",
+        "severity": "HIGH" if discrepancy >= 0.50 else "MEDIUM",
     }
     _discrepancy_logger.warning(json.dumps(record))
     logger.warning(

@@ -7,7 +7,12 @@ Provides risk predictions calculated from real engagement data.
 from fastapi import APIRouter, Depends, HTTPException, Query
 from sqlalchemy.orm import Session
 
-from backend.api.deps import get_db, get_current_user, require_resource_ownership, require_role
+from backend.api.deps import (
+    get_db,
+    get_current_user,
+    require_resource_ownership,
+    require_role,
+)
 from backend.core.constants import Role
 from backend.services.student_service import StudentService
 from backend.utils.api import success_response
@@ -20,7 +25,9 @@ router = APIRouter(
 
 @router.get("/batch")
 def get_all_predictions(
-    include_decisions: bool = Query(False, description="Include intervention recommendations"),
+    include_decisions: bool = Query(
+        False, description="Include intervention recommendations"
+    ),
     # TODO: Bulk exports >500 should use async background task returning a download URL
     limit: int = Query(100, ge=1, le=500),
     db: Session = Depends(get_db),
@@ -34,8 +41,8 @@ def get_all_predictions(
         pred = StudentService.build_prediction_payload(s)
 
         if include_decisions:
-            pred["intervention_recommendation"] = StudentService.build_intervention_recommendation(
-                s["risk_score"]
+            pred["intervention_recommendation"] = (
+                StudentService.build_intervention_recommendation(s["risk_score"])
             )
 
         predictions.append(pred)
@@ -69,8 +76,8 @@ def get_student_prediction(
     response = StudentService.build_prediction_payload(student)
 
     if include_decisions:
-        response["intervention_recommendation"] = StudentService.build_intervention_recommendation(
-            risk
+        response["intervention_recommendation"] = (
+            StudentService.build_intervention_recommendation(risk)
         )
 
     return success_response(response)

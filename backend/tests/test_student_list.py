@@ -9,7 +9,9 @@ import pytest
 from unittest.mock import MagicMock, patch
 from sqlalchemy.orm import Session
 
-from backend.application.student.student_application_service import StudentApplicationService
+from backend.application.student.student_application_service import (
+    StudentApplicationService,
+)
 from backend.database.models.student import Student
 
 
@@ -29,8 +31,7 @@ def mock_db_no_predictions():
 
     # Empty result for any query
     (
-        session.query.return_value.outerjoin.return_value.filter.return_value
-        .order_by.return_value.offset.return_value.limit.return_value.all.return_value
+        session.query.return_value.outerjoin.return_value.filter.return_value.order_by.return_value.offset.return_value.limit.return_value.all.return_value
     ) = []
 
     return session
@@ -73,11 +74,21 @@ def test_risk_filter_works_without_prediction_table():
     """
     # We need to mock at the repository level since we're testing the service
     with (
-        patch('backend.infrastructure.student_repository.StudentRepository.latest_prediction_rows_subquery') as mock_pred_subq,
-        patch('backend.infrastructure.student_repository.StudentRepository.fetch_enrollments_map') as mock_enroll_map,
-        patch('backend.infrastructure.student_repository.StudentRepository.fetch_graded_map') as mock_graded_map,
-        patch('backend.infrastructure.student_repository.StudentRepository.fetch_exam_map') as mock_exam_map,
-        patch('backend.infrastructure.student_repository.StudentRepository.sort_expr_for_students') as mock_sort_expr,
+        patch(
+            "backend.infrastructure.student_repository.StudentRepository.latest_prediction_rows_subquery"
+        ) as mock_pred_subq,
+        patch(
+            "backend.infrastructure.student_repository.StudentRepository.fetch_enrollments_map"
+        ) as mock_enroll_map,
+        patch(
+            "backend.infrastructure.student_repository.StudentRepository.fetch_graded_map"
+        ) as mock_graded_map,
+        patch(
+            "backend.infrastructure.student_repository.StudentRepository.fetch_exam_map"
+        ) as mock_exam_map,
+        patch(
+            "backend.infrastructure.student_repository.StudentRepository.sort_expr_for_students"
+        ) as mock_sort_expr,
     ):
 
         # Setup mock DB session
@@ -108,8 +119,7 @@ def test_risk_filter_works_without_prediction_table():
 
         # Return both students from DB query
         (
-            mock_db.query.return_value.outerjoin.return_value.filter.return_value
-            .order_by.return_value.offset.return_value.limit.return_value.all.return_value
+            mock_db.query.return_value.outerjoin.return_value.filter.return_value.order_by.return_value.offset.return_value.limit.return_value.all.return_value
         ) = [
             (mock_student_high, None),
             (mock_student_low, None),
@@ -135,16 +145,16 @@ def test_risk_filter_works_without_prediction_table():
         # will be computed from empty feature data. The key assertion is that
         # the function RUNS without error and applies the filter post-computation.
         assert isinstance(result, dict), "Result should be a dict"
-        assert 'students' in result, "Result should have 'students' key"
-        assert 'total' in result, "Result should have 'total' key"
-        students = result['students']
+        assert "students" in result, "Result should have 'students' key"
+        assert "total" in result, "Result should have 'total' key"
+        students = result["students"]
 
         # The key validation: all returned students should have risk_score >= 60
         # (or the list should be empty if no students match, not due to DB bug)
         for student in students:
-            assert student.get("risk_score", 0) >= 60, (
-                f"Student {student.get('id')} has risk_score {student.get('risk_score')} < 60"
-            )
+            assert (
+                student.get("risk_score", 0) >= 60
+            ), f"Student {student.get('id')} has risk_score {student.get('risk_score')} < 60"
 
 
 def test_risk_filter_0_to_100_scale():
@@ -157,11 +167,21 @@ def test_risk_filter_0_to_100_scale():
     # risk_min=60 should filter to >= 60, not >= 0.6
 
     with (
-        patch('backend.infrastructure.student_repository.StudentRepository.latest_prediction_rows_subquery') as mock_pred_subq,
-        patch('backend.infrastructure.student_repository.StudentRepository.fetch_enrollments_map') as mock_enroll_map,
-        patch('backend.infrastructure.student_repository.StudentRepository.fetch_graded_map') as mock_graded_map,
-        patch('backend.infrastructure.student_repository.StudentRepository.fetch_exam_map') as mock_exam_map,
-        patch('backend.infrastructure.student_repository.StudentRepository.sort_expr_for_students') as mock_sort_expr,
+        patch(
+            "backend.infrastructure.student_repository.StudentRepository.latest_prediction_rows_subquery"
+        ) as mock_pred_subq,
+        patch(
+            "backend.infrastructure.student_repository.StudentRepository.fetch_enrollments_map"
+        ) as mock_enroll_map,
+        patch(
+            "backend.infrastructure.student_repository.StudentRepository.fetch_graded_map"
+        ) as mock_graded_map,
+        patch(
+            "backend.infrastructure.student_repository.StudentRepository.fetch_exam_map"
+        ) as mock_exam_map,
+        patch(
+            "backend.infrastructure.student_repository.StudentRepository.sort_expr_for_students"
+        ) as mock_sort_expr,
     ):
 
         mock_db = MagicMock(spec=Session)
@@ -170,8 +190,7 @@ def test_risk_filter_0_to_100_scale():
 
         # Empty result from DB
         (
-            mock_db.query.return_value.outerjoin.return_value.filter.return_value
-            .order_by.return_value.offset.return_value.limit.return_value.all.return_value
+            mock_db.query.return_value.outerjoin.return_value.filter.return_value.order_by.return_value.offset.return_value.limit.return_value.all.return_value
         ) = []
         mock_enroll_map.return_value = {}
         mock_graded_map.return_value = {}
@@ -188,7 +207,7 @@ def test_risk_filter_0_to_100_scale():
         )
 
         assert isinstance(result, dict)
-        assert 'students' in result
+        assert "students" in result
 
 
 def test_risk_max_filter_applied():
@@ -196,11 +215,21 @@ def test_risk_max_filter_applied():
     Test that risk_max filter is applied correctly.
     """
     with (
-        patch('backend.infrastructure.student_repository.StudentRepository.latest_prediction_rows_subquery') as mock_pred_subq,
-        patch('backend.infrastructure.student_repository.StudentRepository.fetch_enrollments_map') as mock_enroll_map,
-        patch('backend.infrastructure.student_repository.StudentRepository.fetch_graded_map') as mock_graded_map,
-        patch('backend.infrastructure.student_repository.StudentRepository.fetch_exam_map') as mock_exam_map,
-        patch('backend.infrastructure.student_repository.StudentRepository.sort_expr_for_students') as mock_sort_expr,
+        patch(
+            "backend.infrastructure.student_repository.StudentRepository.latest_prediction_rows_subquery"
+        ) as mock_pred_subq,
+        patch(
+            "backend.infrastructure.student_repository.StudentRepository.fetch_enrollments_map"
+        ) as mock_enroll_map,
+        patch(
+            "backend.infrastructure.student_repository.StudentRepository.fetch_graded_map"
+        ) as mock_graded_map,
+        patch(
+            "backend.infrastructure.student_repository.StudentRepository.fetch_exam_map"
+        ) as mock_exam_map,
+        patch(
+            "backend.infrastructure.student_repository.StudentRepository.sort_expr_for_students"
+        ) as mock_sort_expr,
     ):
 
         mock_db = MagicMock(spec=Session)
@@ -209,8 +238,7 @@ def test_risk_max_filter_applied():
 
         # Empty result
         (
-            mock_db.query.return_value.outerjoin.return_value.filter.return_value
-            .order_by.return_value.offset.return_value.limit.return_value.all.return_value
+            mock_db.query.return_value.outerjoin.return_value.filter.return_value.order_by.return_value.offset.return_value.limit.return_value.all.return_value
         ) = []
         mock_enroll_map.return_value = {}
         mock_graded_map.return_value = {}
@@ -226,11 +254,11 @@ def test_risk_max_filter_applied():
         )
 
         assert isinstance(result, dict)
-        assert 'students' in result
-        for student in result['students']:
-            assert student.get("risk_score", 100) <= 40, (
-                f"Student has risk_score {student.get('risk_score')} > 40"
-            )
+        assert "students" in result
+        for student in result["students"]:
+            assert (
+                student.get("risk_score", 100) <= 40
+            ), f"Student has risk_score {student.get('risk_score')} > 40"
 
 
 def test_combined_risk_min_and_max():
@@ -238,11 +266,21 @@ def test_combined_risk_min_and_max():
     Test that both risk_min and risk_max can be applied together.
     """
     with (
-        patch('backend.infrastructure.student_repository.StudentRepository.latest_prediction_rows_subquery') as mock_pred_subq,
-        patch('backend.infrastructure.student_repository.StudentRepository.fetch_enrollments_map') as mock_enroll_map,
-        patch('backend.infrastructure.student_repository.StudentRepository.fetch_graded_map') as mock_graded_map,
-        patch('backend.infrastructure.student_repository.StudentRepository.fetch_exam_map') as mock_exam_map,
-        patch('backend.infrastructure.student_repository.StudentRepository.sort_expr_for_students') as mock_sort_expr,
+        patch(
+            "backend.infrastructure.student_repository.StudentRepository.latest_prediction_rows_subquery"
+        ) as mock_pred_subq,
+        patch(
+            "backend.infrastructure.student_repository.StudentRepository.fetch_enrollments_map"
+        ) as mock_enroll_map,
+        patch(
+            "backend.infrastructure.student_repository.StudentRepository.fetch_graded_map"
+        ) as mock_graded_map,
+        patch(
+            "backend.infrastructure.student_repository.StudentRepository.fetch_exam_map"
+        ) as mock_exam_map,
+        patch(
+            "backend.infrastructure.student_repository.StudentRepository.sort_expr_for_students"
+        ) as mock_sort_expr,
     ):
 
         mock_db = MagicMock(spec=Session)
@@ -250,8 +288,7 @@ def test_combined_risk_min_and_max():
         mock_sort_expr.return_value = None
 
         (
-            mock_db.query.return_value.outerjoin.return_value.filter.return_value
-            .order_by.return_value.offset.return_value.limit.return_value.all.return_value
+            mock_db.query.return_value.outerjoin.return_value.filter.return_value.order_by.return_value.offset.return_value.limit.return_value.all.return_value
         ) = []
         mock_enroll_map.return_value = {}
         mock_graded_map.return_value = {}
@@ -267,8 +304,9 @@ def test_combined_risk_min_and_max():
         )
 
         assert isinstance(result, dict)
-        assert 'students' in result
-        for student in result['students']:
+        assert "students" in result
+        for student in result["students"]:
             score = student.get("risk_score", 0)
-            assert 40 <= score <= 60, \
-                f"Student risk_score {score} outside range [40, 60]"
+            assert (
+                40 <= score <= 60
+            ), f"Student risk_score {score} outside range [40, 60]"

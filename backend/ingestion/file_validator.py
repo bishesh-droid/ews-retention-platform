@@ -2,6 +2,7 @@
 File-Level Validation
 Pre-parse validation to ensure file integrity before any data extraction
 """
+
 import os
 import csv
 import chardet
@@ -57,7 +58,7 @@ class FileValidator:
                 status=ValidationStatus.REJECTED,
                 file_path=file_path,
                 messages=["File does not exist"],
-                metadata={}
+                metadata={},
             )
 
         # File size check
@@ -67,26 +68,26 @@ class FileValidator:
                 status=ValidationStatus.REJECTED,
                 file_path=file_path,
                 messages=["ERROR: File contains 0 bytes"],
-                metadata={"size_bytes": 0}
+                metadata={"size_bytes": 0},
             )
 
         if file_size > self.max_file_size_mb * 1024 * 1024:
             messages.append(f"WARNING: Large file ({file_size / 1024 / 1024:.1f} MB)")
 
-        metadata['size_bytes'] = file_size
+        metadata["size_bytes"] = file_size
 
         # Extension validation
         ext = Path(file_path).suffix.lower()
-        if ext not in ['.xlsx', '.csv']:
+        if ext not in [".xlsx", ".csv"]:
             return ValidationResult(
                 status=ValidationStatus.REJECTED,
                 file_path=file_path,
                 messages=[f"ERROR: Invalid extension '{ext}', expected .xlsx or .csv"],
-                metadata=metadata
+                metadata=metadata,
             )
 
         # Format-specific validation
-        if ext == '.xlsx':
+        if ext == ".xlsx":
             return self._validate_xlsx(file_path, messages, metadata)
         else:
             return self._validate_csv(file_path, messages, metadata)
@@ -95,7 +96,9 @@ class FileValidator:
         """Check if file exists and is readable"""
         return os.path.isfile(file_path) and os.access(file_path, os.R_OK)
 
-    def _validate_xlsx(self, file_path: str, messages: List[str], metadata: Dict) -> ValidationResult:  # noqa: C901
+    def _validate_xlsx(
+        self, file_path: str, messages: List[str], metadata: Dict
+    ) -> ValidationResult:  # noqa: C901
         """Excel-specific validation"""
         try:
             wb = openpyxl.load_workbook(file_path, read_only=False, data_only=True)
@@ -104,30 +107,32 @@ class FileValidator:
                 status=ValidationStatus.REJECTED,
                 file_path=file_path,
                 messages=[f"ERROR: Failed to open Excel file: {str(e)}"],
-                metadata=metadata
+                metadata=metadata,
             )
 
         # Sheet validation
         sheet_names = wb.sheetnames
-        metadata['sheet_names'] = sheet_names
-        metadata['sheet_count'] = len(sheet_names)
+        metadata["sheet_names"] = sheet_names
+        metadata["sheet_count"] = len(sheet_names)
 
         if not sheet_names:
             return ValidationResult(
                 status=ValidationStatus.REJECTED,
                 file_path=file_path,
                 messages=["ERROR: No sheets found in workbook"],
-                metadata=metadata
+                metadata=metadata,
             )
 
         # Check for hidden sheets
-        visible_sheets = [name for name in sheet_names if wb[name].sheet_state == 'visible']
+        visible_sheets = [
+            name for name in sheet_names if wb[name].sheet_state == "visible"
+        ]
         if not visible_sheets:
             return ValidationResult(
                 status=ValidationStatus.REJECTED,
                 file_path=file_path,
                 messages=["ERROR: All sheets are hidden"],
-                metadata=metadata
+                metadata=metadata,
             )
 
         # Validate first visible sheet
@@ -143,11 +148,15 @@ class FileValidator:
                     return ValidationResult(
                         status=ValidationStatus.REJECTED,
                         file_path=file_path,
-                        messages=[f"ERROR: Merged cells detected in data region: {data_region_merges[:3]}"],
-                        metadata=metadata
+                        messages=[
+                            f"ERROR: Merged cells detected in data region: {data_region_merges[:3]}"
+                        ],
+                        metadata=metadata,
                     )
                 else:
-                    messages.append(f"WARNING: Merged cells in data region: {len(data_region_merges)} found")
+                    messages.append(
+                        f"WARNING: Merged cells in data region: {len(data_region_merges)} found"
+                    )
 
         # Read data for header detection
         data = []
@@ -158,46 +167,47 @@ class FileValidator:
 
         # Detect header row
         header_row = self._detect_header_row(df)
-        metadata['header_row'] = header_row
+        metadata["header_row"] = header_row
 
         if header_row > 0:
             messages.append(f"INFO: Header detected in row {header_row + 1}")
 
         # Detect trailing summaries
-        full_data = pd.read_excel(file_path, sheet_name=visible_sheets[0], header=header_row)
+        full_data = pd.read_excel(
+            file_path, sheet_name=visible_sheets[0], header=header_row
+        )
         trailing_row = self._detect_trailing_summaries(full_data)
         if trailing_row:
-            metadata['trailing_summary_row'] = trailing_row
+            metadata["trailing_summary_row"] = trailing_row
             messages.append(f"INFO: Trailing summary detected at row {trailing_row}")
 
         wb.close()
 
         status = ValidationStatus.WARNING if messages else ValidationStatus.PASSED
         return ValidationResult(
-            status=status,
-            file_path=file_path,
-            messages=messages,
-            metadata=metadata
+            status=status, file_path=file_path, messages=messages, metadata=metadata
         )
 
-    def _validate_csv(self, file_path: str, messages: List[str], metadata: Dict) -> ValidationResult:
+    def _validate_csv(
+        self, file_path: str, messages: List[str], metadata: Dict
+    ) -> ValidationResult:
         """CSV-specific validation"""
 
         # Encoding detection
         encoding = self._detect_encoding(file_path)
-        metadata['encoding'] = encoding
+        metadata["encoding"] = encoding
 
         if not encoding:
             return ValidationResult(
                 status=ValidationStatus.REJECTED,
                 file_path=file_path,
                 messages=["ERROR: Failed to detect file encoding"],
-                metadata=metadata
+                metadata=metadata,
             )
 
         try:
             # Delimiter detection
-            with open(file_path, 'r', encoding=encoding) as f:
+            with open(file_path, "r", encoding=encoding) as f:
                 sample = f.read(10240)  # Read 10KB sample
                 sniffer = csv.Sniffer()
 
@@ -205,21 +215,25 @@ class FileValidator:
                     dialect = sniffer.sniff(sample)
                     delimiter = dialect.delimiter
                 except Exception:
-                    delimiter = ','  # Default
+                    delimiter = ","  # Default
 
-                metadata['delimiter'] = delimiter
+                metadata["delimiter"] = delimiter
 
             # Column count consistency check
-            df = pd.read_csv(file_path, encoding=encoding, delimiter=delimiter, nrows=100)
+            df = pd.read_csv(
+                file_path, encoding=encoding, delimiter=delimiter, nrows=100
+            )
 
             # Check for consistent column count
-            with open(file_path, 'r', encoding=encoding) as f:
+            with open(file_path, "r", encoding=encoding) as f:
                 reader = csv.reader(f, delimiter=delimiter)
                 row_lengths = [len(row) for i, row in enumerate(reader) if i < 100]
 
             if row_lengths:
                 expected_cols = row_lengths[0]
-                inconsistent_rows = [i for i, length in enumerate(row_lengths) if length != expected_cols]
+                inconsistent_rows = [
+                    i for i, length in enumerate(row_lengths) if length != expected_cols
+                ]
 
                 if len(inconsistent_rows) > len(row_lengths) * 0.05:  # >5% variance
                     return ValidationResult(
@@ -231,34 +245,31 @@ class FileValidator:
                                 f"found variance in {len(inconsistent_rows)} rows"
                             ),
                         ],
-                        metadata=metadata
+                        metadata=metadata,
                     )
 
-            metadata['column_count'] = len(df.columns)
+            metadata["column_count"] = len(df.columns)
 
         except Exception as e:
             return ValidationResult(
                 status=ValidationStatus.REJECTED,
                 file_path=file_path,
                 messages=[f"ERROR: Failed to parse CSV: {str(e)}"],
-                metadata=metadata
+                metadata=metadata,
             )
 
         status = ValidationStatus.WARNING if messages else ValidationStatus.PASSED
         return ValidationResult(
-            status=status,
-            file_path=file_path,
-            messages=messages,
-            metadata=metadata
+            status=status, file_path=file_path, messages=messages, metadata=metadata
         )
 
     def _detect_encoding(self, file_path: str) -> Optional[str]:
         """Detect file encoding"""
         try:
-            with open(file_path, 'rb') as f:
+            with open(file_path, "rb") as f:
                 raw_data = f.read(100000)  # Read 100KB
                 result = chardet.detect(raw_data)
-                return result['encoding']
+                return result["encoding"]
         except Exception:
             return None
 
@@ -300,14 +311,14 @@ class FileValidator:
 
     def _detect_trailing_summaries(self, df: pd.DataFrame) -> Optional[int]:
         """Detect trailing summary rows (Total, Average, etc.)"""
-        summary_keywords = ['total', 'average', 'grand total', 'sum', 'mean', 'overall']
+        summary_keywords = ["total", "average", "grand total", "sum", "mean", "overall"]
 
         # Check last 10 rows
         for idx in range(max(0, len(df) - 10), len(df)):
             row = df.iloc[idx]
 
             # Check first column for summary keywords
-            first_val = str(row.iloc[0]).lower() if len(row) > 0 else ''
+            first_val = str(row.iloc[0]).lower() if len(row) > 0 else ""
 
             if any(keyword in first_val for keyword in summary_keywords):
                 return idx
@@ -334,22 +345,22 @@ class FileValidator:
         for col in columns:
             # Basic normalization
             clean = str(col).strip().lower()
-            clean = re.sub(r'[^a-z0-9]+', '_', clean)
-            clean = re.sub(r'_+', '_', clean)
-            clean = clean.strip('_')
+            clean = re.sub(r"[^a-z0-9]+", "_", clean)
+            clean = re.sub(r"_+", "_", clean)
+            clean = clean.strip("_")
 
             # Prepend if starts with digit
             if clean and clean[0].isdigit():
-                clean = f'col_{clean}'
+                clean = f"col_{clean}"
 
             # Handle empty
             if not clean:
-                clean = 'unnamed_column'
+                clean = "unnamed_column"
 
             # Handle duplicates
             if clean in seen:
                 seen[clean] += 1
-                clean = f'{clean}_{seen[clean]}'
+                clean = f"{clean}_{seen[clean]}"
             else:
                 seen[clean] = 0
 

@@ -22,12 +22,19 @@ from slowapi.errors import RateLimitExceeded
 from slowapi.middleware import SlowAPIMiddleware
 
 from backend.config import (
-    API_HOST, API_PORT, CORS_ORIGINS, REDIS_URL, ENVIRONMENT,
-    validate_security_config, RATE_LIMIT_DEFAULT,
+    API_HOST,
+    API_PORT,
+    CORS_ORIGINS,
+    REDIS_URL,
+    ENVIRONMENT,
+    validate_security_config,
+    RATE_LIMIT_DEFAULT,
 )
 from backend.core.rate_limiting import limiter, rate_limit_exceeded_handler
 from backend.core.errors import (
-    http_exception_handler, validation_exception_handler, unhandled_exception_handler
+    http_exception_handler,
+    validation_exception_handler,
+    unhandled_exception_handler,
 )
 from backend.database.connection import init_db, SessionLocal
 from backend.routes import api_router
@@ -54,6 +61,7 @@ def _patch_slowapi_error_handler():
 
     def _safe_rate_limit_handler(request: Request, exc: Exception) -> Response:
         import slowapi.errors
+
         # Only handle RateLimitExceeded as a 429 response
         # Other exceptions should be re-raised to be handled by proper exception handlers
         if not isinstance(exc, slowapi.errors.RateLimitExceeded):
@@ -70,7 +78,9 @@ def _patch_slowapi_error_handler():
         try:
             limiter = getattr(request.app.state, "limiter", None)
             if limiter and hasattr(request.state, "view_rate_limit"):
-                response = limiter._inject_headers(response, request.state.view_rate_limit)
+                response = limiter._inject_headers(
+                    response, request.state.view_rate_limit
+                )
         except Exception:
             pass  # Ignore header injection errors
         return response
@@ -78,8 +88,10 @@ def _patch_slowapi_error_handler():
     # Patch in both locations where it's imported/referenced
     slowapi.extension._rate_limit_exceeded_handler = _safe_rate_limit_handler
     import slowapi
+
     slowapi._rate_limit_exceeded_handler = _safe_rate_limit_handler
     import slowapi.middleware
+
     slowapi.middleware._rate_limit_exceeded_handler = _safe_rate_limit_handler
 
 
@@ -89,6 +101,7 @@ _patch_slowapi_error_handler()
 # ---------------------------------------------------------------------------
 # Lifespan
 # ---------------------------------------------------------------------------
+
 
 def check_redis_connection() -> bool:
     """Verify Redis is reachable before accepting traffic."""
@@ -176,10 +189,13 @@ async def lifespan(app: FastAPI):  # noqa: C901
         for origin in CORS_ORIGINS_NORMALIZED:
             parsed = urlparse(origin)
             if parsed.scheme != "https":
-                raise RuntimeError(
-                    f"Production CORS origin {origin!r} must use HTTPS."
-                )
-            if parsed.hostname in ("localhost", "127.0.0.1", "0.0.0.0", "::1"):  # nosec B104
+                raise RuntimeError(f"Production CORS origin {origin!r} must use HTTPS.")
+            if parsed.hostname in (
+                "localhost",
+                "127.0.0.1",
+                "0.0.0.0",
+                "::1",
+            ):  # nosec B104
                 raise RuntimeError(
                     f"Loopback CORS origin {origin!r} not allowed in production."
                 )
@@ -212,6 +228,7 @@ async def lifespan(app: FastAPI):  # noqa: C901
         # when the signature changes, so keywords are safer here.
         import inspect
         from slowapi.wrappers import LimitGroup
+
         _lg_params = inspect.signature(LimitGroup.__init__).parameters
         _lg_kwargs: dict = dict(
             limit_provider=RATE_LIMIT_DEFAULT,
@@ -246,6 +263,7 @@ async def lifespan(app: FastAPI):  # noqa: C901
     # ingest_all_data manages its own transaction (commit/rollback internally).
     async def _run_startup_ingestion():
         from backend.services.core.data_ingestion import ingest_all_data
+
         db = SessionLocal()
         try:
             # Run sync ingestion in thread pool to avoid blocking event loop
@@ -273,7 +291,9 @@ async def lifespan(app: FastAPI):  # noqa: C901
 
     try:
         await scheduler_service.start(run_daily_on_startup=True)
-        sys_logger.info(f"Scheduler status after startup: {scheduler_service.get_status()}")
+        sys_logger.info(
+            f"Scheduler status after startup: {scheduler_service.get_status()}"
+        )
     except Exception as exc:
         sys_logger.error(f"Scheduler startup error (non-fatal): {exc}")
 
@@ -318,8 +338,13 @@ app.add_middleware(
     allow_origins=CORS_ORIGINS_NORMALIZED,
     allow_credentials=True,
     allow_methods=["GET", "POST", "PUT", "PATCH", "DELETE"],
-    allow_headers=["Authorization", "Content-Type", "X-Request-ID",
-                   "X-API-Key-Hash", "X-Timestamp"],
+    allow_headers=[
+        "Authorization",
+        "Content-Type",
+        "X-Request-ID",
+        "X-API-Key-Hash",
+        "X-Timestamp",
+    ],
 )
 
 # Rate limiting middleware (slowapi with Redis backend)
@@ -347,6 +372,7 @@ app.add_exception_handler(RequestValidationError, validation_exception_handler) 
 @app.exception_handler(AppError)
 async def app_error_handler(request: Request, exc: AppError):
     from backend.core.errors import make_error
+
     request_id = getattr(request.state, "request_id", None)
     sys_logger.warning(
         f"AppError [{exc.status_code}] {request.method} {request.url.path}: {exc.message}"
@@ -374,6 +400,7 @@ app.include_router(ingest_router, prefix="/api/v1")
 # System endpoints
 # ---------------------------------------------------------------------------
 
+
 @app.get("/", tags=["System"])
 def read_root():
     return success_response(
@@ -387,6 +414,7 @@ def health_check(response: Response = None):
     """Health probe with dependency checks for production readiness."""
     # In test mode, be lenient about dependency checks
     import os
+
     is_testing = os.getenv("TESTING", "false").lower() == "true"
 
     db_ok = check_db_connection()
@@ -418,6 +446,7 @@ def health_check(response: Response = None):
 
 if __name__ == "__main__":
     import uvicorn
+
     env = os.getenv("ENVIRONMENT", "development").lower()
     uvicorn.run(
         "backend.main:app",

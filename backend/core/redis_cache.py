@@ -44,7 +44,9 @@ class RedisCache:
         try:
             self.client.setex(key, ttl, payload)
         except Exception as exc:
-            logger.exception("[REDIS] SETEX failed for key=%s ttl=%s: %s", key, ttl, exc)
+            logger.exception(
+                "[REDIS] SETEX failed for key=%s ttl=%s: %s", key, ttl, exc
+            )
 
 
 cache = RedisCache()
@@ -60,7 +62,9 @@ def _normalize_for_cache_key(value: Any) -> Any:
         return [_normalize_for_cache_key(v) for v in value]
     if isinstance(value, set):
         normalized = [_normalize_for_cache_key(v) for v in value]
-        return sorted(normalized, key=lambda x: json.dumps(x, sort_keys=True, default=str))
+        return sorted(
+            normalized, key=lambda x: json.dumps(x, sort_keys=True, default=str)
+        )
     if isinstance(value, dict):
         return {
             str(k): _normalize_for_cache_key(v)
@@ -123,9 +127,11 @@ def cache_response(key_prefix: str, expire: int = CACHE_EXPIRE_SECONDS):
             return result
 
         if inspect.iscoroutinefunction(func):
+
             @wraps(func)
             async def async_wrapper(*args, **kwargs):
                 return await _cache_flow(*args, **kwargs)
+
             return async_wrapper
 
         @wraps(func)
@@ -137,5 +143,7 @@ def cache_response(key_prefix: str, expire: int = CACHE_EXPIRE_SECONDS):
             result = func(*args, **kwargs)
             cache.set(key, result, ttl)
             return result
+
         return sync_wrapper
+
     return decorator

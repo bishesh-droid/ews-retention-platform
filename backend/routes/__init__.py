@@ -45,7 +45,9 @@ api_router.include_router(auth.router, prefix="/auth", tags=["auth"])
 api_router.include_router(student_v1.router, prefix="/student", tags=["student"])
 api_router.include_router(faculty_v1.router, prefix="/faculty", tags=["faculty"])
 api_router.include_router(admin_v1.router, prefix="/admin", tags=["admin"])
-api_router.include_router(audit.router, prefix="/audit-log", tags=["audit"])  # FERPA compliance
+api_router.include_router(
+    audit.router, prefix="/audit-log", tags=["audit"]
+)  # FERPA compliance
 api_router.include_router(retention_v1.router, prefix="/retention", tags=["retention"])
 api_router.include_router(analytics.router, prefix="/analytics", tags=["analytics"])
 api_router.include_router(goals.router, prefix="/goals", tags=["goals"])
@@ -64,9 +66,13 @@ api_router.include_router(decisions.router, prefix="/decisions", tags=["decision
 # TODO: re-enable when implemented - feedback router is placeholder
 # api_router.include_router(feedback.router, prefix="/feedback", tags=["feedback"])
 # Placeholder — not implemented (CROSS-5)
-api_router.include_router(recommendations.router, prefix="/recommendations", tags=["recommendations"])
+api_router.include_router(
+    recommendations.router, prefix="/recommendations", tags=["recommendations"]
+)
 api_router.include_router(advisor.router, tags=["AI Academic Advisor"])
 api_router.include_router(business.router, tags=["Business Intelligence"])
-api_router.include_router(integration.router, prefix="/integration", tags=["Integration API"])
+api_router.include_router(
+    integration.router, prefix="/integration", tags=["Integration API"]
+)
 api_router.include_router(monitoring.router, tags=["monitoring"])
 api_router.include_router(interventions.router, tags=["interventions"])

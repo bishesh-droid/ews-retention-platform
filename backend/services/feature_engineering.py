@@ -39,7 +39,7 @@ warnings.warn(
     "backend.services.feature_engineering is deprecated. "
     "Use backend.services.features instead.",
     DeprecationWarning,
-    stacklevel=2
+    stacklevel=2,
 )
 
 
@@ -56,7 +56,7 @@ class FeatureEngineer:
             return None
         try:
             # Handle the format: 2025-12-28T06:42:30.8300000Z
-            ts_clean = ts.replace('Z', '+00:00')
+            ts_clean = ts.replace("Z", "+00:00")
             return datetime.fromisoformat(ts_clean)
         except (ValueError, TypeError):
             return None
@@ -73,7 +73,9 @@ class FeatureEngineer:
         return max(0.0, v)
 
     @staticmethod
-    def _adaptive_saturation_score(values: List[float], min_scale: float = 1.0, max_scale: float = 1000.0) -> float:
+    def _adaptive_saturation_score(
+        values: List[float], min_scale: float = 1.0, max_scale: float = 1000.0
+    ) -> float:
         """
         Pure helper: data-driven normalization using exponential saturation.
 
@@ -109,7 +111,9 @@ class FeatureEngineer:
         1) explicit `content_completed_w1w2` (true same-window numerator)
         2) fallback to capped cumulative completion if week-specific field absent
         """
-        required_w1w2 = FeatureEngineer._to_non_negative(e.get("content_required_w1w2", 0))
+        required_w1w2 = FeatureEngineer._to_non_negative(
+            e.get("content_required_w1w2", 0)
+        )
         explicit = e.get("content_completed_w1w2")
         if explicit is not None:
             completed = FeatureEngineer._to_non_negative(explicit)
@@ -140,21 +144,25 @@ class FeatureEngineer:
             Score [0-100] or None if truly unknown
         """
         # Filter to mandatory enrollments only
-        mandatory_enrollments = [e for e in enrollments if not e.get("is_optional", False)]
+        mandatory_enrollments = [
+            e for e in enrollments if not e.get("is_optional", False)
+        ]
 
         total_completed = 0
         total_required = 0
 
         for e in mandatory_enrollments:
-            done = e.get('content_completed') or 0
-            req = e.get('content_required') or 0
+            done = e.get("content_completed") or 0
+            req = e.get("content_required") or 0
 
             # Fallback to registry if enrollment value is missing
             if req == 0 and registry_lookup:
-                req = registry_lookup(
-                    e.get('course_offering_code'),
-                    e.get('semester_name')
-                ) or 0
+                req = (
+                    registry_lookup(
+                        e.get("course_offering_code"), e.get("semester_name")
+                    )
+                    or 0
+                )
 
             if req > 0:
                 total_completed += done
@@ -179,7 +187,9 @@ class FeatureEngineer:
         total_required: float = 0
 
         for e in enrollments:
-            required_w1w2 = FeatureEngineer._to_non_negative(e.get('content_required_w1w2', 0))
+            required_w1w2 = FeatureEngineer._to_non_negative(
+                e.get("content_required_w1w2", 0)
+            )
             total_completed += FeatureEngineer._w1w2_completed_for_enrollment(e)
             total_required += required_w1w2
 
@@ -202,11 +212,21 @@ class FeatureEngineer:
         if not enrollments:
             return 0.0
 
-        quiz_per_course = [FeatureEngineer._to_non_negative(e.get('quiz_completed', 0)) for e in enrollments]
-        attempts_per_course = [FeatureEngineer._to_non_negative(e.get('total_quiz_attempts', 0)) for e in enrollments]
+        quiz_per_course = [
+            FeatureEngineer._to_non_negative(e.get("quiz_completed", 0))
+            for e in enrollments
+        ]
+        attempts_per_course = [
+            FeatureEngineer._to_non_negative(e.get("total_quiz_attempts", 0))
+            for e in enrollments
+        ]
 
-        completion_component = FeatureEngineer._adaptive_saturation_score(quiz_per_course, min_scale=1.0, max_scale=200.0)
-        attempt_component = FeatureEngineer._adaptive_saturation_score(attempts_per_course, min_scale=1.0, max_scale=300.0)
+        completion_component = FeatureEngineer._adaptive_saturation_score(
+            quiz_per_course, min_scale=1.0, max_scale=200.0
+        )
+        attempt_component = FeatureEngineer._adaptive_saturation_score(
+            attempts_per_course, min_scale=1.0, max_scale=300.0
+        )
 
         # Completion carries more signal than raw attempts.
         return round((completion_component * 0.7) + (attempt_component * 0.3), 2)
@@ -228,12 +248,18 @@ class FeatureEngineer:
         # Weighted: creating > replying > reading
         weighted_activity = []
         for e in enrollments:
-            created = FeatureEngineer._to_non_negative(e.get('discussion_posts_created', 0))
-            replies = FeatureEngineer._to_non_negative(e.get('discussion_post_replies', 0))
-            read = FeatureEngineer._to_non_negative(e.get('discussion_posts_read', 0))
+            created = FeatureEngineer._to_non_negative(
+                e.get("discussion_posts_created", 0)
+            )
+            replies = FeatureEngineer._to_non_negative(
+                e.get("discussion_post_replies", 0)
+            )
+            read = FeatureEngineer._to_non_negative(e.get("discussion_posts_read", 0))
             weighted_activity.append((created * 3.0) + (replies * 2.0) + (read * 0.5))
 
-        return FeatureEngineer._adaptive_saturation_score(weighted_activity, min_scale=1.0, max_scale=500.0)
+        return FeatureEngineer._adaptive_saturation_score(
+            weighted_activity, min_scale=1.0, max_scale=500.0
+        )
 
     @staticmethod
     def calculate_login_consistency_score(enrollments: List[Dict]) -> float:
@@ -248,8 +274,13 @@ class FeatureEngineer:
         if not enrollments:
             return 0.0
 
-        logins_per_course = [FeatureEngineer._to_non_negative(e.get('num_logins', 0)) for e in enrollments]
-        return FeatureEngineer._adaptive_saturation_score(logins_per_course, min_scale=1.0, max_scale=500.0)
+        logins_per_course = [
+            FeatureEngineer._to_non_negative(e.get("num_logins", 0))
+            for e in enrollments
+        ]
+        return FeatureEngineer._adaptive_saturation_score(
+            logins_per_course, min_scale=1.0, max_scale=500.0
+        )
 
     @staticmethod
     def calculate_time_investment_score(enrollments: List[Dict]) -> float:
@@ -265,10 +296,13 @@ class FeatureEngineer:
             return 0.0
 
         hours_per_course = [
-            FeatureEngineer._to_non_negative(e.get('total_time_spent_seconds', 0)) / 3600.0
+            FeatureEngineer._to_non_negative(e.get("total_time_spent_seconds", 0))
+            / 3600.0
             for e in enrollments
         ]
-        return FeatureEngineer._adaptive_saturation_score(hours_per_course, min_scale=0.5, max_scale=200.0)
+        return FeatureEngineer._adaptive_saturation_score(
+            hours_per_course, min_scale=0.5, max_scale=200.0
+        )
 
     @staticmethod
     def calculate_assignment_score(enrollments: List[Dict]) -> float:
@@ -284,10 +318,12 @@ class FeatureEngineer:
             return 0.0
 
         submissions_per_course = [
-            FeatureEngineer._to_non_negative(e.get('num_assignment_submissions', 0))
+            FeatureEngineer._to_non_negative(e.get("num_assignment_submissions", 0))
             for e in enrollments
         ]
-        return FeatureEngineer._adaptive_saturation_score(submissions_per_course, min_scale=1.0, max_scale=100.0)
+        return FeatureEngineer._adaptive_saturation_score(
+            submissions_per_course, min_scale=1.0, max_scale=100.0
+        )
 
     @staticmethod
     def calculate_zero_progress_ratio(enrollments: List[Dict]) -> float:
@@ -301,8 +337,9 @@ class FeatureEngineer:
             return 1.0
 
         zero_count = sum(
-            1 for e in enrollments
-            if FeatureEngineer._to_non_negative(e.get('content_completed', 0)) <= 0.0
+            1
+            for e in enrollments
+            if FeatureEngineer._to_non_negative(e.get("content_completed", 0)) <= 0.0
         )
         return round(zero_count / len(enrollments), 4)
 
@@ -318,7 +355,9 @@ class FeatureEngineer:
         total_required_w1w2: float = 0
 
         for e in enrollments:
-            required = FeatureEngineer._to_non_negative(e.get('content_required_w1w2', 0))
+            required = FeatureEngineer._to_non_negative(
+                e.get("content_required_w1w2", 0)
+            )
             total_completed += FeatureEngineer._w1w2_completed_for_enrollment(e)
             total_required_w1w2 += required
 
@@ -360,7 +399,9 @@ class FeatureEngineer:
                 e.get("last_scorm_visit_date"),
                 e.get("last_scorm_completion_date"),
             ]
-            parsed_raw = [FeatureEngineer._parse_timestamp(ts) for ts in activity_timestamps if ts]
+            parsed_raw = [
+                FeatureEngineer._parse_timestamp(ts) for ts in activity_timestamps if ts
+            ]
             parsed: List[datetime] = [p for p in parsed_raw if p is not None]
             if not parsed:
                 continue
@@ -396,8 +437,8 @@ class FeatureEngineer:
         """
         breakdown = []
         for e in enrollments:
-            content_req = e.get('content_required', 0) or 0
-            content_done = e.get('content_completed', 0) or 0
+            content_req = e.get("content_required", 0) or 0
+            content_done = e.get("content_completed", 0) or 0
 
             # FIX 1: Add min(100.0, ...) clamp
             # FIX 2: Return None when content_req is unknown (not 0.0 which is ambiguous)
@@ -410,20 +451,25 @@ class FeatureEngineer:
                 pct = round(min(100.0, raw_pct), 2)
                 stale_required_count = raw_pct > 100.0
 
-            breakdown.append({
-                "course_id": e.get('course_id'),
-                "course_name": e.get('course_name', ''),
-                "content_completed": content_done,
-                "content_required": content_req,
-                "completion_pct": pct,
-                "stale_required_count": stale_required_count,
-                "quiz_completed": e.get('quiz_completed', 0) or 0,
-                "total_quiz_attempts": e.get('total_quiz_attempts', 0) or 0,
-                "discussion_posts": e.get('discussion_posts_created', 0) or 0,
-                "time_spent_hours": round((e.get('total_time_spent_seconds', 0) or 0) / 3600, 2),
-                "logins": e.get('num_logins', 0) or 0,
-                "assignments_submitted": e.get('num_assignment_submissions', 0) or 0,
-            })
+            breakdown.append(
+                {
+                    "course_id": e.get("course_id"),
+                    "course_name": e.get("course_name", ""),
+                    "content_completed": content_done,
+                    "content_required": content_req,
+                    "completion_pct": pct,
+                    "stale_required_count": stale_required_count,
+                    "quiz_completed": e.get("quiz_completed", 0) or 0,
+                    "total_quiz_attempts": e.get("total_quiz_attempts", 0) or 0,
+                    "discussion_posts": e.get("discussion_posts_created", 0) or 0,
+                    "time_spent_hours": round(
+                        (e.get("total_time_spent_seconds", 0) or 0) / 3600, 2
+                    ),
+                    "logins": e.get("num_logins", 0) or 0,
+                    "assignments_submitted": e.get("num_assignment_submissions", 0)
+                    or 0,
+                }
+            )
 
         return breakdown
 
@@ -437,17 +483,17 @@ class FeatureEngineer:
         Returns:
             Score [0-100], where 100 = perfect on all quizzes
         """
-        quizzes = [g for g in graded_components if g.get('component_type') == 'quiz']
+        quizzes = [g for g in graded_components if g.get("component_type") == "quiz"]
         if not quizzes:
             return 0.0
 
         scores = []
         for q in quizzes:
-            max_score = q.get('max_score', 0) or 0
+            max_score = q.get("max_score", 0) or 0
             if max_score <= 0:
                 continue
-            score = q.get('score')
-            if score is None or q.get('missed', False):
+            score = q.get("score")
+            if score is None or q.get("missed", False):
                 scores.append(0.0)  # Missed quiz = 0
             else:
                 scores.append(min(100.0, (score / max_score) * 100))
@@ -466,17 +512,19 @@ class FeatureEngineer:
         Returns:
             Score [0-100]
         """
-        assignments = [g for g in graded_components if g.get('component_type') == 'assignment']
+        assignments = [
+            g for g in graded_components if g.get("component_type") == "assignment"
+        ]
         if not assignments:
             return 0.0
 
         scores = []
         for a in assignments:
-            max_score = a.get('max_score', 0) or 0
+            max_score = a.get("max_score", 0) or 0
             if max_score <= 0:
                 continue
-            score = a.get('score')
-            if score is None or a.get('missed', False):
+            score = a.get("score")
+            if score is None or a.get("missed", False):
                 scores.append(0.0)
             else:
                 scores.append(min(100.0, (score / max_score) * 100))
@@ -501,13 +549,13 @@ class FeatureEngineer:
 
         scores = []
         for e in exam_records:
-            total = FeatureEngineer._to_non_negative(e.get('marks_total', 0))
-            present = bool(e.get('present', False))
+            total = FeatureEngineer._to_non_negative(e.get("marks_total", 0))
+            present = bool(e.get("present", False))
 
             if not present:
                 scores.append(0.0)
             elif total > 0:
-                obtained = FeatureEngineer._to_non_negative(e.get('marks_obtained'))
+                obtained = FeatureEngineer._to_non_negative(e.get("marks_obtained"))
                 scores.append(min(100.0, (obtained / total) * 100))
 
         if not scores:
@@ -525,7 +573,7 @@ class FeatureEngineer:
         if not exam_records:
             return 0.0
 
-        attended = sum(1 for e in exam_records if bool(e.get('present', False)))
+        attended = sum(1 for e in exam_records if bool(e.get("present", False)))
         return round((attended / len(exam_records)) * 100, 2)
 
     @staticmethod
@@ -534,7 +582,7 @@ class FeatureEngineer:
         if not isinstance(data, dict):
             return False
         # Legacy format has keys like absrate1, q1mpa1, nograd, etc.
-        legacy_keys = ['absrate1', 'q1mpa1', 'nograd', 'nsusp1', 'mobility1']
+        legacy_keys = ["absrate1", "q1mpa1", "nograd", "nsusp1", "mobility1"]
         return any(k in data for k in legacy_keys)
 
     @staticmethod
@@ -563,7 +611,9 @@ class FeatureEngineer:
             Dictionary with all calculated features
         """
         # Handle legacy K-12 format (single dict instead of list of enrollment dicts)
-        if isinstance(enrollments, dict) and FeatureEngineer._is_legacy_k12_data(enrollments):
+        if isinstance(enrollments, dict) and FeatureEngineer._is_legacy_k12_data(
+            enrollments
+        ):
             return FeatureEngineer._legacy_calculate_all_features(enrollments)
 
         content_completion_score = FeatureEngineer.calculate_content_completion_score(
@@ -571,7 +621,9 @@ class FeatureEngineer:
         )
         w1w2_completion_score: Optional[float]
         if week_number is None or week_number <= 2:
-            w1w2_completion_score = FeatureEngineer.calculate_w1w2_completion_score(enrollments)
+            w1w2_completion_score = FeatureEngineer.calculate_w1w2_completion_score(
+                enrollments
+            )
         else:
             # After week 2, cumulative vs W1/W2-only denominator is misleading without
             # explicit content_completed_w1w2 in ingestion — align with full-term completion.
@@ -580,15 +632,27 @@ class FeatureEngineer:
         features: Dict[str, Any] = {
             "content_completion_score": content_completion_score,
             "w1w2_completion_score": w1w2_completion_score,
-            "quiz_engagement_score": FeatureEngineer.calculate_quiz_engagement_score(enrollments),
-            "discussion_engagement_score": FeatureEngineer.calculate_discussion_engagement_score(enrollments),
-            "login_consistency_score": FeatureEngineer.calculate_login_consistency_score(enrollments),
-            "time_investment_score": FeatureEngineer.calculate_time_investment_score(enrollments),
+            "quiz_engagement_score": FeatureEngineer.calculate_quiz_engagement_score(
+                enrollments
+            ),
+            "discussion_engagement_score": FeatureEngineer.calculate_discussion_engagement_score(
+                enrollments
+            ),
+            "login_consistency_score": FeatureEngineer.calculate_login_consistency_score(
+                enrollments
+            ),
+            "time_investment_score": FeatureEngineer.calculate_time_investment_score(
+                enrollments
+            ),
             "assignment_score": FeatureEngineer.calculate_assignment_score(enrollments),
-            "zero_progress_ratio": FeatureEngineer.calculate_zero_progress_ratio(enrollments),
+            "zero_progress_ratio": FeatureEngineer.calculate_zero_progress_ratio(
+                enrollments
+            ),
             "progress_category": FeatureEngineer.get_progress_category(enrollments),
             "engagement_trend": FeatureEngineer.get_engagement_trend(enrollments),
-            "per_course_breakdown": FeatureEngineer.get_per_course_breakdown(enrollments),
+            "per_course_breakdown": FeatureEngineer.get_per_course_breakdown(
+                enrollments
+            ),
             "total_courses": len(enrollments),
         }
 
@@ -601,32 +665,46 @@ class FeatureEngineer:
             )
 
         if graded_components:
-            features["graded_quiz_score"] = FeatureEngineer.calculate_graded_quiz_score(graded_components)
-            features["graded_assignment_score"] = FeatureEngineer.calculate_graded_assignment_score(graded_components)
+            features["graded_quiz_score"] = FeatureEngineer.calculate_graded_quiz_score(
+                graded_components
+            )
+            features["graded_assignment_score"] = (
+                FeatureEngineer.calculate_graded_assignment_score(graded_components)
+            )
         else:
             features["graded_quiz_score"] = None
             features["graded_assignment_score"] = None
 
         if exam_records:
             features["exam_score"] = FeatureEngineer.calculate_exam_score(exam_records)
-            features["exam_attendance_rate"] = FeatureEngineer.calculate_exam_attendance_rate(exam_records)
+            features["exam_attendance_rate"] = (
+                FeatureEngineer.calculate_exam_attendance_rate(exam_records)
+            )
         else:
             features["exam_score"] = None
             features["exam_attendance_rate"] = None
 
         # Calculate engagement pattern based on raw behavioral features
-        features["engagement_pattern"] = FeatureEngineer.classify_engagement_pattern(features)
+        features["engagement_pattern"] = FeatureEngineer.classify_engagement_pattern(
+            features
+        )
 
         # Detect ghost students (zero engagement patterns)
         # Need to extract login count from enrollment data
         total_logins = sum(e.get("num_logins", 0) or 0 for e in enrollments)
-        features["ghost_info"] = FeatureEngineer.detect_ghost_student(enrollments, total_logins)
+        features["ghost_info"] = FeatureEngineer.detect_ghost_student(
+            enrollments, total_logins
+        )
 
         # Calculate self-directed learning score from optional course engagement
-        features["self_directed_learning_score"] = FeatureEngineer.calculate_self_directed_learning_score(enrollments)
+        features["self_directed_learning_score"] = (
+            FeatureEngineer.calculate_self_directed_learning_score(enrollments)
+        )
 
         # Calculate academic flags from exam records (UFM, defaulter reasons)
-        features["academic_flags"] = FeatureEngineer.calculate_academic_flags(exam_records or [])
+        features["academic_flags"] = FeatureEngineer.calculate_academic_flags(
+            exam_records or []
+        )
 
         return features
 
@@ -650,15 +728,17 @@ class FeatureEngineer:
             Dictionary of boolean flags
         """
         ufm = any(r.get("ufm_flagged") for r in exam_records)
-        reasons = [r.get("defaulter_reason") for r in exam_records if r.get("defaulter_reason")]
+        reasons = [
+            r.get("defaulter_reason") for r in exam_records if r.get("defaulter_reason")
+        ]
 
         return {
-            "ufm_flagged":          ufm,
-            "deferred":             any(r == "deferred" for r in reasons),
-            "dropout_intent":       any(r == "dropout_intent" for r in reasons),
-            "not_activated":        any(r == "not_activated" for r in reasons),
+            "ufm_flagged": ufm,
+            "deferred": any(r == "deferred" for r in reasons),
+            "dropout_intent": any(r == "dropout_intent" for r in reasons),
+            "not_activated": any(r == "not_activated" for r in reasons),
             "health_support_needed": any(r == "health_support" for r in reasons),
-            "unknown_defaulter":    any(r == "unknown_high_risk" for r in reasons),
+            "unknown_defaulter": any(r == "unknown_high_risk" for r in reasons),
         }
 
     @staticmethod
@@ -687,7 +767,9 @@ class FeatureEngineer:
             if req > 0:
                 scores.append(min(1.0, done / req))
             elif done > 0:
-                scores.append(1.0)  # completed something in a course with no required count
+                scores.append(
+                    1.0
+                )  # completed something in a course with no required count
 
         if not scores:
             return 0.0
@@ -713,11 +795,18 @@ class FeatureEngineer:
             Dictionary with ghost detection results
         """
         total_courses = len(enrollments)
-        zero_progress_courses = sum(1 for e in enrollments if (e.get("content_completed") or 0) == 0)
+        zero_progress_courses = sum(
+            1 for e in enrollments if (e.get("content_completed") or 0) == 0
+        )
         total_time = sum(e.get("total_time_spent", 0) or 0 for e in enrollments)
 
         if total_courses == 0:
-            return {"is_ghost": False, "ghost_type": None, "zero_progress_course_count": 0, "total_enrolled_courses": 0}
+            return {
+                "is_ghost": False,
+                "ghost_type": None,
+                "zero_progress_course_count": 0,
+                "total_enrolled_courses": 0,
+            }
 
         all_zero_progress = zero_progress_courses == total_courses
 
@@ -757,7 +846,9 @@ class FeatureEngineer:
         """
         # Extract raw values from features dict
         login_count = features.get("login_count", 0)
-        content_completion_rate = (features.get("content_completion_score") or 0) / 100.0
+        content_completion_rate = (
+            features.get("content_completion_score") or 0
+        ) / 100.0
         total_time_seconds = features.get("total_time_spent", 0)
         graded_quiz_score = features.get("graded_quiz_score")
         risk_score = features.get("risk_score", 0)
@@ -791,7 +882,7 @@ class FeatureEngineer:
         student_id: str,
         db,
         is_new_student: bool = False,
-        week_number: Optional[int] = None
+        week_number: Optional[int] = None,
     ) -> Dict:
         """
         Backward-compatible public interface - delegates to new FeatureEngineer.
@@ -807,11 +898,7 @@ class FeatureEngineer:
 
     @staticmethod
     def normalize_to_scale(
-        value: float,
-        old_min: float,
-        old_max: float,
-        new_min: float,
-        new_max: float
+        value: float, old_min: float, old_max: float, new_min: float, new_max: float
     ) -> float:
         """
         Normalize a value from one scale to another.
@@ -834,7 +921,7 @@ class FeatureEngineer:
         """
         absence_rates = []
         for year in range(1, 8):
-            key = f'absrate{year}'
+            key = f"absrate{year}"
             if key in student_data:
                 val = student_data[key]
                 try:
@@ -864,7 +951,7 @@ class FeatureEngineer:
         mpa_values = []
         for year in range(1, 8):
             for quarter in range(1, 5):
-                key = f'q{quarter}mpa{year}'
+                key = f"q{quarter}mpa{year}"
                 if key in student_data:
                     val = student_data[key]
                     try:
@@ -891,7 +978,7 @@ class FeatureEngineer:
         """
         suspensions = []
         for year in range(1, 8):
-            key = f'nsusp{year}'
+            key = f"nsusp{year}"
             if key in student_data:
                 val = student_data[key]
                 try:
@@ -917,7 +1004,7 @@ class FeatureEngineer:
         """
         mobility = []
         for year in range(1, 8):
-            key = f'mobility{year}'
+            key = f"mobility{year}"
             if key in student_data:
                 val = student_data[key]
                 try:
@@ -942,11 +1029,15 @@ class FeatureEngineer:
         Returns features in the format expected by legacy tests.
         """
         return {
-            'attendance_score': FeatureEngineer.calculate_attendance_score(student_data),
-            'academic_score': FeatureEngineer.calculate_academic_score(student_data),
-            'behavioral_score': FeatureEngineer.calculate_behavioral_score(student_data),
-            'stability_score': FeatureEngineer.calculate_stability_score(student_data),
-            'graduated': student_data.get('nograd', 1) == 0,
+            "attendance_score": FeatureEngineer.calculate_attendance_score(
+                student_data
+            ),
+            "academic_score": FeatureEngineer.calculate_academic_score(student_data),
+            "behavioral_score": FeatureEngineer.calculate_behavioral_score(
+                student_data
+            ),
+            "stability_score": FeatureEngineer.calculate_stability_score(student_data),
+            "graduated": student_data.get("nograd", 1) == 0,
         }
 
 

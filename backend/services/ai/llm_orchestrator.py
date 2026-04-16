@@ -1,15 +1,20 @@
 import hashlib
 from backend.core.security import SecurityManager
 from backend.config import (
-    LLM_PROVIDER, GEMINI_API_KEY, GEMINI_MODEL, CLAUDE_API_KEY, CLAUDE_MODEL,
-    LLM_TEMPERATURE, LLM_MAX_TOKENS,
+    LLM_PROVIDER,
+    GEMINI_API_KEY,
+    GEMINI_MODEL,
+    CLAUDE_API_KEY,
+    CLAUDE_MODEL,
+    LLM_TEMPERATURE,
+    LLM_MAX_TOKENS,
 )
 from backend.services.ai.rag_engine import (
     StudentDataRetriever,
     CohortDataRetriever,
     InstitutionalDataRetriever,
     ContextAssembler,
-    GuardrailValidator
+    GuardrailValidator,
 )
 from backend.core.audit_logger import log_data_access
 from backend.database.models.user import User
@@ -21,6 +26,7 @@ logger = logging.getLogger(__name__)
 
 try:
     import google.generativeai as genai
+
     GENAI_AVAILABLE = True
 except ImportError:
     genai = None
@@ -28,6 +34,7 @@ except ImportError:
 
 try:
     from anthropic import Anthropic
+
     ANTHROPIC_AVAILABLE = True
 except ImportError:
     Anthropic = None
@@ -70,14 +77,14 @@ class LLMOrchestrator:
                     "content": "AI service unavailable - google-generativeai package not installed",
                     "confidence": "low",
                     "sources": [],
-                    "error": "Module not installed"
+                    "error": "Module not installed",
                 }
             if not GEMINI_API_KEY:
                 return {
                     "content": "AI service unavailable - GEMINI_API_KEY not configured",
                     "confidence": "low",
                     "sources": [],
-                    "error": "API key not set"
+                    "error": "API key not set",
                 }
         elif self.llm_provider == "claude":
             if not ANTHROPIC_AVAILABLE:
@@ -85,21 +92,21 @@ class LLMOrchestrator:
                     "content": "AI service unavailable - anthropic package not installed",
                     "confidence": "low",
                     "sources": [],
-                    "error": "Module not installed"
+                    "error": "Module not installed",
                 }
             if not CLAUDE_API_KEY:
                 return {
                     "content": "AI service unavailable - CLAUDE_API_KEY not configured",
                     "confidence": "low",
                     "sources": [],
-                    "error": "API key not set"
+                    "error": "API key not set",
                 }
         else:
             return {
                 "content": f"AI service unavailable - Unsupported LLM provider: {self.llm_provider}",
                 "confidence": "low",
                 "sources": [],
-                "error": "Unsupported LLM provider"
+                "error": "Unsupported LLM provider",
             }
 
         if not self.llm_client:
@@ -107,12 +114,14 @@ class LLMOrchestrator:
                 "content": "AI service unavailable - LLM client not initialized",
                 "confidence": "low",
                 "sources": [],
-                "error": "LLM client not initialized"
+                "error": "LLM client not initialized",
             }
 
         return None
 
-    def _invoke_llm(self, prompt: str, system_message: Optional[str] = None) -> str:  # noqa: C901
+    def _invoke_llm(
+        self, prompt: str, system_message: Optional[str] = None
+    ) -> str:  # noqa: C901
         """Unified provider-agnostic LLM invocation."""
         if self.llm_provider == "gemini":
             try:
@@ -120,8 +129,7 @@ class LLMOrchestrator:
                 if system_message:
                     full_prompt = f"{system_message.strip()}\n\n{prompt}"
                 response = self.llm_client.generate_content(
-                    full_prompt,
-                    request_options={"timeout": 30}
+                    full_prompt, request_options={"timeout": 30}
                 )
                 text = getattr(response, "text", None)
                 if isinstance(text, str) and text.strip():
@@ -130,7 +138,11 @@ class LLMOrchestrator:
             except Exception as e:
                 logger.warning(
                     "LLM call failed",
-                    extra={"error": type(e).__name__, "provider": "gemini", "timeout": 30}
+                    extra={
+                        "error": type(e).__name__,
+                        "provider": "gemini",
+                        "timeout": 30,
+                    },
                 )
                 raise RuntimeError(f"Gemini generation failed: {str(e)}") from e
 
@@ -157,7 +169,11 @@ class LLMOrchestrator:
             except Exception as e:
                 logger.warning(
                     "LLM call failed",
-                    extra={"error": type(e).__name__, "provider": "claude", "timeout": 30}
+                    extra={
+                        "error": type(e).__name__,
+                        "provider": "claude",
+                        "timeout": 30,
+                    },
                 )
                 raise RuntimeError(f"Claude generation failed: {str(e)}") from e
 
@@ -168,8 +184,10 @@ class LLMOrchestrator:
         return self._invoke_llm(prompt=user_message, system_message=system_message)
 
     def explain_risk_change(
-        self, student_id: str, time_period: str = "recent",
-        current_user: Optional[User] = None
+        self,
+        student_id: str,
+        time_period: str = "recent",
+        current_user: Optional[User] = None,
     ) -> Dict[str, Any]:
         """
         Explain why a student's risk score changed.
@@ -187,14 +205,16 @@ class LLMOrchestrator:
             return llm_error
 
         # Retrieve student data via RAG
-        student_context = self.student_retriever.retrieve_student_context(student_id, depth='detailed')
+        student_context = self.student_retriever.retrieve_student_context(
+            student_id, depth="detailed"
+        )
 
         if "error" in student_context:
             return {
                 "content": "Unable to generate explanation: student data not found.",
                 "confidence": "low",
                 "sources": [],
-                "error": student_context["error"]
+                "error": student_context["error"],
             }
 
         # Build prompt with actual data
@@ -205,7 +225,9 @@ class LLMOrchestrator:
             explanation = self._invoke_llm(prompt)
 
             # Validate response
-            validation = GuardrailValidator.validate_response(explanation, student_context)
+            validation = GuardrailValidator.validate_response(
+                explanation, student_context
+            )
 
             # Calculate confidence
             confidence = self._calculate_confidence(validation, student_context)
@@ -223,7 +245,7 @@ class LLMOrchestrator:
                         "operation": "explain_risk_change",
                         "confidence": confidence,
                         "prompt_hash": hashlib.sha256(prompt.encode()).hexdigest()[:16],
-                    }
+                    },
                 )
 
             return {
@@ -232,18 +254,23 @@ class LLMOrchestrator:
                 "sources": student_context.get("data_sources", []),
                 "timestamp": student_context.get("retrieved_at"),
                 "student_id": student_id,
-                "validation": validation
+                "validation": validation,
             }
         except Exception as e:
-            logger.exception("LLM call failed", extra={"operation": "explain_risk_change", "student_id": student_id})
+            logger.exception(
+                "LLM call failed",
+                extra={"operation": "explain_risk_change", "student_id": student_id},
+            )
             return {
                 "content": f"Error generating explanation: {str(e)}",
                 "confidence": "low",
                 "sources": [],
-                "error": str(e)
+                "error": str(e),
             }
 
-    def generate_student_advice(self, student_id: str, question: str, current_user: Optional[User] = None) -> Dict[str, Any]:
+    def generate_student_advice(
+        self, student_id: str, question: str, current_user: Optional[User] = None
+    ) -> Dict[str, Any]:
         """
         Generate personalized advice for a student.
 
@@ -259,14 +286,16 @@ class LLMOrchestrator:
         if llm_error:
             return llm_error
 
-        student_context = self.student_retriever.retrieve_student_context(student_id, depth='detailed')
+        student_context = self.student_retriever.retrieve_student_context(
+            student_id, depth="detailed"
+        )
 
         if "error" in student_context:
             return {
                 "content": "I don't have enough information about your academic progress to provide specific advice.",
                 "confidence": "low",
                 "sources": [],
-                "error": student_context.get("error", "Student context unavailable")
+                "error": student_context.get("error", "Student context unavailable"),
             }
 
         prompt = self._build_student_advice_prompt(student_context, question)
@@ -290,27 +319,35 @@ class LLMOrchestrator:
                         "operation": "generate_student_advice",
                         "confidence": confidence,
                         "prompt_hash": hashlib.sha256(prompt.encode()).hexdigest()[:16],
-                    }
+                    },
                 )
 
             return {
                 "content": advice,
                 "confidence": confidence,
                 "sources": student_context.get("data_sources", []),
-                "timestamp": student_context.get("retrieved_at")
+                "timestamp": student_context.get("retrieved_at"),
             }
         except Exception as e:
-            logger.exception("LLM call failed", extra={"operation": "generate_student_advice", "student_id": student_id})
+            logger.exception(
+                "LLM call failed",
+                extra={
+                    "operation": "generate_student_advice",
+                    "student_id": student_id,
+                },
+            )
             return {
                 "content": "I'm having trouble generating advice right now. Please try again later.",
                 "confidence": "low",
                 "sources": [],
-                "error": str(e)
+                "error": str(e),
             }
 
     def summarize_student_profile(
-        self, student_id: str, for_role: str = "faculty",
-        current_user: Optional[User] = None
+        self,
+        student_id: str,
+        for_role: str = "faculty",
+        current_user: Optional[User] = None,
     ) -> Dict[str, Any]:
         """
         Generate a student profile summary for faculty/counselors.
@@ -327,23 +364,30 @@ class LLMOrchestrator:
         if llm_error:
             return llm_error
 
-        student_context = self.student_retriever.retrieve_student_context(student_id, depth='comprehensive')
+        student_context = self.student_retriever.retrieve_student_context(
+            student_id, depth="comprehensive"
+        )
 
         if "error" in student_context:
             return {
                 "content": "Student profile unavailable.",
                 "confidence": "low",
                 "sources": [],
-                "error": student_context.get("error", "Student context unavailable")
+                "error": student_context.get("error", "Student context unavailable"),
             }
 
         system_message_profile_summary = (
-            f"You are an AI assistant helping {for_role} quickly understand a student's situation."
+            f"You are an AI assistant helping {for_role} quickly "
+            "understand a student's situation."
         )
-        user_message_profile_summary = self._build_faculty_summary_prompt(student_context, for_role)
+        user_message_profile_summary = self._build_faculty_summary_prompt(
+            student_context, for_role
+        )
 
         try:
-            summary = self._generate_content(system_message_profile_summary, user_message_profile_summary)
+            summary = self._generate_content(
+                system_message_profile_summary, user_message_profile_summary
+            )
 
             validation = GuardrailValidator.validate_response(summary, student_context)
             confidence = self._calculate_confidence(validation, student_context)
@@ -360,8 +404,10 @@ class LLMOrchestrator:
                         "model": self.llm_model_name,
                         "operation": "summarize_student_profile",
                         "confidence": confidence,
-                        "prompt_hash": hashlib.sha256(user_message_profile_summary.encode()).hexdigest()[:16],
-                    }
+                        "prompt_hash": hashlib.sha256(
+                            user_message_profile_summary.encode()
+                        ).hexdigest()[:16],
+                    },
                 )
 
             return {
@@ -369,18 +415,26 @@ class LLMOrchestrator:
                 "confidence": confidence,
                 "sources": student_context.get("data_sources", []),
                 "student_id": student_id,
-                "risk_category": student_context.get("risk_category", "unknown")
+                "risk_category": student_context.get("risk_category", "unknown"),
             }
         except Exception as e:
-            logger.exception("LLM call failed", extra={"operation": "summarize_student_profile", "student_id": student_id})
+            logger.exception(
+                "LLM call failed",
+                extra={
+                    "operation": "summarize_student_profile",
+                    "student_id": student_id,
+                },
+            )
             return {
                 "content": "Unable to generate summary.",
                 "confidence": "low",
                 "sources": [],
-                "error": str(e)
+                "error": str(e),
             }
 
-    def suggest_interventions(self, student_id: str, current_user: Optional[User] = None) -> Dict[str, Any]:
+    def suggest_interventions(
+        self, student_id: str, current_user: Optional[User] = None
+    ) -> Dict[str, Any]:
         """
         Suggest evidence-based interventions for a student.
 
@@ -395,39 +449,43 @@ class LLMOrchestrator:
         if llm_error:
             return llm_error
 
-        student_context = self.student_retriever.retrieve_student_context(student_id, depth='detailed')
+        student_context = self.student_retriever.retrieve_student_context(
+            student_id, depth="detailed"
+        )
 
         if "error" in student_context:
             return {
                 "content": [],
                 "confidence": "low",
                 "sources": [],
-                "error": student_context.get("error", "Student context unavailable")
+                "error": student_context.get("error", "Student context unavailable"),
             }
 
         system_message_interventions = (
-            "You are an intervention specialist suggesting evidence-based actions for at-risk students."
+            "You are an intervention specialist suggesting "
+            "evidence-based actions for at-risk students."
         )
         user_message_interventions = self._build_intervention_prompt(student_context)
 
         try:
-            suggestions = self._generate_content(system_message_interventions, user_message_interventions)
+            suggestions = self._generate_content(
+                system_message_interventions, user_message_interventions
+            )
 
             # D3-6: Apply guardrail validation
             validated = GuardrailValidator.validate_response(
-                suggestions,
-                student_context
+                suggestions, student_context
             )
             if validated.get("is_valid") is False:
                 logger.warning(
                     "LLM suggestion failed guardrail validation",
-                    extra={"issues": validated.get("issues", [])}
+                    extra={"issues": validated.get("issues", [])},
                 )
                 return {
                     "content": None,
                     "error": "Suggestion blocked by content filter",
                     "ai_suggested": True,
-                    "confidence": "low"
+                    "confidence": "low",
                 }
 
             # FERPA: Audit log AI disclosure
@@ -442,8 +500,10 @@ class LLMOrchestrator:
                         "model": self.llm_model_name,
                         "operation": "suggest_interventions",
                         "confidence": "medium",
-                        "prompt_hash": hashlib.sha256(user_message_interventions.encode()).hexdigest()[:16],
-                    }
+                        "prompt_hash": hashlib.sha256(
+                            user_message_interventions.encode()
+                        ).hexdigest()[:16],
+                    },
                 )
 
             # D3-5: Return AI reasoning for audit trail
@@ -453,19 +513,26 @@ class LLMOrchestrator:
                 "sources": student_context.get("data_sources", []),
                 "student_id": student_id,
                 "ai_reasoning": (suggestions or "")[:1000],  # truncate for storage
-                "ai_model": GEMINI_MODEL if self.llm_provider == "gemini" else CLAUDE_MODEL,
+                "ai_model": (
+                    GEMINI_MODEL if self.llm_provider == "gemini" else CLAUDE_MODEL
+                ),
                 "ai_suggested": True,
             }
         except Exception as e:
-            logger.exception("LLM call failed", extra={"operation": "suggest_interventions", "student_id": student_id})
+            logger.exception(
+                "LLM call failed",
+                extra={"operation": "suggest_interventions", "student_id": student_id},
+            )
             return {
                 "content": "Unable to generate intervention suggestions.",
                 "confidence": "low",
                 "sources": [],
-                "error": str(e)
+                "error": str(e),
             }
 
-    def analyze_cohort_patterns(self, cohort_filters: Optional[Dict] = None) -> Dict[str, Any]:
+    def analyze_cohort_patterns(
+        self, cohort_filters: Optional[Dict] = None
+    ) -> Dict[str, Any]:
         """
         Analyze patterns across a cohort for sales/retention teams.
 
@@ -486,33 +553,42 @@ class LLMOrchestrator:
                 "content": "Insufficient cohort data for analysis.",
                 "confidence": "low",
                 "sources": [],
-                "error": cohort_context.get("error", "Cohort context unavailable")
+                "error": cohort_context.get("error", "Cohort context unavailable"),
             }
 
         system_message_cohort_analysis = (
-            "You are a retention analyst translating academic risk into business insights for sales/retention teams."
+            "You are a retention analyst translating academic risk "
+            "into business insights for sales/retention teams."
         )
-        user_message_cohort_analysis = self._build_cohort_analysis_prompt(cohort_context)
+        user_message_cohort_analysis = self._build_cohort_analysis_prompt(
+            cohort_context
+        )
 
         try:
-            analysis = self._generate_content(system_message_cohort_analysis, user_message_cohort_analysis)
+            analysis = self._generate_content(
+                system_message_cohort_analysis, user_message_cohort_analysis
+            )
 
             return {
                 "content": analysis,
                 "confidence": "medium",
                 "sources": cohort_context.get("data_sources", []),
-                "cohort_size": cohort_context.get("total_students", 0)
+                "cohort_size": cohort_context.get("total_students", 0),
             }
         except Exception as e:
-            logger.exception("LLM call failed", extra={"operation": "analyze_cohort_patterns"})
+            logger.exception(
+                "LLM call failed", extra={"operation": "analyze_cohort_patterns"}
+            )
             return {
                 "content": "Unable to analyze cohort patterns.",
                 "confidence": "low",
                 "sources": [],
-                "error": str(e)
+                "error": str(e),
             }
 
-    def simulate_what_if(self, student_id: str, scenario: Dict, current_user: Optional[User] = None) -> Dict[str, Any]:
+    def simulate_what_if(
+        self, student_id: str, scenario: Dict, current_user: Optional[User] = None
+    ) -> Dict[str, Any]:
         """
         Simulate a what-if scenario for a student.
 
@@ -528,21 +604,25 @@ class LLMOrchestrator:
         if llm_error:
             return llm_error
 
-        student_context = self.student_retriever.retrieve_student_context(student_id, depth='detailed')
+        student_context = self.student_retriever.retrieve_student_context(
+            student_id, depth="detailed"
+        )
 
         if "error" in student_context:
             return {
                 "content": "Can't simulate scenarios without student data.",
                 "confidence": "low",
                 "sources": [],
-                "error": student_context.get("error", "Student context unavailable")
+                "error": student_context.get("error", "Student context unavailable"),
             }
 
         system_message_what_if = "You are an academic advisor explaining the likely impact of behavior changes."
         user_message_what_if = self._build_what_if_prompt(student_context, scenario)
 
         try:
-            simulation = self._generate_content(system_message_what_if, user_message_what_if)
+            simulation = self._generate_content(
+                system_message_what_if, user_message_what_if
+            )
 
             # FERPA: Audit log AI disclosure
             if current_user:
@@ -556,23 +636,28 @@ class LLMOrchestrator:
                         "model": self.llm_model_name,
                         "operation": "simulate_what_if",
                         "confidence": "medium",
-                        "prompt_hash": hashlib.sha256(user_message_what_if.encode()).hexdigest()[:16],
-                    }
+                        "prompt_hash": hashlib.sha256(
+                            user_message_what_if.encode()
+                        ).hexdigest()[:16],
+                    },
                 )
 
             return {
                 "content": simulation,
                 "confidence": "medium",  # What-if always medium (speculative)
                 "sources": student_context.get("data_sources", []),
-                "scenario": scenario
+                "scenario": scenario,
             }
         except Exception as e:
-            logger.exception("LLM call failed", extra={"operation": "simulate_what_if", "student_id": student_id})
+            logger.exception(
+                "LLM call failed",
+                extra={"operation": "simulate_what_if", "student_id": student_id},
+            )
             return {
                 "content": "Unable to run simulation.",
                 "confidence": "low",
                 "sources": [],
-                "error": str(e)
+                "error": str(e),
             }
 
     def generate_report_narrative(self, report_type: str, data: Dict) -> Dict[str, Any]:
@@ -590,24 +675,33 @@ class LLMOrchestrator:
         if llm_error:
             return llm_error
 
-        system_message_report_narrative = "You are a report writer creating executive summaries for leadership."
-        user_message_report_narrative = self._build_report_narrative_prompt(report_type, data)
+        system_message_report_narrative = (
+            "You are a report writer creating executive summaries for leadership."
+        )
+        user_message_report_narrative = self._build_report_narrative_prompt(
+            report_type, data
+        )
 
         try:
-            narrative = self._generate_content(system_message_report_narrative, user_message_report_narrative)
+            narrative = self._generate_content(
+                system_message_report_narrative, user_message_report_narrative
+            )
 
             # D3-6: Apply guardrail validation
             validated = GuardrailValidator.validate_response(narrative, data)
             if validated.get("is_valid") is False:
                 logger.warning(
                     "LLM report narrative failed guardrail validation",
-                    extra={"issues": validated.get("issues", []), "report_type": report_type}
+                    extra={
+                        "issues": validated.get("issues", []),
+                        "report_type": report_type,
+                    },
                 )
                 return {
                     "content": None,
                     "error": "Report narrative blocked by content filter",
                     "ai_suggested": True,
-                    "confidence": "low"
+                    "confidence": "low",
                 }
 
             return {
@@ -615,14 +709,22 @@ class LLMOrchestrator:
                 "confidence": "high",
                 "report_type": report_type,
                 "ai_suggested": True,
-                "ai_model": GEMINI_MODEL if self.llm_provider == "gemini" else CLAUDE_MODEL,
+                "ai_model": (
+                    GEMINI_MODEL if self.llm_provider == "gemini" else CLAUDE_MODEL
+                ),
             }
         except Exception as e:
-            logger.exception("LLM call failed", extra={"operation": "generate_report_narrative", "report_type": report_type})
+            logger.exception(
+                "LLM call failed",
+                extra={
+                    "operation": "generate_report_narrative",
+                    "report_type": report_type,
+                },
+            )
             return {
                 "content": "Unable to generate report narrative.",
                 "confidence": "low",
-                "error": str(e)
+                "error": str(e),
             }
 
     # ========== Prompt Builders ==========
@@ -708,7 +810,8 @@ Provide intervention suggestions:"""
 
     def _build_cohort_analysis_prompt(self, context: Dict) -> str:
         """Build prompt for cohort analysis."""
-        return f"""You are a retention analyst translating academic risk into business insights for sales/retention teams.
+        return f"""You are a retention analyst translating academic risk \
+into business insights for sales/retention teams.
 
 COHORT DATA:
 Total Students: {context.get('total_students', 0)}
@@ -730,7 +833,9 @@ Provide cohort analysis:"""
         context_text = ContextAssembler.assemble_for_student_explanation(context)
 
         # Sanitize scenario inputs before interpolation
-        scenario_safe = {k: SecurityManager.llm_sanitize(str(v)) for k, v in scenario.items()}
+        scenario_safe = {
+            k: SecurityManager.llm_sanitize(str(v)) for k, v in scenario.items()
+        }
 
         return f"""You are an academic advisor explaining the likely impact of behavior changes.
 
@@ -752,7 +857,11 @@ Explain the projected impact:"""
     def _build_report_narrative_prompt(self, report_type: str, data: Dict) -> str:
         """Build prompt for report narrative."""
         # Sanitize report data before interpolation
-        data_safe = {k: SecurityManager.llm_sanitize(str(v)) for k, v in data.items() if isinstance(v, str)}
+        data_safe = {
+            k: SecurityManager.llm_sanitize(str(v))
+            for k, v in data.items()
+            if isinstance(v, str)
+        }
 
         return f"""You are a report writer creating executive summaries for leadership.
 

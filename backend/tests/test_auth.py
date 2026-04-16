@@ -91,7 +91,9 @@ class TestAuthRegister:
             db_session.delete(user)
             db_session.commit()
 
-    def test_register_duplicate_username_returns_409(self, client: TestClient, test_user: User):
+    def test_register_duplicate_username_returns_409(
+        self, client: TestClient, test_user: User
+    ):
         """POST /auth/register — duplicate username returns 409"""
         response = client.post(
             "/api/v1/auth/register",
@@ -103,8 +105,10 @@ class TestAuthRegister:
         )
 
         assert response.status_code == 409
-        assert "username" in response.json()["error"]["message"].lower() or \
-               "already exists" in response.json()["error"]["message"].lower()
+        assert (
+            "username" in response.json()["error"]["message"].lower()
+            or "already exists" in response.json()["error"]["message"].lower()
+        )
 
     def test_register_invalid_email_returns_422(self, client: TestClient):
         """POST /auth/register — invalid email returns 422"""
@@ -123,7 +127,9 @@ class TestAuthRegister:
 class TestAuthLogin:
     """Test user login endpoint."""
 
-    def test_login_valid_credentials_returns_tokens(self, client: TestClient, test_user: User):
+    def test_login_valid_credentials_returns_tokens(
+        self, client: TestClient, test_user: User
+    ):
         """POST /auth/login — valid credentials return access + refresh token"""
         response = client.post(
             "/api/v1/auth/login",
@@ -141,7 +147,9 @@ class TestAuthLogin:
         # Check refresh token cookie is set
         assert "refresh_token" in response.cookies
 
-    def test_login_wrong_password_returns_401(self, client: TestClient, test_user: User):
+    def test_login_wrong_password_returns_401(
+        self, client: TestClient, test_user: User
+    ):
         """POST /auth/login — wrong password returns 401"""
         response = client.post(
             "/api/v1/auth/login",
@@ -152,14 +160,18 @@ class TestAuthLogin:
         )
 
         assert response.status_code == 401
-        assert "incorrect" in response.json()["error"]["message"].lower() or \
-               "password" in response.json()["error"]["message"].lower()
+        assert (
+            "incorrect" in response.json()["error"]["message"].lower()
+            or "password" in response.json()["error"]["message"].lower()
+        )
 
 
 class TestAuthLogout:
     """Test user logout endpoint with token revocation (SEC-4)."""
 
-    def test_logout_revokes_access_token(self, client: TestClient, test_user: User, db_session: Session):
+    def test_logout_revokes_access_token(
+        self, client: TestClient, test_user: User, db_session: Session
+    ):
         """POST /auth/logout — after logout, access token is blocklisted (SEC-4)"""
         # First login to get a token
         login_response = client.post(
@@ -185,21 +197,40 @@ class TestAuthLogout:
         # Verify the token is in the revocation blocklist
         # Decode token to get JTI (skip audience/issuer validation — we just need the jti)
         import jwt as pyjwt
-        from backend.config import SECRET_KEY, ALGORITHM, EWS_TOKEN_AUDIENCE, EWS_SERVICE_NAME
+        from backend.config import (
+            SECRET_KEY,
+            ALGORITHM,
+            EWS_TOKEN_AUDIENCE,
+            EWS_SERVICE_NAME,
+        )
 
         payload = pyjwt.decode(
-            access_token, SECRET_KEY, algorithms=[ALGORITHM],
-            audience=EWS_TOKEN_AUDIENCE, issuer=EWS_SERVICE_NAME,
+            access_token,
+            SECRET_KEY,
+            algorithms=[ALGORITHM],
+            audience=EWS_TOKEN_AUDIENCE,
+            issuer=EWS_SERVICE_NAME,
         )
         token_jti = payload.get("jti")
 
-        revoked = db_session.query(RevokedToken).filter(RevokedToken.jti == token_jti).first()
-        assert revoked is not None, "Token should be in revocation blocklist after logout"
+        revoked = (
+            db_session.query(RevokedToken).filter(RevokedToken.jti == token_jti).first()
+        )
+        assert (
+            revoked is not None
+        ), "Token should be in revocation blocklist after logout"
 
-    def test_logout_revokes_refresh_token(self, client: TestClient, test_user: User, db_session: Session):
+    def test_logout_revokes_refresh_token(
+        self, client: TestClient, test_user: User, db_session: Session
+    ):
         """POST /auth/logout — after logout, refresh token is also blocklisted (SEC-4)"""
         import jwt as pyjwt
-        from backend.config import SECRET_KEY, ALGORITHM, EWS_TOKEN_AUDIENCE, EWS_SERVICE_NAME
+        from backend.config import (
+            SECRET_KEY,
+            ALGORITHM,
+            EWS_TOKEN_AUDIENCE,
+            EWS_SERVICE_NAME,
+        )
 
         # First login to get tokens
         login_response = client.post(
@@ -225,16 +256,23 @@ class TestAuthLogout:
 
         # Decode refresh token to get JTI
         refresh_payload = pyjwt.decode(
-            refresh_token, SECRET_KEY, algorithms=[ALGORITHM],
-            audience=EWS_TOKEN_AUDIENCE, issuer=EWS_SERVICE_NAME,
+            refresh_token,
+            SECRET_KEY,
+            algorithms=[ALGORITHM],
+            audience=EWS_TOKEN_AUDIENCE,
+            issuer=EWS_SERVICE_NAME,
         )
         refresh_jti = refresh_payload.get("jti")
 
         # Verify refresh token is also revoked
-        revoked_refresh = db_session.query(RevokedToken).filter(
-            RevokedToken.jti == refresh_jti
-        ).first()
-        assert revoked_refresh is not None, "Refresh token should be revoked after logout"
+        revoked_refresh = (
+            db_session.query(RevokedToken)
+            .filter(RevokedToken.jti == refresh_jti)
+            .first()
+        )
+        assert (
+            revoked_refresh is not None
+        ), "Refresh token should be revoked after logout"
 
     def test_logout_without_token_fails_401(self, client: TestClient):
         """POST /auth/logout without token should fail with 401."""
@@ -263,8 +301,6 @@ class TestTokenRevocation:
         self, client: TestClient, test_user: User, db_session: Session
     ):
         """REV-1: After logout, revoked access token cannot access protected endpoints."""
-        import jwt as pyjwt
-        from backend.config import SECRET_KEY, ALGORITHM, EWS_TOKEN_AUDIENCE, EWS_SERVICE_NAME
 
         # Login
         login_response = client.post(
@@ -296,9 +332,14 @@ class TestTokenRevocation:
         self, client: TestClient, test_user: User, db_session: Session
     ):
         """REV-2: Revoked refresh token cannot be used to get new access token."""
-        from datetime import datetime, timedelta
+        from datetime import datetime
         import jwt as pyjwt
-        from backend.config import SECRET_KEY, ALGORITHM, EWS_TOKEN_AUDIENCE, EWS_SERVICE_NAME
+        from backend.config import (
+            SECRET_KEY,
+            ALGORITHM,
+            EWS_TOKEN_AUDIENCE,
+            EWS_SERVICE_NAME,
+        )
 
         # Login to get refresh token
         login_response = client.post(
@@ -310,8 +351,11 @@ class TestTokenRevocation:
 
         # Decode and revoke refresh token
         payload = pyjwt.decode(
-            refresh_token, SECRET_KEY, algorithms=[ALGORITHM],
-            audience=EWS_TOKEN_AUDIENCE, issuer=EWS_SERVICE_NAME,
+            refresh_token,
+            SECRET_KEY,
+            algorithms=[ALGORITHM],
+            audience=EWS_TOKEN_AUDIENCE,
+            issuer=EWS_SERVICE_NAME,
         )
         token_jti = payload.get("jti")
         token_exp = payload.get("exp")
@@ -342,9 +386,13 @@ class TestTokenRevocation:
         self, client: TestClient, test_user: User, db_session: Session
     ):
         """REV-3: Revoked token expiry should match JWT exp claim."""
-        from datetime import datetime, timezone
         import jwt as pyjwt
-        from backend.config import SECRET_KEY, ALGORITHM, EWS_TOKEN_AUDIENCE, EWS_SERVICE_NAME
+        from backend.config import (
+            SECRET_KEY,
+            ALGORITHM,
+            EWS_TOKEN_AUDIENCE,
+            EWS_SERVICE_NAME,
+        )
 
         # Login
         login_response = client.post(
@@ -362,30 +410,41 @@ class TestTokenRevocation:
 
         # Decode token to get JTI and exp
         payload = pyjwt.decode(
-            access_token, SECRET_KEY, algorithms=[ALGORITHM],
-            audience=EWS_TOKEN_AUDIENCE, issuer=EWS_SERVICE_NAME,
+            access_token,
+            SECRET_KEY,
+            algorithms=[ALGORITHM],
+            audience=EWS_TOKEN_AUDIENCE,
+            issuer=EWS_SERVICE_NAME,
         )
         token_jti = payload.get("jti")
         token_exp = payload.get("exp")
 
         # Verify revoked token record
-        revoked = db_session.query(RevokedToken).filter(
-            RevokedToken.jti == token_jti
-        ).first()
+        revoked = (
+            db_session.query(RevokedToken).filter(RevokedToken.jti == token_jti).first()
+        )
 
         assert revoked is not None
         # Verify expiry matches (within 1 second tolerance).
         # expires_at is stored as a naive UTC datetime in SQLite; attach UTC
         # before calling timestamp() so Python doesn't misinterpret it as local.
         from datetime import timezone as _tz
+
         db_exp = int(revoked.expires_at.replace(tzinfo=_tz.utc).timestamp())
         assert abs(db_exp - token_exp) <= 1, "DB expiry should match JWT exp claim"
 
-    def test_cannot_revoke_same_token_twice(self, client: TestClient, test_user: User, db_session: Session):
+    def test_cannot_revoke_same_token_twice(
+        self, client: TestClient, test_user: User, db_session: Session
+    ):
         """REV-4: Revoking same token twice should be idempotent (no error)."""
-        from datetime import datetime, timedelta
+        from datetime import datetime
         import jwt as pyjwt
-        from backend.config import SECRET_KEY, ALGORITHM, EWS_TOKEN_AUDIENCE, EWS_SERVICE_NAME
+        from backend.config import (
+            SECRET_KEY,
+            ALGORITHM,
+            EWS_TOKEN_AUDIENCE,
+            EWS_SERVICE_NAME,
+        )
 
         # Login
         login_response = client.post(
@@ -397,8 +456,11 @@ class TestTokenRevocation:
 
         # Decode token
         payload = pyjwt.decode(
-            access_token, SECRET_KEY, algorithms=[ALGORITHM],
-            audience=EWS_TOKEN_AUDIENCE, issuer=EWS_SERVICE_NAME,
+            access_token,
+            SECRET_KEY,
+            algorithms=[ALGORITHM],
+            audience=EWS_TOKEN_AUDIENCE,
+            issuer=EWS_SERVICE_NAME,
         )
         token_jti = payload.get("jti")
         token_exp = payload.get("exp")
@@ -427,16 +489,18 @@ class TestTokenRevocation:
             db_session.rollback()
 
         # Verify only one record exists
-        count = db_session.query(RevokedToken).filter(
-            RevokedToken.jti == token_jti
-        ).count()
+        count = (
+            db_session.query(RevokedToken).filter(RevokedToken.jti == token_jti).count()
+        )
         assert count <= 1, "Should not create duplicate revocation entries"
 
 
 class TestAuthRefresh:
     """Test token refresh endpoint."""
 
-    def test_refresh_valid_token_returns_new_access_token(self, client: TestClient, test_user: User):
+    def test_refresh_valid_token_returns_new_access_token(
+        self, client: TestClient, test_user: User
+    ):
         """POST /auth/refresh — valid refresh token returns new access token"""
         # First login to get tokens
         login_response = client.post(
@@ -462,11 +526,18 @@ class TestAuthRefresh:
         # New refresh token cookie should be set
         assert "refresh_token" in refresh_response.cookies
 
-    def test_refresh_revoked_token_returns_401(self, client: TestClient, test_user: User, db_session: Session):
+    def test_refresh_revoked_token_returns_401(
+        self, client: TestClient, test_user: User, db_session: Session
+    ):
         """POST /auth/refresh — revoked refresh token returns 401 (SEC-4)"""
-        from datetime import datetime, timedelta
+        from datetime import datetime
         import jwt as pyjwt
-        from backend.config import SECRET_KEY, ALGORITHM, EWS_TOKEN_AUDIENCE, EWS_SERVICE_NAME
+        from backend.config import (
+            SECRET_KEY,
+            ALGORITHM,
+            EWS_TOKEN_AUDIENCE,
+            EWS_SERVICE_NAME,
+        )
 
         # First login to get tokens
         login_response = client.post(
@@ -484,8 +555,11 @@ class TestAuthRefresh:
 
         # Decode refresh token to get JTI
         payload = pyjwt.decode(
-            refresh_token, SECRET_KEY, algorithms=[ALGORITHM],
-            audience=EWS_TOKEN_AUDIENCE, issuer=EWS_SERVICE_NAME,
+            refresh_token,
+            SECRET_KEY,
+            algorithms=[ALGORITHM],
+            audience=EWS_TOKEN_AUDIENCE,
+            issuer=EWS_SERVICE_NAME,
         )
         token_jti = payload.get("jti")
         token_exp = payload.get("exp")

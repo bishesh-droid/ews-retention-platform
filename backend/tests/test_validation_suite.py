@@ -1,6 +1,7 @@
 """
 Test suite for data validation components
 """
+
 import pytest
 import pandas as pd
 from datetime import datetime, timedelta
@@ -40,7 +41,13 @@ class TestFileValidator:
         """Test header normalization"""
         validator = FileValidator()
 
-        headers = ["  Student Email   ", "Quiz Score (%)", "2023 Grade", "Email", "Email"]
+        headers = [
+            "  Student Email   ",
+            "Quiz Score (%)",
+            "2023 Grade",
+            "Email",
+            "Email",
+        ]
         normalized = validator.normalize_header(headers)
 
         assert normalized[0] == "student_email"
@@ -57,11 +64,17 @@ class TestSchemaInference:
         """Should detect email columns"""
         engine = SchemaInferenceEngine()
 
-        df = pd.DataFrame({
-            'student_email': ['john@example.com', 'jane@example.com', 'bob@example.com']
-        })
+        df = pd.DataFrame(
+            {
+                "student_email": [
+                    "john@example.com",
+                    "jane@example.com",
+                    "bob@example.com",
+                ]
+            }
+        )
 
-        schema = engine.infer_schema(df, 'test.csv')
+        schema = engine.infer_schema(df, "test.csv")
 
         assert len(schema.columns) == 1
         assert schema.columns[0].type == ColumnType.EMAIL
@@ -71,11 +84,9 @@ class TestSchemaInference:
         """Should detect percentage columns"""
         engine = SchemaInferenceEngine()
 
-        df = pd.DataFrame({
-            'attendance_percentage': [85.0, 90.5, 78.0, 95.0]
-        })
+        df = pd.DataFrame({"attendance_percentage": [85.0, 90.5, 78.0, 95.0]})
 
-        schema = engine.infer_schema(df, 'test.csv')
+        schema = engine.infer_schema(df, "test.csv")
 
         assert schema.columns[0].type == ColumnType.PERCENTAGE
         assert schema.columns[0].constraints.min_value == 0.0
@@ -86,11 +97,9 @@ class TestSchemaInference:
         engine = SchemaInferenceEngine()
 
         # Use large float values and neutral column name
-        df = pd.DataFrame({
-            'measurement': [1065.5, 1178.3, 1182.9, 1191.1, 1188.7]
-        })
+        df = pd.DataFrame({"measurement": [1065.5, 1178.3, 1182.9, 1191.1, 1188.7]})
 
-        schema = engine.infer_schema(df, 'test.csv')
+        schema = engine.infer_schema(df, "test.csv")
 
         col = schema.columns[0]
         assert col.type in [ColumnType.NUMERIC, ColumnType.INTEGER]
@@ -103,32 +112,31 @@ class TestRowValidation:
 
     def test_detect_excel_errors(self):
         """Should detect Excel error values"""
-        row = pd.Series({
-            'student_email': 'john@example.com',
-            'quiz_score': '#DIV/0!',
-            'attendance': 85
-        })
+        row = pd.Series(
+            {
+                "student_email": "john@example.com",
+                "quiz_score": "#DIV/0!",
+                "attendance": 85,
+            }
+        )
 
         errors = RowValidator.detect_excel_errors(row)
 
         assert len(errors) > 0
-        assert 'quiz_score=#DIV/0!' in errors[0]
+        assert "quiz_score=#DIV/0!" in errors[0]
 
     def test_normalize_special_values(self):
         """Should normalize N/A and null-like strings"""
-        row = pd.Series({
-            'col1': 'N/A',
-            'col2': 'NULL',
-            'col3': '  ',
-            'col4': 'valid_value'
-        })
+        row = pd.Series(
+            {"col1": "N/A", "col2": "NULL", "col3": "  ", "col4": "valid_value"}
+        )
 
         normalized = RowValidator.normalize_special_values(row)
 
-        assert pd.isna(normalized['col1'])
-        assert pd.isna(normalized['col2'])
-        assert pd.isna(normalized['col3'])
-        assert normalized['col4'] == 'valid_value'
+        assert pd.isna(normalized["col1"])
+        assert pd.isna(normalized["col2"])
+        assert pd.isna(normalized["col3"])
+        assert normalized["col4"] == "valid_value"
 
 
 class TestNumericGuards:
@@ -137,28 +145,32 @@ class TestNumericGuards:
     def test_detect_nan_inf(self):
         """Should detect NaN and Infinity"""
 
-        assert NumericGuard.detect_infinity_nan(float('nan'))
-        assert NumericGuard.detect_infinity_nan(float('inf'))
-        assert NumericGuard.detect_infinity_nan(float('-inf'))
+        assert NumericGuard.detect_infinity_nan(float("nan"))
+        assert NumericGuard.detect_infinity_nan(float("inf"))
+        assert NumericGuard.detect_infinity_nan(float("-inf"))
         assert not NumericGuard.detect_infinity_nan(42.5)
 
     def test_check_negative_where_invalid(self):
         """Should flag negative values in percentage/count columns"""
-        assert NumericGuard.check_negative_where_invalid(-5, 'attendance_percentage')
-        assert NumericGuard.check_negative_where_invalid(-1, 'login_count')
-        assert not NumericGuard.check_negative_where_invalid(-5, 'temperature_change')
+        assert NumericGuard.check_negative_where_invalid(-5, "attendance_percentage")
+        assert NumericGuard.check_negative_where_invalid(-1, "login_count")
+        assert not NumericGuard.check_negative_where_invalid(-5, "temperature_change")
 
     def test_validate_percentage_range(self):
         """Should validate percentage bounds (0-100)"""
-        is_valid, msg = NumericGuard.validate_percentage_range(105, 'completion_percentage')
+        is_valid, msg = NumericGuard.validate_percentage_range(
+            105, "completion_percentage"
+        )
         assert not is_valid
         assert "cannot exceed 100" in msg
 
-        is_valid, msg = NumericGuard.validate_percentage_range(-5, 'attendance_percent')
+        is_valid, msg = NumericGuard.validate_percentage_range(-5, "attendance_percent")
         assert not is_valid
         assert "cannot be negative" in msg
 
-        is_valid, msg = NumericGuard.validate_percentage_range(85.5, 'success_percentage')
+        is_valid, msg = NumericGuard.validate_percentage_range(
+            85.5, "success_percentage"
+        )
         assert is_valid
 
 
@@ -198,17 +210,17 @@ class TestQuarantine:
         qm = QuarantineManager()
 
         qm.quarantine_row(
-            row_data={'student_email': 'test@example.com', 'score': 'invalid'},
-            reason='TYPE_MISMATCH',
-            source_file='quiz.xlsx',
+            row_data={"student_email": "test@example.com", "score": "invalid"},
+            reason="TYPE_MISMATCH",
+            source_file="quiz.xlsx",
             row_number=45,
-            failed_column='score',
-            failure_message='Non-numeric value'
+            failed_column="score",
+            failure_message="Non-numeric value",
         )
 
         assert len(qm.quarantined_rows) == 1
         assert qm.quarantined_rows[0].row_number == 45
-        assert qm.quarantined_rows[0].quarantine_reason == 'TYPE_MISMATCH'
+        assert qm.quarantined_rows[0].quarantine_reason == "TYPE_MISMATCH"
 
     def test_quarantine_summary(self):
         """Should generate correct summary statistics"""
@@ -218,20 +230,20 @@ class TestQuarantine:
         # Add quarantined rows
         for i in range(5):
             qm.quarantine_row(
-                row_data={'col': 'value'},
-                reason='VALIDATION_ERROR',
-                source_file='test.xlsx',
+                row_data={"col": "value"},
+                reason="VALIDATION_ERROR",
+                source_file="test.xlsx",
                 row_number=i,
-                failed_column='col'
+                failed_column="col",
             )
 
         summary = qm.get_summary()
 
         assert summary.total_quarantined == 5
         assert summary.quarantine_rate == 5.0  # 5/100 * 100
-        assert 'test.xlsx' in summary.by_file
-        assert summary.by_file['test.xlsx'] == 5
+        assert "test.xlsx" in summary.by_file
+        assert summary.by_file["test.xlsx"] == 5
 
 
 if __name__ == "__main__":
-    pytest.main([__file__, '-v'])
+    pytest.main([__file__, "-v"])

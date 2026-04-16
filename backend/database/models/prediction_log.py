@@ -19,6 +19,7 @@ class PredictionLog(Base):
     Stores input features, output scores, and metadata for traceability.
     This table grows quickly — consider archival strategy for old records.
     """
+
     __tablename__ = "prediction_logs"
 
     # Primary Key
@@ -38,15 +39,17 @@ class PredictionLog(Base):
     output_category = Column(String(20), nullable=True)  # 'low', 'medium', 'high'
 
     # Metadata
-    created_at = Column(DateTime, default=lambda: datetime.now(timezone.utc), index=True)
+    created_at = Column(
+        DateTime, default=lambda: datetime.now(timezone.utc), index=True
+    )
 
     # Optional: source info (API endpoint, scheduled job, etc.)
     source = Column(String(50), nullable=True)  # e.g., 'api', 'scheduler', 'manual'
 
     # Indexes for common queries
     __table_args__ = (
-        Index('ix_prediction_logs_student_created', 'student_id', 'created_at'),
-        Index('ix_prediction_logs_model_version', 'model_version'),
+        Index("ix_prediction_logs_student_created", "student_id", "created_at"),
+        Index("ix_prediction_logs_model_version", "model_version"),
     )
 
     # Relationship (optional, for join queries)

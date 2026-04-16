@@ -27,7 +27,7 @@ router = APIRouter()
 @router.get("/users", response_model=List[UserOut])
 def list_users(
     current_user: deps.User = Depends(deps.require_role([Role.ADMIN])),
-    db: Session = Depends(deps.get_db)
+    db: Session = Depends(deps.get_db),
 ):
     """
     List all system users (Admin only).
@@ -38,7 +38,7 @@ def list_users(
 @router.get("/audit-logs", response_model=APIResponse)
 def get_audit_logs(
     current_user: deps.User = Depends(deps.require_role([Role.ADMIN])),
-    db: Session = Depends(deps.get_db)
+    db: Session = Depends(deps.get_db),
 ):
     """
     Get system audit trail (Admin only).
@@ -94,10 +94,14 @@ def list_course_registry(
     """
     from backend.database.models.course_content_registry import CourseContentRegistry
 
-    rows = db.query(CourseContentRegistry).order_by(
-        CourseContentRegistry.semester_name,
-        CourseContentRegistry.course_offering_code,
-    ).all()
+    rows = (
+        db.query(CourseContentRegistry)
+        .order_by(
+            CourseContentRegistry.semester_name,
+            CourseContentRegistry.course_offering_code,
+        )
+        .all()
+    )
 
     return [
         {
@@ -105,7 +109,9 @@ def list_course_registry(
             "course_name": r.course_name,
             "semester": r.semester_name,
             "content_required": r.content_required,
-            "last_updated_at": r.last_updated_at.isoformat() if r.last_updated_at else None,
+            "last_updated_at": (
+                r.last_updated_at.isoformat() if r.last_updated_at else None
+            ),
             "source_file": r.source_file,
         }
         for r in rows
@@ -134,7 +140,9 @@ def update_course_registry(
     reason = request.get("reason", "No reason provided")
 
     if not semester_name or not isinstance(content_required, int):
-        raise HTTPException(status_code=400, detail="semester_name and content_required required")
+        raise HTTPException(
+            status_code=400, detail="semester_name and content_required required"
+        )
 
     existing = (
         db.query(CourseContentRegistry)
@@ -214,31 +222,54 @@ def get_intervention_effectiveness(  # noqa: C901
         program_clean = program.strip()
         if len(program_clean) > 100:
             raise HTTPException(400, "program filter value too long")
-        base_query = base_query.join(Student, InterventionLog.student_org_id == Student.org_defined_id)
-        base_query = base_query.filter(Student.parent_department_name.ilike(f"%{program_clean}%"))
+        base_query = base_query.join(
+            Student, InterventionLog.student_org_id == Student.org_defined_id
+        )
+        base_query = base_query.filter(
+            Student.parent_department_name.ilike(f"%{program_clean}%")
+        )
 
     # OPTIMIZATION: Single SQL query with conditional aggregation
     # All metrics computed at database level using GROUP BY and conditional COUNT/SUM/AVG
     result = base_query.with_entities(
         # Overall counts using conditional aggregation
         func.count().label("total"),
-        func.sum(case((InterventionLog.reviewed.is_(True), 1), else_=0)).label("reviewed"),
-        func.sum(case((InterventionLog.acted_on.is_(True), 1), else_=0)).label("acted_on"),
-        func.sum(case((InterventionLog.acted_on.is_(False), 1), else_=0)).label("dismissed"),
-        func.sum(case((InterventionLog.acted_on.is_(None), 1), else_=0)).label("pending"),
+        func.sum(case((InterventionLog.reviewed.is_(True), 1), else_=0)).label(
+            "reviewed"
+        ),
+        func.sum(case((InterventionLog.acted_on.is_(True), 1), else_=0)).label(
+            "acted_on"
+        ),
+        func.sum(case((InterventionLog.acted_on.is_(False), 1), else_=0)).label(
+            "dismissed"
+        ),
+        func.sum(case((InterventionLog.acted_on.is_(None), 1), else_=0)).label(
+            "pending"
+        ),
         # Outcome counts
-        func.sum(case((InterventionLog.outcome == "improved", 1), else_=0)).label("outcome_improved"),
-        func.sum(case((InterventionLog.outcome == "unchanged", 1), else_=0)).label("outcome_unchanged"),
-        func.sum(case((InterventionLog.outcome == "worsened", 1), else_=0)).label("outcome_worsened"),
-        func.sum(case((InterventionLog.outcome == "pending", 1), else_=0)).label("outcome_pending"),
+        func.sum(case((InterventionLog.outcome == "improved", 1), else_=0)).label(
+            "outcome_improved"
+        ),
+        func.sum(case((InterventionLog.outcome == "unchanged", 1), else_=0)).label(
+            "outcome_unchanged"
+        ),
+        func.sum(case((InterventionLog.outcome == "worsened", 1), else_=0)).label(
+            "outcome_worsened"
+        ),
+        func.sum(case((InterventionLog.outcome == "pending", 1), else_=0)).label(
+            "outcome_pending"
+        ),
         # Average delta for acted interventions with outcomes
         func.avg(
             case(
                 (
-                    and_(InterventionLog.acted_on.is_(True), InterventionLog.outcome_delta.isnot(None)),
-                    InterventionLog.outcome_delta
+                    and_(
+                        InterventionLog.acted_on.is_(True),
+                        InterventionLog.outcome_delta.isnot(None),
+                    ),
+                    InterventionLog.outcome_delta,
                 ),
-                else_=None
+                else_=None,
             )
         ).label("avg_delta"),
     ).first()
@@ -274,32 +305,59 @@ def get_intervention_effectiveness(  # noqa: C901
 
     # OPTIMIZATION: Group-by queries for breakdowns (still SQL-level aggregation)
     # By intervention type
-    type_query = base_query.with_entities(
-        InterventionLog.intervention_type,
-        func.count().label("count"),
-        func.sum(case((InterventionLog.acted_on.is_(True), 1), else_=0)).label("acted"),
-        func.sum(case((InterventionLog.outcome == "improved", 1), else_=0)).label("improved"),
-    ).group_by(InterventionLog.intervention_type).all()
+    type_query = (
+        base_query.with_entities(
+            InterventionLog.intervention_type,
+            func.count().label("count"),
+            func.sum(case((InterventionLog.acted_on.is_(True), 1), else_=0)).label(
+                "acted"
+            ),
+            func.sum(case((InterventionLog.outcome == "improved", 1), else_=0)).label(
+                "improved"
+            ),
+        )
+        .group_by(InterventionLog.intervention_type)
+        .all()
+    )
 
     by_type = {}
     for row in type_query:
         itype = row.intervention_type or "unknown"
         by_type[itype] = {
             "count": int(row.count),
-            "acted_rate": round(int(row.acted) / int(row.count), 3) if row.count > 0 else 0,
-            "improvement_rate": round(int(row.improved) / int(row.acted), 3) if row.acted > 0 else 0,
+            "acted_rate": (
+                round(int(row.acted) / int(row.count), 3) if row.count > 0 else 0
+            ),
+            "improvement_rate": (
+                round(int(row.improved) / int(row.acted), 3) if row.acted > 0 else 0
+            ),
         }
 
     # By engagement pattern
-    pattern_query = base_query.with_entities(
-        InterventionLog.engagement_pattern,
-        func.count().label("count"),
-        func.sum(case((InterventionLog.outcome == "improved", 1), else_=0)).label("improved"),
-        func.sum(case((
-            and_(InterventionLog.acted_on.is_(True),
-                 InterventionLog.engagement_pattern == InterventionLog.engagement_pattern), 1), else_=0
-        )).label("acted"),
-    ).group_by(InterventionLog.engagement_pattern).all()
+    pattern_query = (
+        base_query.with_entities(
+            InterventionLog.engagement_pattern,
+            func.count().label("count"),
+            func.sum(case((InterventionLog.outcome == "improved", 1), else_=0)).label(
+                "improved"
+            ),
+            func.sum(
+                case(
+                    (
+                        and_(
+                            InterventionLog.acted_on.is_(True),
+                            InterventionLog.engagement_pattern
+                            == InterventionLog.engagement_pattern,
+                        ),
+                        1,
+                    ),
+                    else_=0,
+                )
+            ).label("acted"),
+        )
+        .group_by(InterventionLog.engagement_pattern)
+        .all()
+    )
 
     by_pattern = {}
     for row in pattern_query:
@@ -307,7 +365,9 @@ def get_intervention_effectiveness(  # noqa: C901
         acted_count = int(row.acted or 0)
         by_pattern[pattern] = {
             "count": int(row.count),
-            "improvement_rate": round(int(row.improved) / acted_count, 3) if acted_count > 0 else 0,
+            "improvement_rate": (
+                round(int(row.improved) / acted_count, 3) if acted_count > 0 else 0
+            ),
         }
 
     improved_among_acted = outcomes["improved"] if acted_on > 0 else 0
@@ -322,7 +382,9 @@ def get_intervention_effectiveness(  # noqa: C901
         "dismissed": dismissed,
         "pending_review": pending,
         "outcomes": outcomes,
-        "improvement_rate_among_acted": round(improved_among_acted / acted_on, 3) if acted_on > 0 else 0.0,
+        "improvement_rate_among_acted": (
+            round(improved_among_acted / acted_on, 3) if acted_on > 0 else 0.0
+        ),
         "avg_risk_delta_after_action": round(avg_delta, 1),
         "by_intervention_type": by_type,
         "by_engagement_pattern": by_pattern,
@@ -370,7 +432,10 @@ def get_ingestion_run_summary(
             )
             .join(Student, RiskSnapshot.student_id == Student.id)
             .filter(RiskSnapshot.timestamp >= run.run_at)
-            .filter(RiskSnapshot.timestamp < (previous_run.run_at if previous_run else run.run_at))
+            .filter(
+                RiskSnapshot.timestamp
+                < (previous_run.run_at if previous_run else run.run_at)
+            )
             .all()
         )
 
@@ -390,13 +455,17 @@ def get_ingestion_run_summary(
                 prev_score = prev_by_student.get(snap.student_id, snap.risk_score)
                 delta = abs(snap.risk_score - prev_score)
                 if delta > 10:
-                    significant_risk_changes.append({
-                        "org_id": snap.org_defined_id,
-                        "name": f"{snap.first_name} {snap.last_name}".strip(),
-                        "previous_score": round(prev_score, 1) if prev_score else None,
-                        "current_score": round(snap.risk_score, 1),
-                        "delta": round(delta, 1),
-                    })
+                    significant_risk_changes.append(
+                        {
+                            "org_id": snap.org_defined_id,
+                            "name": f"{snap.first_name} {snap.last_name}".strip(),
+                            "previous_score": (
+                                round(prev_score, 1) if prev_score else None
+                            ),
+                            "current_score": round(snap.risk_score, 1),
+                            "delta": round(delta, 1),
+                        }
+                    )
 
     return {
         "id": run.id,
@@ -416,7 +485,9 @@ def get_ingestion_run_summary(
             significant_risk_changes,
             key=lambda x: x["delta"],
             reverse=True,
-        )[:50],  # Limit to top 50
+        )[
+            :50
+        ],  # Limit to top 50
     }
 
 
@@ -481,13 +552,15 @@ def evaluate_scorer(
         results = []
         for thresh in thresholds:
             metrics = run_evaluation(df, threshold=thresh)
-            results.append({
-                "threshold": thresh,
-                "precision": metrics["precision"],
-                "recall": metrics["recall"],
-                "f1_score": metrics["f1_score"],
-                "specificity": metrics["specificity"],
-            })
+            results.append(
+                {
+                    "threshold": thresh,
+                    "precision": metrics["precision"],
+                    "recall": metrics["recall"],
+                    "f1_score": metrics["f1_score"],
+                    "specificity": metrics["specificity"],
+                }
+            )
 
         return {
             "evaluated_students": len(df),
@@ -517,10 +590,16 @@ def evaluate_scorer(
         }
 
 
-@router.delete("/students/{org_id}/erase", status_code=204,
-               dependencies=[Depends(require_role([Role.ADMIN]))])
-async def erase_student(org_id: str, db: AsyncSession = Depends(deps.get_db_async),
-                        _user: User = Depends(get_current_user_async)):
+@router.delete(
+    "/students/{org_id}/erase",
+    status_code=204,
+    dependencies=[Depends(require_role([Role.ADMIN]))],
+)
+async def erase_student(
+    org_id: str,
+    db: AsyncSession = Depends(deps.get_db_async),
+    _user: User = Depends(get_current_user_async),
+):
     """
     GDPR Art. 17 right to erasure. Hard deletes all data for this student.
     Irreversible. Requires admin role. Logged to audit trail.
@@ -538,7 +617,7 @@ async def erase_student(org_id: str, db: AsyncSession = Depends(deps.get_db_asyn
             "erased_org_id_prefix": org_id[:4] + "…",
             "requested_by": getattr(_user, "username", "unknown"),
             "timestamp": datetime.now(timezone.utc).isoformat(),
-        }
+        },
     )
 
     # Cascade handles: Enrollment, RiskSnapshot, GradedComponent, ExamRecord,
@@ -548,26 +627,41 @@ async def erase_student(org_id: str, db: AsyncSession = Depends(deps.get_db_asyn
     return Response(status_code=204)
 
 
-@router.get("/students/{org_id}/data-export",
-            dependencies=[Depends(require_role([Role.ADMIN]))])
-async def export_student_data(org_id: str, db: AsyncSession = Depends(deps.get_db_async)):
+@router.get(
+    "/students/{org_id}/data-export", dependencies=[Depends(require_role([Role.ADMIN]))]
+)
+async def export_student_data(
+    org_id: str, db: AsyncSession = Depends(deps.get_db_async)
+):
     """GDPR Art. 15 — returns all data held about a student as JSON."""
     result = await db.execute(select(Student).where(Student.org_defined_id == org_id))
     student = result.scalar_one_or_none()
     if not student:
         raise HTTPException(404, "Student not found")
 
-    enrollments_result = await db.execute(select(Enrollment).where(Enrollment.student_org_id == org_id))
+    enrollments_result = await db.execute(
+        select(Enrollment).where(Enrollment.student_org_id == org_id)
+    )
     enrollments = enrollments_result.scalars().all()
-    snapshots_result = await db.execute(select(RiskSnapshot).where(RiskSnapshot.student_id == student.id))
+    snapshots_result = await db.execute(
+        select(RiskSnapshot).where(RiskSnapshot.student_id == student.id)
+    )
     snapshots = snapshots_result.scalars().all()
-    interventions_result = await db.execute(select(InterventionLog).where(InterventionLog.student_org_id == org_id))
+    interventions_result = await db.execute(
+        select(InterventionLog).where(InterventionLog.student_org_id == org_id)
+    )
     interventions = interventions_result.scalars().all()
-    predictions_result = await db.execute(select(Prediction).where(Prediction.student_id == student.id))
+    predictions_result = await db.execute(
+        select(Prediction).where(Prediction.student_id == student.id)
+    )
     predictions = predictions_result.scalars().all()
-    graded_result = await db.execute(select(GradedComponent).where(GradedComponent.student_org_id == org_id))
+    graded_result = await db.execute(
+        select(GradedComponent).where(GradedComponent.student_org_id == org_id)
+    )
     graded = graded_result.scalars().all()
-    exams_result = await db.execute(select(ExamRecord).where(ExamRecord.student_org_id == org_id))
+    exams_result = await db.execute(
+        select(ExamRecord).where(ExamRecord.student_org_id == org_id)
+    )
     exams = exams_result.scalars().all()
 
     def student_to_dict(s):
@@ -583,16 +677,48 @@ async def export_student_data(org_id: str, db: AsyncSession = Depends(deps.get_d
     return {
         "export_generated_at": datetime.now(timezone.utc).isoformat(),
         "student": student_to_dict(student),
-        "enrollments": [{k: v for k, v in e.__dict__.items() if not k.startswith("_")} for e in enrollments],
-        "risk_snapshots": [{"week": s.week_number, "score": s.risk_score,
-                            "timestamp": s.timestamp.isoformat() if s.timestamp else None} for s in snapshots],
-        "interventions": [{"type": i.intervention_type, "week": i.week_number,
-                           "outcome": i.outcome, "recommended_at": i.recommended_at.isoformat() if i.recommended_at else None}
-                          for i in interventions],
-        "predictions": [{"risk_score": p.risk_score, "retention_likelihood": p.retention_likelihood,
-                         "created_at": p.created_at.isoformat() if p.created_at else None} for p in predictions],
-        "graded_components": [{"course": g.course_name, "component": g.component_name,
-                               "score": g.score, "missed": g.missed} for g in graded],
-        "exam_records": [{"course": e.course_code, "present": e.present,
-                          "score_pct": e.score_pct} for e in exams],
+        "enrollments": [
+            {k: v for k, v in e.__dict__.items() if not k.startswith("_")}
+            for e in enrollments
+        ],
+        "risk_snapshots": [
+            {
+                "week": s.week_number,
+                "score": s.risk_score,
+                "timestamp": s.timestamp.isoformat() if s.timestamp else None,
+            }
+            for s in snapshots
+        ],
+        "interventions": [
+            {
+                "type": i.intervention_type,
+                "week": i.week_number,
+                "outcome": i.outcome,
+                "recommended_at": (
+                    i.recommended_at.isoformat() if i.recommended_at else None
+                ),
+            }
+            for i in interventions
+        ],
+        "predictions": [
+            {
+                "risk_score": p.risk_score,
+                "retention_likelihood": p.retention_likelihood,
+                "created_at": p.created_at.isoformat() if p.created_at else None,
+            }
+            for p in predictions
+        ],
+        "graded_components": [
+            {
+                "course": g.course_name,
+                "component": g.component_name,
+                "score": g.score,
+                "missed": g.missed,
+            }
+            for g in graded
+        ],
+        "exam_records": [
+            {"course": e.course_code, "present": e.present, "score_pct": e.score_pct}
+            for e in exams
+        ],
     }

@@ -18,17 +18,17 @@ from typing import Dict, Any, Optional
 from backend.config import (
     INTERVENTION_THRESHOLDS,
     INTERVENTION_COOLDOWN_DAYS,
-    RISK_SPIKE_THRESHOLD
+    RISK_SPIKE_THRESHOLD,
 )
 
 # Configure logger
 logger = logging.getLogger(__name__)
 
 # Extract thresholds from config
-THRESHOLD_NO_ACTION = INTERVENTION_THRESHOLDS['no_action']
-THRESHOLD_GENTLE = INTERVENTION_THRESHOLDS['gentle_reminder']
-THRESHOLD_MENTOR = INTERVENTION_THRESHOLDS['mentor_outreach']
-THRESHOLD_URGENT = INTERVENTION_THRESHOLDS['urgent']
+THRESHOLD_NO_ACTION = INTERVENTION_THRESHOLDS["no_action"]
+THRESHOLD_GENTLE = INTERVENTION_THRESHOLDS["gentle_reminder"]
+THRESHOLD_MENTOR = INTERVENTION_THRESHOLDS["mentor_outreach"]
+THRESHOLD_URGENT = INTERVENTION_THRESHOLDS["urgent"]
 
 
 def _validate_risk_score(risk_score: float) -> float:
@@ -42,7 +42,9 @@ def _validate_risk_score(risk_score: float) -> float:
 
     # Check NaN — use neutral default rather than raising
     if risk_score != risk_score:  # NaN check (NaN != NaN is always True)
-        logger.error("Invalid risk_score in decision engine: nan. Using neutral default 50.0")
+        logger.error(
+            "Invalid risk_score in decision engine: nan. Using neutral default 50.0"
+        )
         return 50.0
 
     # Check Inf — reject with AssertionError
@@ -103,7 +105,10 @@ def _handle_academic_flags(features: Dict[str, Any]) -> Optional[Dict[str, Any]]
         return None
 
     if features.get("suppress_intervention"):
-        return {"type": "none", "reason": "Student formally deferred — enrolled in next trimester"}
+        return {
+            "type": "none",
+            "reason": "Student formally deferred — enrolled in next trimester",
+        }
 
     flags = features.get("academic_flags", {})
 
@@ -297,7 +302,7 @@ def get_intervention_recommendation(
 def should_trigger_intervention(
     current_risk_score: float,
     previous_risk_score: float = None,
-    days_since_last_intervention: int = None
+    days_since_last_intervention: int = None,
 ) -> bool:
     """
     Determine if an intervention should be triggered based on risk score and history.
@@ -326,7 +331,10 @@ def should_trigger_intervention(
 
     # No previous score — respect cooldown, then trigger only if above action threshold
     if previous_risk_score is None:
-        if days_since_last_intervention is not None and days_since_last_intervention < INTERVENTION_COOLDOWN_DAYS:
+        if (
+            days_since_last_intervention is not None
+            and days_since_last_intervention < INTERVENTION_COOLDOWN_DAYS
+        ):
             return False  # In cooldown, no delta to justify bypass
         return current_risk_score >= THRESHOLD_NO_ACTION
 
@@ -338,7 +346,10 @@ def should_trigger_intervention(
         return True
 
     # Respects cooldown for smaller changes
-    if days_since_last_intervention is None or days_since_last_intervention >= INTERVENTION_COOLDOWN_DAYS:
+    if (
+        days_since_last_intervention is None
+        or days_since_last_intervention >= INTERVENTION_COOLDOWN_DAYS
+    ):
         return delta >= 1  # Any increase OK after cooldown expires
 
     return False
@@ -369,7 +380,6 @@ Keep up the great work!
 Best regards,
 Your Learning Support Team
         """.strip(),
-
         "mentor_outreach_email": f"""
 Dear {student_name},
 
@@ -385,7 +395,6 @@ We're committed to your success!
 Best regards,
 Academic Support Team
         """.strip(),
-
         "urgent_intervention_package": f"""
 Dear {student_name},
 
@@ -401,16 +410,14 @@ A member of our student success team will contact you via phone and WhatsApp wit
 We're here to help you succeed!
 
 Student Success Team
-        """.strip()
+        """.strip(),
     }
 
     return templates.get(template_name, "")
 
 
 def calculate_intervention_priority(
-    risk_score: float,
-    engagement_trend: float = None,
-    days_inactive: int = None
+    risk_score: float, engagement_trend: float = None, days_inactive: int = None
 ) -> str:
     """
     Calculate priority level for intervention queue

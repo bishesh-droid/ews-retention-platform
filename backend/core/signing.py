@@ -37,8 +37,7 @@ def verify_signed_request(
 
     # 2. Verify the key hash matches stored hash (constant-time comparison)
     if not hmac.compare_digest(
-        api_key_hash_from_header.encode(),
-        INTEGRATION_API_KEY_HASH.encode()
+        api_key_hash_from_header.encode(), INTEGRATION_API_KEY_HASH.encode()
     ):
         return False
 

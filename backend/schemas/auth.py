@@ -26,6 +26,7 @@ class UserCreate(UserBase):
     assigns the "student" role.  Accepting a role from an untrusted
     client would allow anyone to self-elevate to admin/faculty.
     """
+
     username: str
     email: EmailStr
     password: str
@@ -40,12 +41,14 @@ class UserUpdate(UserBase):
     self-service call.  Allowing self-role-update is a privilege
     escalation vulnerability.
     """
+
     password: Optional[str] = None
     model_config = ConfigDict(extra="forbid")
 
 
 class AdminUserUpdate(BaseModel):
     """Fields that only an admin may change on any user account."""
+
     role: Optional[str] = None
     is_active: Optional[bool] = None
     is_superuser: Optional[bool] = None

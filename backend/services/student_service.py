@@ -24,7 +24,9 @@ class StudentService:
 
     @staticmethod
     def _get_enrollment_dicts(db: Session, student_id: str) -> List[Dict]:
-        return StudentRepository.fetch_enrollments_map(db, [student_id]).get(student_id, [])
+        return StudentRepository.fetch_enrollments_map(db, [student_id]).get(
+            student_id, []
+        )
 
     @staticmethod
     def _get_graded_components(db: Session, student_id: str) -> List[Dict]:
@@ -35,7 +37,9 @@ class StudentService:
         return StudentRepository.fetch_exam_map(db, [student_id]).get(student_id, [])
 
     @staticmethod
-    def _fetch_enrollments_map(db: Session, student_ids: List[str]) -> Dict[str, List[Dict]]:
+    def _fetch_enrollments_map(
+        db: Session, student_ids: List[str]
+    ) -> Dict[str, List[Dict]]:
         return StudentRepository.fetch_enrollments_map(db, student_ids)
 
     @staticmethod
@@ -47,12 +51,20 @@ class StudentService:
         return StudentRepository.fetch_exam_map(db, student_ids)
 
     @staticmethod
-    def calculate_student_metrics(student, enrollment_dicts: List[Dict], graded_dicts=None, exam_dicts=None) -> Dict:
-        return StudentApplicationService.calculate_student_metrics(student, enrollment_dicts, graded_dicts, exam_dicts)
+    def calculate_student_metrics(
+        student, enrollment_dicts: List[Dict], graded_dicts=None, exam_dicts=None
+    ) -> Dict:
+        return StudentApplicationService.calculate_student_metrics(
+            student, enrollment_dicts, graded_dicts, exam_dicts
+        )
 
     @staticmethod
-    def get_student_by_id(db: Session, student_id: str, current_user=None) -> Optional[Dict]:
-        return StudentApplicationService.get_student_by_id(db, student_id, current_user=current_user)
+    def get_student_by_id(
+        db: Session, student_id: str, current_user=None
+    ) -> Optional[Dict]:
+        return StudentApplicationService.get_student_by_id(
+            db, student_id, current_user=current_user
+        )
 
     @staticmethod
     def get_all_students(
@@ -88,7 +100,9 @@ class StudentService:
         )
 
     @staticmethod
-    def get_latest_risk_scores_for_students(db: Session, student_ids: List[str]) -> Dict[str, float]:
+    def get_latest_risk_scores_for_students(
+        db: Session, student_ids: List[str]
+    ) -> Dict[str, float]:
         return StudentRepository.get_latest_risk_scores_for_students(db, student_ids)
 
     @staticmethod

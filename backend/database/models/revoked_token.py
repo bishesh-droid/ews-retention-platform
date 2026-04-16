@@ -27,12 +27,14 @@ class RevokedToken(Base):
 
     id = Column(Integer, primary_key=True, autoincrement=True)
     jti = Column(String(36), unique=True, index=True, nullable=False)
-    user_id = Column(Integer, ForeignKey("users.id", ondelete="CASCADE"), nullable=False)
+    user_id = Column(
+        Integer, ForeignKey("users.id", ondelete="CASCADE"), nullable=False
+    )
     revoked_at = Column(DateTime, server_default=func.now(), nullable=False)
     expires_at = Column(DateTime, nullable=False)
 
     # Additional index for efficient cleanup queries
     __table_args__ = (
-        Index('ix_revoked_tokens_expires_at', 'expires_at'),
-        Index('ix_revoked_tokens_user_id', 'user_id'),
+        Index("ix_revoked_tokens_expires_at", "expires_at"),
+        Index("ix_revoked_tokens_user_id", "user_id"),
     )

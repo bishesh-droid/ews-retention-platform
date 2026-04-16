@@ -36,6 +36,7 @@ class StudentRiskProfileData(BaseModel):
 
     DB-5: risk_score is ALWAYS on a 0-100 scale (not 0-1).
     """
+
     student_id: str
     student_name: str
     risk_score: float
@@ -49,17 +50,18 @@ class StudentRiskProfileData(BaseModel):
     exported_at: str
     api_version: str
 
-    @field_validator('risk_score')
+    @field_validator("risk_score")
     @classmethod
     def validate_risk_score(cls, v: float) -> float:
         """Validate risk_score is within 0-100 scale."""
         if not (0.0 <= v <= 100.0):
-            raise ValueError(f'risk_score must be between 0 and 100, got {v}')
+            raise ValueError(f"risk_score must be between 0 and 100, got {v}")
         return v
 
 
 class CohortRiskProfilesData(BaseModel):
     """Integration API inner data schema for cohort risk profiles list."""
+
     profiles: List[StudentRiskProfileData]
     total_in_system: int
     returned: int
@@ -72,15 +74,18 @@ class CohortRiskProfilesData(BaseModel):
 # API Response envelope types (wrappers for consistent response shape)
 class StudentRiskProfileResponse(APIResponse):
     """Standard envelope for single student risk profile."""
+
     data: StudentRiskProfileData
 
 
 class CohortRiskProfilesResponse(APIResponse):
     """Standard envelope for cohort risk profiles."""
+
     data: CohortRiskProfilesData
 
 
 # ─── Authentication ─────────────────────────────────────────────────────────
+
 
 async def verify_integration_key(
     request: Request,
@@ -97,7 +102,7 @@ async def verify_integration_key(
     if not INTEGRATION_API_KEY_HASH:
         raise HTTPException(
             status_code=503,
-            detail="Integration API is not configured. Set INTEGRATION_API_KEY_HASH env var."
+            detail="Integration API is not configured. Set INTEGRATION_API_KEY_HASH env var.",
         )
 
     # Verify key hash matches (constant-time comparison)
@@ -116,6 +121,7 @@ async def verify_integration_key(
 
 
 # ─── Helpers ─────────────────────────────────────────────────────────────────
+
 
 def _build_risk_profile(db: Session, student: Student) -> StudentRiskProfileData:
     """Build a complete risk profile conforming to the integration contract.
@@ -136,19 +142,33 @@ def _build_risk_profile(db: Session, student: Student) -> StudentRiskProfileData
 
     # Build signal breakdowns
     academic_signals = {
-        "content_completion_score": round(float(student_data.get("content_completion_score", 0)), 2),
+        "content_completion_score": round(
+            float(student_data.get("content_completion_score", 0)), 2
+        ),
         "graded_quiz_score": round(float(student_data.get("graded_quiz_score", 0)), 2),
-        "graded_assignment_score": round(float(student_data.get("graded_assignment_score", 0)), 2),
+        "graded_assignment_score": round(
+            float(student_data.get("graded_assignment_score", 0)), 2
+        ),
         "exam_score": round(float(student_data.get("exam_score", 0)), 2),
-        "exam_attendance_rate": round(float(student_data.get("exam_attendance_rate", 0)), 2),
+        "exam_attendance_rate": round(
+            float(student_data.get("exam_attendance_rate", 0)), 2
+        ),
     }
 
     engagement_signals = {
-        "quiz_engagement_score": round(float(student_data.get("quiz_engagement_score", 0)), 2),
-        "discussion_engagement_score": round(float(student_data.get("discussion_engagement_score", 0)), 2),
+        "quiz_engagement_score": round(
+            float(student_data.get("quiz_engagement_score", 0)), 2
+        ),
+        "discussion_engagement_score": round(
+            float(student_data.get("discussion_engagement_score", 0)), 2
+        ),
         "assignment_score": round(float(student_data.get("assignment_score", 0)), 2),
-        "login_consistency_score": round(float(student_data.get("login_consistency_score", 0)), 2),
-        "time_investment_score": round(float(student_data.get("time_investment_score", 0)), 2),
+        "login_consistency_score": round(
+            float(student_data.get("login_consistency_score", 0)), 2
+        ),
+        "time_investment_score": round(
+            float(student_data.get("time_investment_score", 0)), 2
+        ),
     }
 
     # Consistency signals
@@ -164,7 +184,8 @@ def _build_risk_profile(db: Session, student: Student) -> StudentRiskProfileData
 
     profile = StudentRiskProfileData(
         student_id=student.id,
-        student_name=f"{student.first_name or ''} {student.last_name or ''}".strip() or student.id,
+        student_name=f"{student.first_name or ''} {student.last_name or ''}".strip()
+        or student.id,
         risk_score=round(risk_score, 2),
         risk_level=risk_level,
         academic_signals=academic_signals,
@@ -240,19 +261,33 @@ def _build_risk_profile_from_cached_data(
 
     # Build signal breakdowns from features
     academic_signals = {
-        "content_completion_score": round(float(features.get("content_completion_score") or 0), 2),
+        "content_completion_score": round(
+            float(features.get("content_completion_score") or 0), 2
+        ),
         "graded_quiz_score": round(float(features.get("graded_quiz_score") or 0), 2),
-        "graded_assignment_score": round(float(features.get("graded_assignment_score") or 0), 2),
+        "graded_assignment_score": round(
+            float(features.get("graded_assignment_score") or 0), 2
+        ),
         "exam_score": round(float(features.get("exam_score") or 0), 2),
-        "exam_attendance_rate": round(float(features.get("exam_attendance_rate") or 0), 2),
+        "exam_attendance_rate": round(
+            float(features.get("exam_attendance_rate") or 0), 2
+        ),
     }
 
     engagement_signals = {
-        "quiz_engagement_score": round(float(features.get("quiz_engagement_score") or 0), 2),
-        "discussion_engagement_score": round(float(features.get("discussion_engagement_score") or 0), 2),
+        "quiz_engagement_score": round(
+            float(features.get("quiz_engagement_score") or 0), 2
+        ),
+        "discussion_engagement_score": round(
+            float(features.get("discussion_engagement_score") or 0), 2
+        ),
         "assignment_score": round(float(features.get("assignment_score") or 0), 2),
-        "login_consistency_score": round(float(features.get("login_consistency_score") or 0), 2),
-        "time_investment_score": round(float(features.get("time_investment_score") or 0), 2),
+        "login_consistency_score": round(
+            float(features.get("login_consistency_score") or 0), 2
+        ),
+        "time_investment_score": round(
+            float(features.get("time_investment_score") or 0), 2
+        ),
     }
 
     # Consistency signals
@@ -268,7 +303,8 @@ def _build_risk_profile_from_cached_data(
 
     profile = StudentRiskProfileData(
         student_id=student.id,
-        student_name=f"{student.first_name or ''} {student.last_name or ''}".strip() or student.id,
+        student_name=f"{student.first_name or ''} {student.last_name or ''}".strip()
+        or student.id,
         risk_score=round(risk_score, 2),
         risk_level=risk_level,
         academic_signals=academic_signals,
@@ -286,7 +322,10 @@ def _build_risk_profile_from_cached_data(
 
 # ─── Endpoints ───────────────────────────────────────────────────────────────
 
-@router.get("/student-risk-profile/{student_id}", response_model=StudentRiskProfileResponse)
+
+@router.get(
+    "/student-risk-profile/{student_id}", response_model=StudentRiskProfileResponse
+)
 @limiter.limit("60/minute")
 def get_student_risk_profile(
     request: Request,
@@ -336,13 +375,10 @@ def get_cohort_risk_profiles(
     """
     # OPTIMIZATION A: Eager loading with selectinload prevents N+1 queries
     # Instead of lazy loading causing 1 + 3N queries, we use 4 queries total
-    query = (
-        db.query(Student)
-        .options(
-            selectinload(Student.enrollments),
-            selectinload(Student.graded_components),
-            selectinload(Student.exam_records),
-        )
+    query = db.query(Student).options(
+        selectinload(Student.enrollments),
+        selectinload(Student.graded_components),
+        selectinload(Student.exam_records),
     )
     students = query.offset(skip).limit(limit).all()
 

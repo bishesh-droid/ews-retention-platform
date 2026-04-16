@@ -21,7 +21,7 @@ class HallucinationPrevention:
         self,
         llm_response: str,
         allowed_data_sources: Dict[str, Any],
-        confidence_threshold: float = 0.7
+        confidence_threshold: float = 0.7,
     ) -> Dict[str, Any]:
         """
         Validate LLM response against allowed data sources.
@@ -38,7 +38,7 @@ class HallucinationPrevention:
             "is_valid": True,
             "confidence": 1.0,
             "issues": [],
-            "warnings": []
+            "warnings": [],
         }
 
         # Check 1: Verify no fabricated student IDs
@@ -55,15 +55,19 @@ class HallucinationPrevention:
 
         # Check 2: Verify numerical claims
         numbers_in_response = self._extract_numbers(llm_response)
-        if not self._verify_numbers_plausible(numbers_in_response, allowed_data_sources):
+        if not self._verify_numbers_plausible(
+            numbers_in_response, allowed_data_sources
+        ):
             validation_result["confidence"] *= 0.7
             validation_result["warnings"].append(
                 "Response contains numerical values that may not align with source data"
             )
 
         # Check 3: Check for hedge words that indicate uncertainty
-        uncertainty_indicators = ['might', 'could', 'possibly', 'perhaps', 'maybe']
-        hedge_count = sum(1 for word in uncertainty_indicators if word in llm_response.lower())
+        uncertainty_indicators = ["might", "could", "possibly", "perhaps", "maybe"]
+        hedge_count = sum(
+            1 for word in uncertainty_indicators if word in llm_response.lower()
+        )
 
         if hedge_count > 2:
             validation_result["confidence"] *= 0.75
@@ -76,7 +80,7 @@ class HallucinationPrevention:
             "based on future predictions",
             "in next semester",
             "will definitely",
-            "guaranteed to"
+            "guaranteed to",
         ]
 
         for phrase in unavailable_phrases:
@@ -95,7 +99,7 @@ class HallucinationPrevention:
     def _extract_student_ids(self, text: str) -> Set[str]:
         """Extract potential student IDs from text."""
         # Look for patterns like "student 1234" or "ID: 1234"
-        pattern = r'(?:student|id)[:\s]+(\d{3,6})'
+        pattern = r"(?:student|id)[:\s]+(\d{3,6})"
         matches = re.findall(pattern, text.lower())
         return set(matches)
 
@@ -104,35 +108,33 @@ class HallucinationPrevention:
         allowed_ids = set()
 
         # Extract from various data source structures
-        if 'student_data' in data_sources:
-            if isinstance(data_sources['student_data'], dict):
-                if 'id' in data_sources['student_data']:
-                    allowed_ids.add(str(data_sources['student_data']['id']))
-            elif isinstance(data_sources['student_data'], list):
-                for student in data_sources['student_data']:
-                    if 'id' in student:
-                        allowed_ids.add(str(student['id']))
+        if "student_data" in data_sources:
+            if isinstance(data_sources["student_data"], dict):
+                if "id" in data_sources["student_data"]:
+                    allowed_ids.add(str(data_sources["student_data"]["id"]))
+            elif isinstance(data_sources["student_data"], list):
+                for student in data_sources["student_data"]:
+                    if "id" in student:
+                        allowed_ids.add(str(student["id"]))
 
-        if 'students' in data_sources:
-            for student in data_sources.get('students', []):
-                if 'id' in student:
-                    allowed_ids.add(str(student['id']))
+        if "students" in data_sources:
+            for student in data_sources.get("students", []):
+                if "id" in student:
+                    allowed_ids.add(str(student["id"]))
 
         return allowed_ids
 
     def _extract_numbers(self, text: str) -> List[float]:
         """Extract numerical values from text."""
         # Find numbers (including percentages and decimals)
-        pattern = r'\b\d+\.?\d*%?\b'
+        pattern = r"\b\d+\.?\d*%?\b"
         numbers = re.findall(pattern, text)
 
         # Convert to float, removing % if present
-        return [float(n.replace('%', '')) for n in numbers]
+        return [float(n.replace("%", "")) for n in numbers]
 
     def _verify_numbers_plausible(
-        self,
-        numbers: List[float],
-        data_sources: Dict[str, Any]
+        self, numbers: List[float], data_sources: Dict[str, Any]
     ) -> bool:
         """
         Check if numbers in response are plausible given source data.
@@ -189,7 +191,7 @@ class ContentFilter:
         "you're going to fail",
         "hopeless",
         "worthless",
-        "stupid"
+        "stupid",
     ]
 
     # Sensitive topics that need careful handling (topic -> category mapping)
@@ -198,7 +200,7 @@ class ContentFilter:
         "depression": "mental health",
         "anxiety": "mental health",
         "suicide": "mental health",
-        "self-harm": "mental health"
+        "self-harm": "mental health",
     }
 
     @staticmethod
@@ -213,7 +215,7 @@ class ContentFilter:
             "is_appropriate": True,
             "issues": [],
             "needs_escalation": False,
-            "filtered_response": response
+            "filtered_response": response,
         }
 
         response_lower = response.lower()
@@ -254,7 +256,7 @@ class ContentFilter:
             ),
             "medical": (
                 "\n\n🏥 This is not medical advice. Please consult healthcare professionals."
-            )
+            ),
         }
 
         disclaimer = disclaimers.get(topic, "")
@@ -269,9 +271,9 @@ class ConfidenceScorer:
     @staticmethod
     def calculate_confidence(
         data_completeness: float,  # 0-1
-        data_recency: float,        # 0-1 (how recent is the data)
-        sample_size: int,           # Number of data points
-        llm_uncertainty: float = 0.0  # Any uncertainty expressed by LLM itself
+        data_recency: float,  # 0-1 (how recent is the data)
+        sample_size: int,  # Number of data points
+        llm_uncertainty: float = 0.0,  # Any uncertainty expressed by LLM itself
     ) -> Dict[str, Any]:
         """
         Calculate overall confidence score.
@@ -281,9 +283,9 @@ class ConfidenceScorer:
         """
         # Weighted combination
         base_score = (
-            data_completeness * 0.4 +
-            data_recency * 0.3 +
-            min(sample_size / 100, 1.0) * 0.3
+            data_completeness * 0.4
+            + data_recency * 0.3
+            + min(sample_size / 100, 1.0) * 0.3
         )
 
         # Penalize for LLM-expressed uncertainty
@@ -307,6 +309,6 @@ class ConfidenceScorer:
             "factors": {
                 "data_completeness": data_completeness,
                 "data_recency": data_recency,
-                "sample_size": sample_size
-            }
+                "sample_size": sample_size,
+            },
         }

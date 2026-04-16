@@ -8,17 +8,30 @@ from backend.schemas.common import PredictionResult, MessageResponse, ErrorRespo
 from backend.schemas.student import Student, StudentCreate, StudentBase
 from backend.schemas.prediction import Prediction, PredictionCreate, PredictionBase
 from backend.schemas.intervention import (
-    Intervention, InterventionCreate, InterventionBase,
-    Recommendation, RecommendationCreate, RecommendationBase
+    Intervention,
+    InterventionCreate,
+    InterventionBase,
+    Recommendation,
+    RecommendationCreate,
+    RecommendationBase,
 )
 from backend.schemas.llm import (
-    PatternDiscovery, PatternDiscoveryCreate, PatternDiscoveryBase,
-    LLMQueryBase, LLMInsightBase
+    PatternDiscovery,
+    PatternDiscoveryCreate,
+    PatternDiscoveryBase,
+    LLMQueryBase,
+    LLMInsightBase,
 )
 from backend.schemas.event import (
-    RawEvent, RawEventCreate, RawEventBase,
-    EngineeredFeatures, EngineeredFeaturesCreate, EngineeredFeaturesBase,
-    StudentResponse, StudentResponseCreate, StudentResponseBase
+    RawEvent,
+    RawEventCreate,
+    RawEventBase,
+    EngineeredFeatures,
+    EngineeredFeaturesCreate,
+    EngineeredFeaturesBase,
+    StudentResponse,
+    StudentResponseCreate,
+    StudentResponseBase,
 )
 
 __all__ = [

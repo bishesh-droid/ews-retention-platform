@@ -55,18 +55,21 @@ def get_student_interventions(
         if user_dept and target_student.parent_department_name != user_dept:
             raise HTTPException(
                 status_code=403,
-                detail="Access denied — student is not in your department"
+                detail="Access denied — student is not in your department",
             )
 
     interventions = StudentService.get_interventions_by_student_id(db, student_id)
     if not interventions:
-        raise HTTPException(status_code=404, detail=f"No interventions found for student '{student_id}'")
+        raise HTTPException(
+            status_code=404, detail=f"No interventions found for student '{student_id}'"
+        )
     return interventions
 
 
 # =============================================================================
 # Intervention Log Endpoints
 # =============================================================================
+
 
 @router.get("/students/{org_id}/intervention-logs")
 def get_student_intervention_logs(
@@ -89,7 +92,9 @@ def get_student_intervention_logs(
         {
             "id": log.id,
             "student_org_id": log.student_org_id,
-            "recommended_at": log.recommended_at.isoformat() if log.recommended_at else None,
+            "recommended_at": (
+                log.recommended_at.isoformat() if log.recommended_at else None
+            ),
             "intervention_type": log.intervention_type,
             "engagement_pattern": log.engagement_pattern,
             "risk_score_at_recommendation": log.risk_score_at_recommendation,
@@ -213,11 +218,9 @@ def get_pending_interventions(
         dept = getattr(_user, "department", None)
         if dept:
             # Join to Student to filter by department
-            query = (
-                query
-                .join(Student, Student.org_defined_id == InterventionLog.student_org_id)
-                .filter(Student.parent_department_name == dept)
-            )
+            query = query.join(
+                Student, Student.org_defined_id == InterventionLog.student_org_id
+            ).filter(Student.parent_department_name == dept)
 
     if semester:
         query = query.filter(InterventionLog.semester_name == semester)
@@ -227,7 +230,9 @@ def get_pending_interventions(
         query = query.filter(InterventionLog.intervention_type == type)
 
     # Join with Student to get name and support program filter
-    query = query.join(Student, InterventionLog.student_org_id == Student.org_defined_id)
+    query = query.join(
+        Student, InterventionLog.student_org_id == Student.org_defined_id
+    )
 
     if program:
         query = query.filter(Student.parent_department_name.ilike(f"%{program}%"))
@@ -236,25 +241,35 @@ def get_pending_interventions(
 
     # Batch lookup students to avoid N+1 and missing relationship issues
     student_org_ids = [log.student_org_id for log in logs]
-    student_map = {
-        s.org_defined_id: s
-        for s in db.query(Student)
-        .filter(Student.org_defined_id.in_(student_org_ids))
-        .all()
-    } if student_org_ids else {}
+    student_map = (
+        {
+            s.org_defined_id: s
+            for s in db.query(Student)
+            .filter(Student.org_defined_id.in_(student_org_ids))
+            .all()
+        }
+        if student_org_ids
+        else {}
+    )
 
     return [
         {
             "log_id": log.id,
             "student_org_id": log.student_org_id,
             "student_name": (
-                f"{student_map[log.student_org_id].first_name} "
-                f"{student_map[log.student_org_id].last_name}"
-            ).strip() if log.student_org_id in student_map else "Unknown",
+                (
+                    f"{student_map[log.student_org_id].first_name} "
+                    f"{student_map[log.student_org_id].last_name}"
+                ).strip()
+                if log.student_org_id in student_map
+                else "Unknown"
+            ),
             "risk_score": log.risk_score_at_recommendation,
             "intervention_type": log.intervention_type,
             "engagement_pattern": log.engagement_pattern,
-            "recommended_at": log.recommended_at.isoformat() if log.recommended_at else None,
+            "recommended_at": (
+                log.recommended_at.isoformat() if log.recommended_at else None
+            ),
             "week_number": log.week_number,
         }
         for log in logs
@@ -350,7 +365,9 @@ def get_student_detail(
     current_user: User = Depends(require_role(_STAFF_ROLES)),
 ):
     """Get detailed engagement information for a single student. Staff only."""
-    student = StudentService.get_student_by_id(db, student_id, current_user=current_user)
+    student = StudentService.get_student_by_id(
+        db, student_id, current_user=current_user
+    )
     if not student:
         raise HTTPException(status_code=404, detail=f"Student '{student_id}' not found")
 
@@ -376,7 +393,9 @@ def get_student_weekly_summary(
     current_user: User = Depends(require_role(_STAFF_ROLES)),
 ):
     """Get a lightweight weekly-style summary for the student portal. Staff only."""
-    student = StudentService.get_student_by_id(db, student_id, current_user=current_user)
+    student = StudentService.get_student_by_id(
+        db, student_id, current_user=current_user
+    )
     if not student:
         raise HTTPException(status_code=404, detail=f"Student '{student_id}' not found")
 
@@ -402,7 +421,11 @@ def get_student_weekly_summary(
         .limit(2)
         .all()
     )
-    if len(preds) == 2 and preds[0].engagement_score is not None and preds[1].engagement_score is not None:
+    if (
+        len(preds) == 2
+        and preds[0].engagement_score is not None
+        and preds[1].engagement_score is not None
+    ):
         cur = float(preds[0].engagement_score)
         prev = float(preds[1].engagement_score)
         if cur <= 1.0 and prev <= 1.0:
@@ -461,12 +484,14 @@ def get_student_risk_trend(
         risk_val = float(raw_risk)
         if risk_val <= 1.0:
             risk_val *= 100.0
-        points.append({
-            "timestamp": ts,
-            "risk_score": round(max(0.0, min(100.0, risk_val)), 2),
-            "week_number": p.week_number,
-            "semester": p.semester_name,
-        })
+        points.append(
+            {
+                "timestamp": ts,
+                "risk_score": round(max(0.0, min(100.0, risk_val)), 2),
+                "week_number": p.week_number,
+                "semester": p.semester_name,
+            }
+        )
 
     return {"student_id": student_id, "points": points}
 
@@ -479,8 +504,14 @@ def get_at_risk_students(
     _user: User = Depends(require_role(_STAFF_ROLES)),
 ):
     """Get students above a risk threshold. Staff only."""
-    students = StudentService.get_all_students(db, 0, limit, "risk_score", "desc", risk_min=threshold)
-    return {"at_risk_students": students, "count": len(students), "threshold": threshold}
+    students = StudentService.get_all_students(
+        db, 0, limit, "risk_score", "desc", risk_min=threshold
+    )
+    return {
+        "at_risk_students": students,
+        "count": len(students),
+        "threshold": threshold,
+    }
 
 
 @router.get("/risk-distribution")
@@ -579,7 +610,11 @@ def get_cohort_engagement_trends(
         buckets.setdefault(key, []).append(eng)
 
     labels = sorted(buckets.keys())
-    values = [round(sum(buckets[lbl]) / len(buckets[lbl]), 2) for lbl in labels] if labels else []
+    values = (
+        [round(sum(buckets[lbl]) / len(buckets[lbl]), 2) for lbl in labels]
+        if labels
+        else []
+    )
     return {"labels": labels, "values": values, "points": len(snaps)}
 
 
@@ -615,7 +650,11 @@ def get_cohort_performance_trends(
         buckets.setdefault(key, []).append(val)
 
     labels = sorted(buckets.keys())
-    values = [round(sum(buckets[lbl]) / len(buckets[lbl]), 3) for lbl in labels] if labels else []
+    values = (
+        [round(sum(buckets[lbl]) / len(buckets[lbl]), 3) for lbl in labels]
+        if labels
+        else []
+    )
     return {"labels": labels, "values": values, "points": len(preds)}
 
 
@@ -663,7 +702,9 @@ def get_intervention_effectiveness(
 
     avg_before = round(sum(before_vals) / len(before_vals), 2) if before_vals else None
     avg_after = round(sum(after_vals) / len(after_vals), 2) if after_vals else None
-    avg_improve = round(sum(improvements) / len(improvements), 2) if improvements else None
+    avg_improve = (
+        round(sum(improvements) / len(improvements), 2) if improvements else None
+    )
 
     return {
         "window_weeks": weeks,

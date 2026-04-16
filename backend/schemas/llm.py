@@ -11,6 +11,7 @@ from typing import Optional
 
 class PatternDiscoveryBase(BaseModel):
     """Base pattern discovery schema."""
+
     pattern_type: str
     title: str
     description: str
@@ -28,6 +29,7 @@ class PatternDiscoveryCreate(PatternDiscoveryBase):
 
 class PatternDiscovery(PatternDiscoveryBase):
     """Full pattern discovery schema."""
+
     id: int
     discovered_at: date
     acknowledged: int
@@ -39,6 +41,7 @@ class PatternDiscovery(PatternDiscoveryBase):
 # Future LLM schemas can be added here
 class LLMQueryBase(BaseModel):
     """Base LLM query schema."""
+
     user_id: str
     user_role: str
     query_type: str
@@ -50,6 +53,7 @@ class LLMQueryBase(BaseModel):
 
 class LLMInsightBase(BaseModel):
     """Base LLM insight schema."""
+
     insight_type: str
     title: str
     content: str

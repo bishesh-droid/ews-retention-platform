@@ -24,7 +24,10 @@ router = APIRouter(prefix="/monitoring", tags=["monitoring"])
 
 @router.get("/health")
 async def health_check(db: AsyncSession = Depends(get_db_async)):
-    health: Dict[str, Any] = {"status": "healthy", "timestamp": datetime.now(timezone.utc).isoformat()}
+    health: Dict[str, Any] = {
+        "status": "healthy",
+        "timestamp": datetime.now(timezone.utc).isoformat(),
+    }
 
     # Check DB connectivity
     try:
@@ -35,9 +38,7 @@ async def health_check(db: AsyncSession = Depends(get_db_async)):
         health["status"] = "unhealthy"
 
     # Check ingestion staleness
-    result = await db.execute(
-        select(IngestionRun).order_by(IngestionRun.run_at.desc())
-    )
+    result = await db.execute(select(IngestionRun).order_by(IngestionRun.run_at.desc()))
     latest_run = result.scalar_one_or_none()
     if latest_run is None:
         health["last_ingestion"] = "never"
@@ -50,7 +51,9 @@ async def health_check(db: AsyncSession = Depends(get_db_async)):
         health["last_ingestion_status"] = latest_run.status or ""
         if latest_run.status != "success" or age_hours > 48:
             health["ingestion_status"] = "stale"
-            health["status"] = "degraded"  # not unhealthy — server is up, just data is old
+            health["status"] = (
+                "degraded"  # not unhealthy — server is up, just data is old
+            )
         else:
             health["ingestion_status"] = "ok"
 

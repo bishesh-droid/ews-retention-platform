@@ -1,6 +1,7 @@
 """
 Type coercion utilities for normalizing raw data
 """
+
 import pandas as pd
 from datetime import datetime
 from typing import Optional
@@ -27,7 +28,7 @@ class TypeCoercer:
 
         try:
             # Handle "90%", "90 %", etc.
-            str_val = str(value).strip().replace('%', '').strip()
+            str_val = str(value).strip().replace("%", "").strip()
             float_val = float(str_val)
 
             # If 0-1 range, convert to 0-100
@@ -81,5 +82,5 @@ class TypeCoercer:
         if isinstance(value, bool):
             return value
         if isinstance(value, str):
-            return value.lower() in ['true', 'yes', '1', 't', 'y']
+            return value.lower() in ["true", "yes", "1", "t", "y"]
         return bool(value)

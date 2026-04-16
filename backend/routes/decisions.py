@@ -68,9 +68,12 @@ def get_recommended_intervention(student_id: str, db: Session = Depends(get_db))
     recommendation = _get_recommendation(risk_score)
 
     # Get last intervention
-    last_intervention = db.query(Intervention).filter(
-        Intervention.student_id == student_id
-    ).order_by(Intervention.date.desc()).first()
+    last_intervention = (
+        db.query(Intervention)
+        .filter(Intervention.student_id == student_id)
+        .order_by(Intervention.date.desc())
+        .first()
+    )
 
     days_since_last = None
     if last_intervention and last_intervention.date:
@@ -90,7 +93,8 @@ def get_recommended_intervention(student_id: str, db: Session = Depends(get_db))
         "current_risk_score": risk_score,
         "risk_score_percent": round(risk_score, 1),
         "threshold_category": recommendation["threshold_category"],
-        "should_trigger": risk_score >= 40 and (days_since_last is None or days_since_last >= 7),
+        "should_trigger": risk_score >= 40
+        and (days_since_last is None or days_since_last >= 7),
         "days_since_last_intervention": days_since_last,
         "priority": priority,
         "recommended_action": recommendation,
@@ -109,10 +113,12 @@ def get_pending_interventions(
     priority: str = None,
     assigned_team: str = None,
     limit: int = 50,
-    db: Session = Depends(get_db)
+    db: Session = Depends(get_db),
 ):
     """Get list of students who need interventions."""
-    students = StudentService.get_all_students(db, 0, 500, "risk_score", "desc", risk_min=40.0)
+    students = StudentService.get_all_students(
+        db, 0, 500, "risk_score", "desc", risk_min=40.0
+    )
 
     pending = []
     for s in students:
@@ -121,23 +127,29 @@ def get_pending_interventions(
         if recommendation["threshold_category"] == "low_risk":
             continue
 
-        priority_level = "critical" if s["risk_score"] >= 80 else "high" if s["risk_score"] >= 60 else "medium"
+        priority_level = (
+            "critical"
+            if s["risk_score"] >= 80
+            else "high" if s["risk_score"] >= 60 else "medium"
+        )
 
         if priority and priority_level != priority:
             continue
         if assigned_team and recommendation["assigned_team"] != assigned_team:
             continue
 
-        pending.append({
-            "student_id": s["id"],
-            "risk_score": s["risk_score"],
-            "risk_score_percent": round(s["risk_score"], 1),
-            "threshold_category": recommendation["threshold_category"],
-            "assigned_team": recommendation["assigned_team"],
-            "priority": priority_level,
-            "days_since_last_intervention": None,
-            "recommended_channels": recommendation["channels"],
-        })
+        pending.append(
+            {
+                "student_id": s["id"],
+                "risk_score": s["risk_score"],
+                "risk_score_percent": round(s["risk_score"], 1),
+                "threshold_category": recommendation["threshold_category"],
+                "assigned_team": recommendation["assigned_team"],
+                "priority": priority_level,
+                "days_since_last_intervention": None,
+                "recommended_channels": recommendation["channels"],
+            }
+        )
 
     return {
         "total_pending": len(pending),

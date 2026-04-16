@@ -11,6 +11,7 @@ from ..connection import Base
 
 class IngestionRun(Base):
     """Audit log for data ingestion runs with detailed statistics."""
+
     __tablename__ = "ingestion_runs"
 
     id = Column(Integer, primary_key=True)
@@ -25,4 +26,6 @@ class IngestionRun(Base):
     risk_scores_updated = Column(Integer, default=0)
     errors = Column(JSON, default=list)  # [{"file": str, "error": str}]
     duration_seconds = Column(Float, nullable=True)
-    status = Column(String(32), default="running")  # "running"|"success"|"partial"|"failed"
+    status = Column(
+        String(32), default="running"
+    )  # "running"|"success"|"partial"|"failed"

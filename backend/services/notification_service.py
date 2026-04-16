@@ -144,9 +144,13 @@ class NotificationService:
             "event": "risk_threshold_crossed",
             "student_id": student_id,
             "risk_score": round(risk_score, 2),
-            "previous_score": round(previous_score, 2) if previous_score is not None else None,
+            "previous_score": (
+                round(previous_score, 2) if previous_score is not None else None
+            ),
             "category": category,  # "high" or "critical"
-            "threshold_crossed": HIGH_RISK_THRESHOLD if category == "high" else CRITICAL_RISK_THRESHOLD,
+            "threshold_crossed": (
+                HIGH_RISK_THRESHOLD if category == "high" else CRITICAL_RISK_THRESHOLD
+            ),
             "timestamp": now.isoformat(),
             "faculty": faculty_name,
         }
@@ -167,7 +171,9 @@ class NotificationService:
         import os
 
         api_key = os.getenv("SENDGRID_API_KEY")
-        email_endpoint = os.getenv("EMAIL_ENDPOINT", "https://api.sendgrid.com/v3/mail/send")
+        email_endpoint = os.getenv(
+            "EMAIL_ENDPOINT", "https://api.sendgrid.com/v3/mail/send"
+        )
         from_email = os.getenv("NOTIFICATION_FROM_EMAIL", "alerts@ews-platform.edu")
 
         target_email = pref.email_override or user.email
@@ -213,7 +219,9 @@ class NotificationService:
                 response = await client.post(email_endpoint, json=data)
 
             if response.status_code in (200, 201, 202, 204):
-                logger.info(f"[NOTIFICATION] Email sent to {target_email} for student {payload['student_id']}")
+                logger.info(
+                    f"[NOTIFICATION] Email sent to {target_email} for student {payload['student_id']}"
+                )
                 return True
             else:
                 logger.warning(
@@ -235,7 +243,9 @@ class NotificationService:
         Returns True if sent successfully, False otherwise.
         """
         if not pref.webhook_url:
-            logger.warning(f"[NOTIFICATION] No webhook_url configured for user {pref.user_id}")
+            logger.warning(
+                f"[NOTIFICATION] No webhook_url configured for user {pref.user_id}"
+            )
             return False
 
         try:
@@ -257,9 +267,7 @@ class NotificationService:
             if webhook_secret:
                 payload_bytes = json.dumps(payload, sort_keys=True).encode()
                 signature = hmac.new(
-                    webhook_secret.encode(),
-                    payload_bytes,
-                    hashlib.sha256
+                    webhook_secret.encode(), payload_bytes, hashlib.sha256
                 ).hexdigest()
                 headers["X-EWS-Signature"] = f"sha256={signature}"
 
@@ -358,13 +366,22 @@ class NotificationService:
         try:
             # Get student info for notification
             student = db.query(Student).filter(Student.id == student_id).first()
-            student_name = f"{student.first_name or ''} {student.last_name or ''}".strip() if student else student_id
+            student_name = (
+                f"{student.first_name or ''} {student.last_name or ''}".strip()
+                if student
+                else student_id
+            )
 
             # Find all faculty with notification preferences for this threshold
-            prefs = db.query(FacultyNotificationPref).join(User).filter(
-                User.role.in_(["faculty", "admin", "retention team"]),
-                User.is_active is True,
-            ).all()
+            prefs = (
+                db.query(FacultyNotificationPref)
+                .join(User)
+                .filter(
+                    User.role.in_(["faculty", "admin", "retention team"]),
+                    User.is_active is True,
+                )
+                .all()
+            )
 
             for pref in prefs:
                 try:
@@ -375,14 +392,18 @@ class NotificationService:
                         continue
 
                     # Check cooldown
-                    is_cooldown = await self._is_cooldown_active(pref, student_id, redis_client)
+                    is_cooldown = await self._is_cooldown_active(
+                        pref, student_id, redis_client
+                    )
                     if is_cooldown:
-                        results.append({
-                            "user_id": pref.user_id,
-                            "student_id": student_id,
-                            "status": "skipped",
-                            "reason": "cooldown_active",
-                        })
+                        results.append(
+                            {
+                                "user_id": pref.user_id,
+                                "student_id": student_id,
+                                "status": "skipped",
+                                "reason": "cooldown_active",
+                            }
+                        )
                         continue
 
                     # Build payload
@@ -401,33 +422,43 @@ class NotificationService:
                     if pref.notification_channel == "webhook":
                         success = await self._send_webhook_notification(pref, payload)
                     else:  # default to email
-                        success = await self._send_email_notification(pref, user, payload)
+                        success = await self._send_email_notification(
+                            pref, user, payload
+                        )
 
                     # Update last_notified_at on success
                     if success:
-                        await self._update_last_notified(pref, student_id, db, redis_client)
+                        await self._update_last_notified(
+                            pref, student_id, db, redis_client
+                        )
 
-                    results.append({
-                        "user_id": pref.user_id,
-                        "student_id": student_id,
-                        "channel": pref.notification_channel,
-                        "status": "sent" if success else "failed",
-                        "category": category,
-                    })
+                    results.append(
+                        {
+                            "user_id": pref.user_id,
+                            "student_id": student_id,
+                            "channel": pref.notification_channel,
+                            "status": "sent" if success else "failed",
+                            "category": category,
+                        }
+                    )
 
                 except Exception as exc:
                     logger.exception(
                         f"[NOTIFICATION] Failed to notify user {pref.user_id} for student {student_id}: {exc}"
                     )
-                    results.append({
-                        "user_id": pref.user_id,
-                        "student_id": student_id,
-                        "status": "error",
-                        "error": str(exc),
-                    })
+                    results.append(
+                        {
+                            "user_id": pref.user_id,
+                            "student_id": student_id,
+                            "status": "error",
+                            "error": str(exc),
+                        }
+                    )
 
         except Exception as exc:
-            logger.exception(f"[NOTIFICATION] notify_risk_threshold_crossed failed: {exc}")
+            logger.exception(
+                f"[NOTIFICATION] notify_risk_threshold_crossed failed: {exc}"
+            )
             # Never crash the caller — log and return partial results
 
         return results

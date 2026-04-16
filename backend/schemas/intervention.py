@@ -11,6 +11,7 @@ from datetime import date
 
 class InterventionBase(BaseModel):
     """Base intervention schema."""
+
     date: date
     user: str
     action: str
@@ -24,6 +25,7 @@ class InterventionBase(BaseModel):
 
 class InterventionCreate(BaseModel):
     """Schema for creating an intervention."""
+
     student_id: Optional[str] = None
     student_ids: Optional[List[str]] = None
     date: Optional[date] = None
@@ -39,6 +41,7 @@ class InterventionCreate(BaseModel):
 
 class Intervention(InterventionBase):
     """Full intervention schema with metadata."""
+
     id: int
     student_id: str
     ai_suggested: Optional[int] = 0
@@ -50,6 +53,7 @@ class Intervention(InterventionBase):
 
 class RecommendationBase(BaseModel):
     """Base recommendation schema."""
+
     recommendation: str
 
 
@@ -59,6 +63,7 @@ class RecommendationCreate(RecommendationBase):
 
 class Recommendation(RecommendationBase):
     """Full recommendation schema."""
+
     id: int
     student_id: str
 

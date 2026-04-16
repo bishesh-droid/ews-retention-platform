@@ -24,7 +24,9 @@ from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy import func, and_, case, select
 
 from backend.api.deps import get_current_user_async, get_db_async, require_role
-from backend.application.student.student_application_service import StudentApplicationService
+from backend.application.student.student_application_service import (
+    StudentApplicationService,
+)
 from backend.core.constants import Role
 from backend.core.rate_limiting import limiter
 from backend.database.models.user import User
@@ -44,6 +46,7 @@ _STAFF_ROLES = Role.staff_roles()
 # Schemas
 # ---------------------------------------------------------------------------
 
+
 class BatchPredictionRequest(BaseModel):
     student_ids: List[str]
 
@@ -51,6 +54,7 @@ class BatchPredictionRequest(BaseModel):
 # ---------------------------------------------------------------------------
 # Endpoints
 # ---------------------------------------------------------------------------
+
 
 @router.get("/predict/{student_id}")
 @limiter.limit("30/minute")
@@ -70,8 +74,12 @@ async def predict_student_risk(
         raise HTTPException(status_code=404, detail="Student not found")
 
     # Run sync service calls in thread pool to avoid blocking event loop
-    enrollments = await asyncio.to_thread(StudentService._get_enrollment_dicts, db, student_id)
-    graded = await asyncio.to_thread(StudentService._get_graded_components, db, student_id)
+    enrollments = await asyncio.to_thread(
+        StudentService._get_enrollment_dicts, db, student_id
+    )
+    graded = await asyncio.to_thread(
+        StudentService._get_graded_components, db, student_id
+    )
     exams = await asyncio.to_thread(StudentService._get_exam_records, db, student_id)
 
     try:
@@ -122,8 +130,12 @@ async def predict_student_batch(
     target_ids = [sid for sid in unique_ids if sid in existing_ids]
 
     # Run sync service calls in thread pool to avoid blocking event loop
-    enrollment_map = await asyncio.to_thread(StudentService._fetch_enrollments_map, db, target_ids)
-    graded_map = await asyncio.to_thread(StudentService._fetch_graded_map, db, target_ids)
+    enrollment_map = await asyncio.to_thread(
+        StudentService._fetch_enrollments_map, db, target_ids
+    )
+    graded_map = await asyncio.to_thread(
+        StudentService._fetch_graded_map, db, target_ids
+    )
     exam_map = await asyncio.to_thread(StudentService._fetch_exam_map, db, target_ids)
 
     results = []
@@ -170,36 +182,35 @@ async def get_cohort_risk(
         .subquery()
     )
 
-    stmt = (
-        select(
-            func.count(Prediction.student_id).label("n"),
-            func.avg(Prediction.risk_score).label("avg_risk"),
-            func.sum(
-                case(
-                    (Prediction.risk_score >= 70.0, 1),
-                    else_=0,
-                )
-            ).label("high_count"),
-            func.sum(
-                case(
-                    (Prediction.risk_score >= 85.0, 1),
-                    else_=0,
-                )
-            ).label("critical_count"),
-        )
-        .join(
-            latest_subq,
-            and_(
-                Prediction.student_id == latest_subq.c.student_id,
-                Prediction.prediction_timestamp == latest_subq.c.max_ts,
-            ),
-        )
+    stmt = select(
+        func.count(Prediction.student_id).label("n"),
+        func.avg(Prediction.risk_score).label("avg_risk"),
+        func.sum(
+            case(
+                (Prediction.risk_score >= 70.0, 1),
+                else_=0,
+            )
+        ).label("high_count"),
+        func.sum(
+            case(
+                (Prediction.risk_score >= 85.0, 1),
+                else_=0,
+            )
+        ).label("critical_count"),
+    ).join(
+        latest_subq,
+        and_(
+            Prediction.student_id == latest_subq.c.student_id,
+            Prediction.prediction_timestamp == latest_subq.c.max_ts,
+        ),
     )
     result = await db.execute(stmt)
     agg = result.one()
 
     # Calculate engagement patterns for the cohort
-    engagement_patterns = StudentApplicationService.get_cohort_engagement_patterns(db, current_user=_user)
+    engagement_patterns = StudentApplicationService.get_cohort_engagement_patterns(
+        db, current_user=_user
+    )
 
     if not agg.n:
         count_result = await db.execute(select(func.count(Student.id)))
@@ -237,7 +248,7 @@ async def get_trend_analysis(
     """
     start = datetime.utcnow() - timedelta(weeks=weeks)
     # PostgreSQL-compatible week key formatting (ISO week)
-    week_key = func.to_char(Prediction.prediction_timestamp, 'IYYY-IW')
+    week_key = func.to_char(Prediction.prediction_timestamp, "IYYY-IW")
     stmt = (
         select(
             week_key.label("week"),
@@ -252,7 +263,10 @@ async def get_trend_analysis(
 
     if not rows:
         return success_response(
-            {"weekly_trend": [], "note": "No predictions stored in the requested window."}
+            {
+                "weekly_trend": [],
+                "note": "No predictions stored in the requested window.",
+            }
         )
     trend = [{"week": w, "avg_risk": round(float(avg or 0.0), 2)} for w, avg in rows]
 

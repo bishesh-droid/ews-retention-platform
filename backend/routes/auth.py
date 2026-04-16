@@ -74,7 +74,7 @@ async def login(
         subject=user.id,
         role=user.role or "student",
         expires_delta=refresh_token_expires,
-        token_type="refresh"
+        token_type="refresh",
     )
 
     # Set httpOnly cookie with refresh token
@@ -181,7 +181,9 @@ async def refresh_token(
             await redis_client.close()
         except Exception:
             # Log Redis failure but don't fail the refresh - DB is source of truth
-            logger.warning("Failed to write revoked token to Redis (RTR)", exc_info=True)
+            logger.warning(
+                "Failed to write revoked token to Redis (RTR)", exc_info=True
+            )
 
     # Rotate refresh token (security best practice)
     new_refresh_token_expires = timedelta(days=REFRESH_TOKEN_EXPIRE_DAYS)
@@ -189,7 +191,7 @@ async def refresh_token(
         subject=user.id,
         role=user.role or "student",
         expires_delta=new_refresh_token_expires,
-        token_type="refresh"
+        token_type="refresh",
     )
 
     # Update refresh token cookie
@@ -231,9 +233,7 @@ async def logout(
         try:
             # Decode without verification to extract jti and exp
             unverified_payload = pyjwt.decode(
-                token,
-                key="",
-                options={"verify_signature": False, "verify_exp": False}
+                token, key="", options={"verify_signature": False, "verify_exp": False}
             )
             token_jti = unverified_payload.get("jti")
             token_exp = unverified_payload.get("exp")
@@ -256,8 +256,12 @@ async def logout(
                         await redis_client.setex(f"jti:{token_jti}", ttl, "1")
                     await redis_client.close()
                 except Exception:
-                    logger.warning("Failed to write revoked access token to Redis", exc_info=True)
-                logger.info(f"Access token revoked for user {current_user.id}, jti={token_jti}")
+                    logger.warning(
+                        "Failed to write revoked access token to Redis", exc_info=True
+                    )
+                logger.info(
+                    f"Access token revoked for user {current_user.id}, jti={token_jti}"
+                )
         except Exception as e:
             # Log but don't fail the logout if token revocation fails
             logger.warning(f"Failed to revoke access token during logout: {e}")
@@ -271,7 +275,7 @@ async def logout(
             unverified_payload = pyjwt.decode(
                 refresh_token,
                 key="",
-                options={"verify_signature": False, "verify_exp": False}
+                options={"verify_signature": False, "verify_exp": False},
             )
             refresh_jti = unverified_payload.get("jti")
             refresh_exp = unverified_payload.get("exp")
@@ -294,8 +298,12 @@ async def logout(
                         await redis_client.setex(f"jti:{refresh_jti}", ttl, "1")
                     await redis_client.close()
                 except Exception:
-                    logger.warning("Failed to write revoked refresh token to Redis", exc_info=True)
-                logger.info(f"Refresh token revoked for user {current_user.id}, jti={refresh_jti}")
+                    logger.warning(
+                        "Failed to write revoked refresh token to Redis", exc_info=True
+                    )
+                logger.info(
+                    f"Refresh token revoked for user {current_user.id}, jti={refresh_jti}"
+                )
         except Exception as e:
             # Log but don't fail the logout if token revocation fails
             logger.warning(f"Failed to revoke refresh token during logout: {e}")
@@ -343,8 +351,8 @@ async def register(
         username=user_in.username,
         email=user_in.email,
         hashed_password=auth.get_password_hash(user_in.password),
-        role="student",          # Hard-coded: public registration is always student
-        is_active=True,          # New accounts are active by default; only admins can deactivate
+        role="student",  # Hard-coded: public registration is always student
+        is_active=True,  # New accounts are active by default; only admins can deactivate
         is_superuser=False,
     )
     db.add(db_user)
@@ -376,19 +384,27 @@ def update_current_profile(
     Role and active-status changes require an admin action.
     """
     if payload.username is not None:
-        existing = db.query(User).filter(
-            User.username == payload.username, User.id != current_user.id
-        ).first()
+        existing = (
+            db.query(User)
+            .filter(User.username == payload.username, User.id != current_user.id)
+            .first()
+        )
         if existing:
-            raise HTTPException(status_code=status.HTTP_409_CONFLICT, detail="Username already taken.")
+            raise HTTPException(
+                status_code=status.HTTP_409_CONFLICT, detail="Username already taken."
+            )
         current_user.username = payload.username
 
     if payload.email is not None:
-        existing = db.query(User).filter(
-            User.email == payload.email, User.id != current_user.id
-        ).first()
+        existing = (
+            db.query(User)
+            .filter(User.email == payload.email, User.id != current_user.id)
+            .first()
+        )
         if existing:
-            raise HTTPException(status_code=status.HTTP_409_CONFLICT, detail="Email already registered.")
+            raise HTTPException(
+                status_code=status.HTTP_409_CONFLICT, detail="Email already registered."
+            )
         current_user.email = payload.email
 
     if payload.password:
@@ -403,6 +419,7 @@ def update_current_profile(
 # ---------------------------------------------------------------------------
 # Admin-only: role and account management
 # ---------------------------------------------------------------------------
+
 
 @router.patch(
     "/users/{user_id}",
@@ -421,7 +438,9 @@ def admin_update_user(
     """
     user = db.query(User).filter(User.id == user_id).first()
     if not user:
-        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="User not found.")
+        raise HTTPException(
+            status_code=status.HTTP_404_NOT_FOUND, detail="User not found."
+        )
 
     old_role = user.role
     old_is_superuser = user.is_superuser

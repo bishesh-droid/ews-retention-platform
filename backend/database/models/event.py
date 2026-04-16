@@ -4,7 +4,16 @@ Event Models
 Database models for raw events and engineered features.
 """
 
-from sqlalchemy import Column, Integer, String, Float, ForeignKey, DateTime, Date, Boolean
+from sqlalchemy import (
+    Column,
+    Integer,
+    String,
+    Float,
+    ForeignKey,
+    DateTime,
+    Date,
+    Boolean,
+)
 from sqlalchemy.orm import relationship
 from datetime import datetime, timezone
 from backend.database.connection import Base
@@ -15,14 +24,19 @@ class RawEvent(Base):
     Stores all incoming student activity events from various sources.
     This is the raw event stream before feature engineering.
     """
+
     __tablename__ = "raw_events"
 
     id = Column(Integer, primary_key=True, index=True)
     student_id = Column(String, ForeignKey("students.id"), index=True)
 
     # Event classification
-    event_source = Column(String, index=True)  # 'lms', 'zoom', 'website', 'communication', 'marketing'
-    event_type = Column(String)  # 'login', 'assignment_submit', 'class_attend', 'email_open', etc.
+    event_source = Column(
+        String, index=True
+    )  # 'lms', 'zoom', 'website', 'communication', 'marketing'
+    event_type = Column(
+        String
+    )  # 'login', 'assignment_submit', 'class_attend', 'email_open', etc.
 
     # Event payload
     event_data = Column(String)  # JSON string for flexible event-specific data
@@ -41,6 +55,7 @@ class EngineeredFeatures(Base):
     - Intent
     - Responsiveness
     """
+
     __tablename__ = "engineered_features"
 
     id = Column(Integer, primary_key=True, index=True)

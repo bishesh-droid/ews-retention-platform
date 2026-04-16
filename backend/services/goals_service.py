@@ -7,7 +7,14 @@ from backend.database import Goal, Enrollment
 
 class GoalsService:
     @staticmethod
-    def create_goal(db: Session, student_id: str, goal_type: str, title: str, target_value: float, end_date: datetime):
+    def create_goal(
+        db: Session,
+        student_id: str,
+        goal_type: str,
+        title: str,
+        target_value: float,
+        end_date: datetime,
+    ):
         """
         Creates a new goal for a student.
         """
@@ -17,7 +24,7 @@ class GoalsService:
             title=title,
             target_value=target_value,  # type: ignore[arg-type]
             end_date=end_date,
-            status="active"
+            status="active",
         )
         db.add(db_goal)
         # Caller commits the transaction.
@@ -30,16 +37,19 @@ class GoalsService:
         """
         Aggregates weekly data and updates goal current_value and status.
         """
-        active_goals = db.query(Goal).filter(
-            Goal.student_id == student_id,
-            Goal.status == "active"
-        ).all()
+        active_goals = (
+            db.query(Goal)
+            .filter(Goal.student_id == student_id, Goal.status == "active")
+            .all()
+        )
 
         if not active_goals:
             return
 
         # Fetch recent enrollment metrics for aggregation
-        enrollments = db.query(Enrollment).filter(Enrollment.student_id == student_id).all()
+        enrollments = (
+            db.query(Enrollment).filter(Enrollment.student_id == student_id).all()
+        )
 
         for goal in active_goals:
             # Update progress based on type

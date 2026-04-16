@@ -37,64 +37,82 @@ class InterventionIntelligence:
 
         # Recommendation 1: Academic coaching (for low grades)
         if student.predictions[0].grades < 2.5:
-            recommendations.append({
-                "intervention_type": "Academic Coaching",
-                "priority": "high",
-                "reasoning": (
-                    f"Student's GPA ({student.predictions[0].grades:.2f}) is below 2.5, "
-                    f"indicating academic difficulty."
-                ),
-                "success_probability": 0.75,
-                "evidence": "Similar students improved risk by avg 18 points after coaching",
-                "estimated_impact": "15-20 point risk reduction",
-                "implementation": "Schedule weekly 1-on-1 tutoring sessions"
-            })
+            recommendations.append(
+                {
+                    "intervention_type": "Academic Coaching",
+                    "priority": "high",
+                    "reasoning": (
+                        f"Student's GPA ({student.predictions[0].grades:.2f}) is below 2.5, "
+                        f"indicating academic difficulty."
+                    ),
+                    "success_probability": 0.75,
+                    "evidence": "Similar students improved risk by avg 18 points after coaching",
+                    "estimated_impact": "15-20 point risk reduction",
+                    "implementation": "Schedule weekly 1-on-1 tutoring sessions",
+                }
+            )
 
         # Recommendation 2: Attendance intervention
         if student.predictions[0].attendance < 75:
-            recommendations.append({
-                "intervention_type": "Attendance Support",
-                "priority": "critical",
-                "reasoning": f"Attendance rate ({student.predictions[0].attendance:.0f}%) is critically low.",
-                "success_probability": 0.65,
-                "evidence": "Attendance improvements correlate with 25-point risk reduction",
-                "estimated_impact": "20-25 point risk reduction",
-                "implementation": "Identify barriers (transport, work schedule) and provide flexible options"
-            })
+            recommendations.append(
+                {
+                    "intervention_type": "Attendance Support",
+                    "priority": "critical",
+                    "reasoning": f"Attendance rate ({student.predictions[0].attendance:.0f}%) is critically low.",
+                    "success_probability": 0.65,
+                    "evidence": "Attendance improvements correlate with 25-point risk reduction",
+                    "estimated_impact": "20-25 point risk reduction",
+                    "implementation": "Identify barriers (transport, work schedule) and provide flexible options",
+                }
+            )
 
         # Recommendation 3: Counseling (for high risk with interventions already)
         if risk_score > 70 and student.interventions and len(list(student.interventions)) > 0:  # type: ignore[arg-type]
-            recommendations.append({
-                "intervention_type": "Intensive Counseling",
-                "priority": "high",
-                "reasoning": (
-                    f"Risk remains high ({risk_score:.0f}%) despite "
-                    f"{len(list(student.interventions))} previous interventions."  # type: ignore[arg-type]
-                ),
-                "success_probability": 0.50,
-                "evidence": "Multi-intervention students need deeper support beyond academics",
-                "estimated_impact": "Holistic approach, variable impact",
-                "implementation": "Assign dedicated counselor, explore non-academic barriers"
-            })
+            recommendations.append(
+                {
+                    "intervention_type": "Intensive Counseling",
+                    "priority": "high",
+                    "reasoning": (
+                        f"Risk remains high ({risk_score:.0f}%) despite "
+                        f"{len(list(student.interventions))} previous interventions."  # type: ignore[arg-type]
+                    ),
+                    "success_probability": 0.50,
+                    "evidence": "Multi-intervention students need deeper support beyond academics",
+                    "estimated_impact": "Holistic approach, variable impact",
+                    "implementation": "Assign dedicated counselor, explore non-academic barriers",
+                }
+            )
 
         # Recommendation 4: Peer mentoring (for moderate risk)
         if 40 < risk_score <= 70:
-            recommendations.append({
-                "intervention_type": "Peer Mentoring",
-                "priority": "medium",
-                "reasoning": (
-                    f"Moderate risk ({risk_score:.0f}%) indicates engagement issues. "
-                    f"Peer support often effective."
-                ),
-                "success_probability": 0.70,
-                "evidence": "Moderate-risk students respond well to peer connections",
-                "estimated_impact": "10-15 point risk reduction",
-                "implementation": "Match with successful upper-year student in same program"
-            })
+            recommendations.append(
+                {
+                    "intervention_type": "Peer Mentoring",
+                    "priority": "medium",
+                    "reasoning": (
+                        f"Moderate risk ({risk_score:.0f}%) indicates engagement issues. "
+                        f"Peer support often effective."
+                    ),
+                    "success_probability": 0.70,
+                    "evidence": "Moderate-risk students respond well to peer connections",
+                    "estimated_impact": "10-15 point risk reduction",
+                    "implementation": "Match with successful upper-year student in same program",
+                }
+            )
 
         # Sort by priority and success probability
-        priority_order: Dict[str, int] = {"critical": 0, "high": 1, "medium": 2, "low": 3}
-        recommendations.sort(key=lambda x: (priority_order.get(x["priority"], 3), -x["success_probability"]))
+        priority_order: Dict[str, int] = {
+            "critical": 0,
+            "high": 1,
+            "medium": 2,
+            "low": 3,
+        }
+        recommendations.sort(
+            key=lambda x: (
+                priority_order.get(x["priority"], 3),
+                -x["success_probability"],
+            )
+        )
 
         return recommendations[:3]  # Top 3 recommendations
 
@@ -112,14 +130,14 @@ class InterventionIntelligence:
             return {
                 "total_interventions": 0,
                 "effectiveness": "unknown",
-                "message": "No intervention data available for analysis"
+                "message": "No intervention data available for analysis",
             }
 
         # Count intervention types
         intervention_types: Dict[str, Any] = {}
         for student in students_with_interventions:
             for intervention in student.interventions:  # type: ignore[attr-defined]
-                action = getattr(intervention, 'action', None)
+                action = getattr(intervention, "action", None)
                 if action and action not in intervention_types:
                     intervention_types[action] = {"count": 0, "students": []}
                 intervention_types[action]["count"] += 1
@@ -127,20 +145,29 @@ class InterventionIntelligence:
                     intervention_types[str(action)]["students"].append(student.id)  # type: ignore[index]
 
         total_interventions = sum(data["count"] for data in intervention_types.values())
-        coverage = len(students_with_interventions) / len(all_students) * 100 if all_students else 0
+        coverage = (
+            len(students_with_interventions) / len(all_students) * 100
+            if all_students
+            else 0
+        )
 
         return {
             "total_interventions": total_interventions,
             "unique_students_reached": len(students_with_interventions),
             "coverage_percentage": round(coverage, 1),
-            "intervention_types": {k: v["count"] for k, v in intervention_types.items()},
+            "intervention_types": {
+                k: v["count"] for k, v in intervention_types.items()
+            },
             "avg_interventions_per_student": (
                 round(total_interventions / len(students_with_interventions), 1)
-                if students_with_interventions else 0
-            )
+                if students_with_interventions
+                else 0
+            ),
         }
 
-    def find_similar_students(self, student_id: str, limit: int = 5) -> List[Dict[str, Any]]:
+    def find_similar_students(
+        self, student_id: str, limit: int = 5
+    ) -> List[Dict[str, Any]]:
         """
         Find students with similar risk profiles.
 
@@ -176,25 +203,32 @@ class InterventionIntelligence:
             similarity_score = risk_diff + (attendance_diff * 0.5) + (grades_diff * 10)
 
             if similarity_score < 30:  # Threshold for "similar"
-                similar.append({
-                    "student_id": student.id,
-                    "risk_score": round(student.predictions[0].risk_score, 1),
-                    "attendance": round(student.predictions[0].attendance, 1),
-                    "grades": round(student.predictions[0].grades, 2),
-                    "similarity_score": round(similarity_score, 1),
-                    "interventions_received": len(list(student.interventions)),  # type: ignore[arg-type]
-                    "intervention_details": [
-                        {"action": getattr(i, 'action', None), "date": str(getattr(i, 'date', None))}
-                        for i in list(student.interventions)[-3:]  # type: ignore[attr-defined]
-                    ]
-                })
+                similar.append(
+                    {
+                        "student_id": student.id,
+                        "risk_score": round(student.predictions[0].risk_score, 1),
+                        "attendance": round(student.predictions[0].attendance, 1),
+                        "grades": round(student.predictions[0].grades, 2),
+                        "similarity_score": round(similarity_score, 1),
+                        "interventions_received": len(list(student.interventions)),  # type: ignore[arg-type]
+                        "intervention_details": [
+                            {
+                                "action": getattr(i, "action", None),
+                                "date": str(getattr(i, "date", None)),
+                            }
+                            for i in list(student.interventions)[-3:]  # type: ignore[attr-defined]
+                        ],
+                    }
+                )
 
         # Sort by similarity
         similar.sort(key=lambda x: x["similarity_score"])
 
         return similar[:limit]
 
-    def calculate_intervention_priority_queue(self, limit: int = 20) -> List[Dict[str, Any]]:
+    def calculate_intervention_priority_queue(
+        self, limit: int = 20
+    ) -> List[Dict[str, Any]]:
         """
         Generate a priority queue of students needing intervention.
 
@@ -211,30 +245,40 @@ class InterventionIntelligence:
 
         for student in students_with_predictions:
             risk = student.predictions[0].risk_score
-            intervention_count = len(list(student.interventions)) if student.interventions else 0  # type: ignore[arg-type]
+            intervention_count = (
+                len(list(student.interventions)) if student.interventions else 0
+            )  # type: ignore[arg-type]
 
             # Urgency score: high risk + few/no interventions = urgent
-            urgency_score = risk - (intervention_count * 5)  # Reduce urgency if already intervened
+            urgency_score = risk - (
+                intervention_count * 5
+            )  # Reduce urgency if already intervened
 
             # Boost urgency if risk increased recently (check if we have prior prediction)
             # For now, use static urgency
 
-            priority_queue.append({
-                "student_id": student.id,
-                "risk_score": round(risk, 1),
-                "urgency_score": round(urgency_score, 1),
-                "intervention_count": intervention_count,
-                "attendance": round(student.predictions[0].attendance, 1),
-                "grades": round(student.predictions[0].grades, 2),
-                "reasoning": self._generate_urgency_reasoning(risk, intervention_count, student.predictions[0])
-            })
+            priority_queue.append(
+                {
+                    "student_id": student.id,
+                    "risk_score": round(risk, 1),
+                    "urgency_score": round(urgency_score, 1),
+                    "intervention_count": intervention_count,
+                    "attendance": round(student.predictions[0].attendance, 1),
+                    "grades": round(student.predictions[0].grades, 2),
+                    "reasoning": self._generate_urgency_reasoning(
+                        risk, intervention_count, student.predictions[0]
+                    ),
+                }
+            )
 
         # Sort by urgency (highest first)
         priority_queue.sort(key=lambda x: x["urgency_score"], reverse=True)
 
         return priority_queue[:limit]
 
-    def _generate_urgency_reasoning(self, risk: float, intervention_count: int, prediction: Prediction) -> str:
+    def _generate_urgency_reasoning(
+        self, risk: float, intervention_count: int, prediction: Prediction
+    ) -> str:
         """Generate natural language reasoning for urgency."""
         reasons = []
 
@@ -246,7 +290,9 @@ class InterventionIntelligence:
         if intervention_count == 0:
             reasons.append("no previous interventions")
         elif intervention_count > 2:
-            reasons.append(f"{intervention_count} interventions with limited improvement")
+            reasons.append(
+                f"{intervention_count} interventions with limited improvement"
+            )
 
         if prediction.attendance is not None and prediction.attendance < 70:
             reasons.append("very low attendance")

@@ -9,7 +9,12 @@ from backend.database.models.course import Course
 from backend.database.models.enrollment import Enrollment
 from backend.database.models.prediction import Prediction
 from backend.database.models.intervention import Intervention
-from backend.database.models.llm import LLMQuery, LLMInsight, AIExplanation, PatternDiscovery
+from backend.database.models.llm import (
+    LLMQuery,
+    LLMInsight,
+    AIExplanation,
+    PatternDiscovery,
+)
 from backend.database.models.event import RawEvent, EngineeredFeatures
 from backend.database.models.feature import StudentResponse
 from .user import User

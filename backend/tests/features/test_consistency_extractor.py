@@ -9,7 +9,10 @@ Comprehensive tests for:
 """
 
 from datetime import datetime, timedelta
-from backend.services.features.consistency import ConsistencyFeatureExtractor, ConsistencyFeatures
+from backend.services.features.consistency import (
+    ConsistencyFeatureExtractor,
+    ConsistencyFeatures,
+)
 
 
 class TestConsistencyFeatureExtractor:

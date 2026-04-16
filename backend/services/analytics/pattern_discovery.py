@@ -28,12 +28,14 @@ class PatternDiscoveryEngine:
         students_with_predictions = [s for s in students if s.predictions]
 
         if len(students_with_predictions) < 10:
-            return [{
-                "type": "insufficient_data",
-                "title": "Need more student data",
-                "description": "At least 10 students required for pattern detection",
-                "confidence": "low"
-            }]
+            return [
+                {
+                    "type": "insufficient_data",
+                    "title": "Need more student data",
+                    "description": "At least 10 students required for pattern detection",
+                    "confidence": "low",
+                }
+            ]
 
         patterns = []
 
@@ -48,7 +50,9 @@ class PatternDiscoveryEngine:
             patterns.append(gpa_pattern)
 
         # Pattern 3: Intervention gaps
-        intervention_pattern = self._analyze_intervention_gaps(students, students_with_predictions)
+        intervention_pattern = self._analyze_intervention_gaps(
+            students, students_with_predictions
+        )
         if intervention_pattern:
             patterns.append(intervention_pattern)
 
@@ -64,7 +68,7 @@ class PatternDiscoveryEngine:
         attendance_risk_correlation = []
 
         for student in students:
-            absrate7 = getattr(student, 'absrate7', None)
+            absrate7 = getattr(student, "absrate7", None)
             if absrate7 is not None and student.predictions:
                 # Convert absence rate to attendance
                 attendance = (1 - absrate7) * 100  # type: ignore[attr-defined]
@@ -76,7 +80,9 @@ class PatternDiscoveryEngine:
 
         # Calculate correlation
         low_attendance_students = [r for a, r in attendance_risk_correlation if a < 75]
-        high_attendance_students = [r for a, r in attendance_risk_correlation if a >= 90]
+        high_attendance_students = [
+            r for a, r in attendance_risk_correlation if a >= 90
+        ]
 
         if low_attendance_students and high_attendance_students:
             avg_low = statistics.mean(low_attendance_students)
@@ -95,9 +101,11 @@ class PatternDiscoveryEngine:
                         "low_attendance_avg_risk": round(avg_low, 1),
                         "high_attendance_avg_risk": round(avg_high, 1),
                         "risk_difference": round(risk_diff, 1),
-                        "sample_size": len(attendance_risk_correlation)
+                        "sample_size": len(attendance_risk_correlation),
                     },
-                    "confidence": "high" if len(attendance_risk_correlation) > 20 else "medium",
+                    "confidence": (
+                        "high" if len(attendance_risk_correlation) > 20 else "medium"
+                    ),
                     "suggested_action": (
                         "Consider flexible attendance policies or early intervention "
                         "for students below 75% attendance."
@@ -112,11 +120,13 @@ class PatternDiscoveryEngine:
 
         for student in students:
             # Compare Q1 to Q4 of most recent quarter
-            q1mpa7 = getattr(student, 'q1mpa7', None)
-            q4mpa7 = getattr(student, 'q4mpa7', None)
+            q1mpa7 = getattr(student, "q1mpa7", None)
+            q4mpa7 = getattr(student, "q4mpa7", None)
             if q1mpa7 is not None and q4mpa7 is not None:
                 improvement = q4mpa7 - q1mpa7  # type: ignore[attr-defined]
-                risk = student.predictions[0].risk_score if student.predictions else None
+                risk = (
+                    student.predictions[0].risk_score if student.predictions else None
+                )
                 if risk is not None:
                     gpa_trends.append((improvement, risk))
 
@@ -144,7 +154,7 @@ class PatternDiscoveryEngine:
                         "improved_students_avg_risk": round(avg_risk_improved, 1),
                         "declined_students_avg_risk": round(avg_risk_declined, 1),
                         "improved_count": len(improved_students),
-                        "declined_count": len(declined_students)
+                        "declined_count": len(declined_students),
                     },
                     "confidence": "medium",
                     "suggested_action": (
@@ -155,15 +165,25 @@ class PatternDiscoveryEngine:
 
         return None
 
-    def _analyze_intervention_gaps(self, all_students: List[Student], at_risk_students: List[Student]) -> Optional[Dict]:
+    def _analyze_intervention_gaps(
+        self, all_students: List[Student], at_risk_students: List[Student]
+    ) -> Optional[Dict]:
         """Identify students who need interventions but haven't received any."""
-        high_risk_students = [s for s in at_risk_students if s.predictions and s.predictions[0].risk_score > 70]
+        high_risk_students = [
+            s
+            for s in at_risk_students
+            if s.predictions and s.predictions[0].risk_score > 70
+        ]
 
         if not high_risk_students:
             return None
 
-        students_without_interventions = [s for s in high_risk_students if not s.interventions]
-        gap_percentage = (len(students_without_interventions) / len(high_risk_students)) * 100
+        students_without_interventions = [
+            s for s in high_risk_students if not s.interventions
+        ]
+        gap_percentage = (
+            len(students_without_interventions) / len(high_risk_students)
+        ) * 100
 
         if gap_percentage > 30:
             return {
@@ -176,7 +196,7 @@ class PatternDiscoveryEngine:
                 "evidence": {
                     "high_risk_count": len(high_risk_students),
                     "without_intervention_count": len(students_without_interventions),
-                    "gap_percentage": round(gap_percentage, 1)
+                    "gap_percentage": round(gap_percentage, 1),
                 },
                 "confidence": "high",
                 "suggested_action": (
@@ -210,7 +230,7 @@ class PatternDiscoveryEngine:
                     "critical_risk_count": critical_risk,
                     "total_students": total_students,
                     "percentage": round(critical_pct, 1),
-                    "average_risk": round(statistics.mean(risk_scores), 1)
+                    "average_risk": round(statistics.mean(risk_scores), 1),
                 },
                 "confidence": "high",
                 "suggested_action": (
@@ -234,7 +254,9 @@ class PatternDiscoveryEngine:
         blind_spots = []
 
         # Blind Spot 1: Early vs Late quarter performance
-        early_late_pattern = self._compare_early_vs_late_performance(students_with_predictions)
+        early_late_pattern = self._compare_early_vs_late_performance(
+            students_with_predictions
+        )
         if early_late_pattern:
             blind_spots.append(early_late_pattern)
 
@@ -245,14 +267,16 @@ class PatternDiscoveryEngine:
 
         return blind_spots
 
-    def _compare_early_vs_late_performance(self, students: List[Student]) -> Optional[Dict]:
+    def _compare_early_vs_late_performance(
+        self, students: List[Student]
+    ) -> Optional[Dict]:
         """Compare Q1 vs Q4 performance across cohort."""
         early_strong = []
         late_strong = []
 
         for student in students:
-            q1mpa7 = getattr(student, 'q1mpa7', None)
-            q4mpa7 = getattr(student, 'q4mpa7', None)
+            q1mpa7 = getattr(student, "q1mpa7", None)
+            q4mpa7 = getattr(student, "q4mpa7", None)
             if q1mpa7 is not None and q4mpa7 is not None:
                 if q1mpa7 > q4mpa7:  # type: ignore[attr-defined]
                     early_strong.append(student)
@@ -269,25 +293,44 @@ class PatternDiscoveryEngine:
                 ),
                 "evidence": {
                     "early_strong_count": len(early_strong),
-                    "late_strong_count": len(late_strong)
+                    "late_strong_count": len(late_strong),
                 },
                 "confidence": "medium",
-                "insight": "Consider mid-semester support programs or adjust Q4 workload expectations."
+                "insight": "Consider mid-semester support programs or adjust Q4 workload expectations.",
             }
 
         return None
 
     def _analyze_suspension_impact(self, students: List[Student]) -> Optional[Dict]:
         """Check if suspensions correlate with risk."""
-        students_with_suspensions = [s for s in students if getattr(s, 'nsusp7', None) and getattr(s, 'nsusp7', 0) > 0]
-        students_without_suspensions = [s for s in students if not getattr(s, 'nsusp7', None) or getattr(s, 'nsusp7', 0) == 0]
+        students_with_suspensions = [
+            s
+            for s in students
+            if getattr(s, "nsusp7", None) and getattr(s, "nsusp7", 0) > 0
+        ]
+        students_without_suspensions = [
+            s
+            for s in students
+            if not getattr(s, "nsusp7", None) or getattr(s, "nsusp7", 0) == 0
+        ]
 
         if len(students_with_suspensions) < 3 or len(students_without_suspensions) < 3:
             return None
 
-        avg_risk_with_susp = statistics.mean([s.predictions[0].risk_score for s in students_with_suspensions if s.predictions])
+        avg_risk_with_susp = statistics.mean(
+            [
+                s.predictions[0].risk_score
+                for s in students_with_suspensions
+                if s.predictions
+            ]
+        )
         avg_risk_without_susp = statistics.mean(
-            [s.predictions[0].risk_score for s in students_without_suspensions if s.predictions])
+            [
+                s.predictions[0].risk_score
+                for s in students_without_suspensions
+                if s.predictions
+            ]
+        )
 
         risk_diff = avg_risk_with_susp - avg_risk_without_susp
 
@@ -302,10 +345,10 @@ class PatternDiscoveryEngine:
                 "evidence": {
                     "with_suspension_avg_risk": round(avg_risk_with_susp, 1),
                     "without_suspension_avg_risk": round(avg_risk_without_susp, 1),
-                    "students_with_suspensions": len(students_with_suspensions)
+                    "students_with_suspensions": len(students_with_suspensions),
                 },
                 "confidence": "high",
-                "insight": "Re-evaluate suspension practices or provide intensive support post-suspension."
+                "insight": "Re-evaluate suspension practices or provide intensive support post-suspension.",
             }
 
         return None
@@ -317,7 +360,9 @@ class CohortAnalyzer:
     def __init__(self, db: Session):
         self.db = db
 
-    def analyze_churn_risk(self, cohort_filters: Optional[Dict] = None) -> Dict[str, Any]:
+    def analyze_churn_risk(
+        self, cohort_filters: Optional[Dict] = None
+    ) -> Dict[str, Any]:
         """
         Translate academic risk to business impact.
 
@@ -340,7 +385,9 @@ class CohortAnalyzer:
         # Estimate revenue at risk (assume $5000 per student avg)
         avg_tuition = 5000
         high_risk_revenue = high_churn_risk * avg_tuition * 0.6  # 60% churn probability
-        medium_risk_revenue = medium_churn_risk * avg_tuition * 0.3  # 30% churn probability
+        medium_risk_revenue = (
+            medium_churn_risk * avg_tuition * 0.3
+        )  # 30% churn probability
 
         total_revenue_at_risk = high_risk_revenue + medium_risk_revenue
 
@@ -351,14 +398,18 @@ class CohortAnalyzer:
                 "high_risk_students": high_churn_risk,
                 "medium_risk_students": medium_churn_risk,
                 "low_risk_students": low_churn_risk,
-                "estimated_high_churn_pct": round((high_churn_risk / len(students_with_predictions)) * 60, 1),
-                "estimated_medium_churn_pct": round((medium_churn_risk / len(students_with_predictions)) * 30, 1)
+                "estimated_high_churn_pct": round(
+                    (high_churn_risk / len(students_with_predictions)) * 60, 1
+                ),
+                "estimated_medium_churn_pct": round(
+                    (medium_churn_risk / len(students_with_predictions)) * 30, 1
+                ),
             },
             "revenue_impact": {
                 "total_revenue_at_risk": round(total_revenue_at_risk, 2),
                 "high_risk_revenue": round(high_risk_revenue, 2),
                 "medium_risk_revenue": round(medium_risk_revenue, 2),
-                "currency": "USD"
+                "currency": "USD",
             },
-            "confidence": "medium"
+            "confidence": "medium",
         }
