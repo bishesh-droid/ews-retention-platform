@@ -19,7 +19,11 @@ class CourseContentRegistry(Base):
     course_name = Column(String(256), nullable=False)
     semester_name = Column(String(64), nullable=False)
     content_required = Column(Integer, nullable=False)
-    last_updated_at = Column(DateTime, default=lambda: datetime.now(timezone.utc), onupdate=lambda: datetime.now(timezone.utc))
+    last_updated_at = Column(
+        DateTime,
+        default=lambda: datetime.now(timezone.utc),
+        onupdate=lambda: datetime.now(timezone.utc)
+    )
     source_file = Column(String(256), nullable=True)
 
     __table_args__ = (

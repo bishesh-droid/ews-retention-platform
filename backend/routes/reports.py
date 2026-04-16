@@ -169,7 +169,10 @@ def generate_report(
 
     fmt = _fmt_upper(req.format)
     if fmt not in template.get("formats", []):
-        return error_response("Unsupported format for template", {"format": fmt, "supported": template.get("formats", [])})
+        return error_response(
+            "Unsupported format for template",
+            {"format": fmt, "supported": template.get("formats", [])}
+        )
 
     options = req.options or {}
     now = datetime.utcnow()
@@ -333,7 +336,9 @@ def export_students(
         for s in students
     ]
 
-    ExportService.log_export(db, int(current_user.id), str(current_user.role), f"students_{format}")  # type: ignore[arg-type]
+    ExportService.log_export(
+        db, int(current_user.id), str(current_user.role), f"students_{format}"
+    )  # type: ignore[arg-type]
 
     db.commit()
 

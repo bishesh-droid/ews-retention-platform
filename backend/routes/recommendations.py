@@ -115,7 +115,10 @@ def get_recommendations_for_student(
             "type": "positive",
             "priority": "low",
             "title": "Keep Up the Great Work!",
-            "description": "You're performing well. Continue your current study habits and consider mentoring other students.",
+            "description": (
+                "You're performing well. Continue your current study habits "
+                "and consider mentoring other students."
+            ),
         })
 
     return success_response(

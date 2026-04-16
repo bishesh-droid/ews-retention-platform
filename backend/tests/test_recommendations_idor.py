@@ -13,7 +13,7 @@ Security Requirements:
 import pytest
 from fastapi.testclient import TestClient
 from sqlalchemy.orm import Session
-from unittest.mock import MagicMock, patch
+from unittest.mock import patch
 
 from backend.database.models.user import User
 from backend.database.models.student import Student
@@ -333,7 +333,7 @@ class TestRecommendationsIDOR:
         Forged or expired tokens should be rejected.
         """
         response = client.get(
-            f"/api/v1/recommendations/student1@test.com",
+            "/api/v1/recommendations/student1@test.com",
             headers={"Authorization": "Bearer invalid_token_xyz"},
         )
 
@@ -369,7 +369,7 @@ class TestRecommendationsLogging:
 
             with caplog.at_level(logging.INFO):
                 response = client.get(
-                    f"/api/v1/recommendations/student1@test.com",
+                    "/api/v1/recommendations/student1@test.com",
                     headers={"Authorization": f"Bearer {token}"},
                 )
 
@@ -410,7 +410,7 @@ class TestRecommendationsEdgeCases:
         """
         # Token with malformed payload
         response = client.get(
-            f"/api/v1/recommendations/student1@test.com",
+            "/api/v1/recommendations/student1@test.com",
             headers={"Authorization": "Bearer eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJzdWIiOiIifQ.invalid"},
         )
 

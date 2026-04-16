@@ -12,7 +12,7 @@ import time
 
 from fastapi import APIRouter, Depends, HTTPException, Header, Query, Request
 from pydantic import BaseModel, field_validator
-from sqlalchemy.orm import Session
+from sqlalchemy.orm import Session, selectinload
 from typing import Optional, List, Dict
 from datetime import datetime
 

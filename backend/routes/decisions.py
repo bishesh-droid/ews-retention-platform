@@ -76,7 +76,14 @@ def get_recommended_intervention(student_id: str, db: Session = Depends(get_db))
     if last_intervention and last_intervention.date:
         days_since_last = (date.today() - last_intervention.date).days
 
-    priority = "critical" if risk_score >= 80 else "high" if risk_score >= 60 else "medium" if risk_score >= 40 else "low"
+    if risk_score >= 80:
+        priority = "critical"
+    elif risk_score >= 60:
+        priority = "high"
+    elif risk_score >= 40:
+        priority = "medium"
+    else:
+        priority = "low"
 
     return {
         "student_id": student_id,

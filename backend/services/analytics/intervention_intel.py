@@ -82,7 +82,10 @@ class InterventionIntelligence:
             recommendations.append({
                 "intervention_type": "Peer Mentoring",
                 "priority": "medium",
-                "reasoning": f"Moderate risk ({risk_score:.0f}%) indicates engagement issues. Peer support often effective.",
+                "reasoning": (
+                    f"Moderate risk ({risk_score:.0f}%) indicates engagement issues. "
+                    f"Peer support often effective."
+                ),
                 "success_probability": 0.70,
                 "evidence": "Moderate-risk students respond well to peer connections",
                 "estimated_impact": "10-15 point risk reduction",

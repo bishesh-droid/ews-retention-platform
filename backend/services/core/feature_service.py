@@ -44,7 +44,8 @@ def compute_academic_signals(student_id: str, db: Session, lookback_days: int = 
             # Use existing absrate and GPA data as proxy
             avg_grade = getattr(student, 'q4mpa7', 0) * 20  # Scale 0-5 to 0-100
             return {
-                "assignment_completion_rate": 1.0 - getattr(student, 'absrate7', 0.5),  # Assume absrate relates to completion
+                # Assume absrate relates to completion
+                "assignment_completion_rate": 1.0 - getattr(student, 'absrate7', 0.5),
                 "average_grade": avg_grade,
                 "deadline_adherence_score": 0.8,  # Default
                 "grade_trend": 0.0

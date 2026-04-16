@@ -167,7 +167,10 @@ class LLMOrchestrator:
         """Backward-compatible helper for existing internal call sites."""
         return self._invoke_llm(prompt=user_message, system_message=system_message)
 
-    def explain_risk_change(self, student_id: str, time_period: str = "recent", current_user: Optional[User] = None) -> Dict[str, Any]:
+    def explain_risk_change(
+        self, student_id: str, time_period: str = "recent",
+        current_user: Optional[User] = None
+    ) -> Dict[str, Any]:
         """
         Explain why a student's risk score changed.
 
@@ -305,7 +308,10 @@ class LLMOrchestrator:
                 "error": str(e)
             }
 
-    def summarize_student_profile(self, student_id: str, for_role: str = "faculty", current_user: Optional[User] = None) -> Dict[str, Any]:
+    def summarize_student_profile(
+        self, student_id: str, for_role: str = "faculty",
+        current_user: Optional[User] = None
+    ) -> Dict[str, Any]:
         """
         Generate a student profile summary for faculty/counselors.
 

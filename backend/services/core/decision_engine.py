@@ -361,7 +361,8 @@ Dear {student_name},
 
 We noticed that you haven't been as active on the platform recently. We're here to support you in your learning journey!
 
-If you're facing any challenges or have questions, please don't hesitate to reach out to your instructors or our support team.
+If you're facing any challenges or have questions, please don't hesitate to
+reach out to your instructors or our support team.
 
 Keep up the great work!
 

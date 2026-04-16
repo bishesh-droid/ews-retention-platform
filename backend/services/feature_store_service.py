@@ -28,7 +28,9 @@ class FeatureStoreService:
         attendance_rate = 0.0
         if enrollments:
             # Simple average across enrollments
-            attendance_rate = sum(int(e.num_logins or 0) for e in enrollments) / len(enrollments)  # type: ignore[arg-type]
+            attendance_rate = sum(
+                int(e.num_logins or 0) for e in enrollments
+            ) / len(enrollments)  # type: ignore[arg-type]
 
         grade_trend = 0.0
         if graded:
@@ -50,7 +52,9 @@ class FeatureStoreService:
 
         features.attendance_rate = attendance_rate  # type: ignore[assignment]
         features.grade_trend = grade_trend  # type: ignore[assignment]
-        features.login_frequency = sum(int(e.num_logins or 0) for e in enrollments)  # type: ignore[assignment, arg-type]
+        features.login_frequency = sum(
+            int(e.num_logins or 0) for e in enrollments
+        )  # type: ignore[assignment, arg-type]
         # Add more features...
 
         return features

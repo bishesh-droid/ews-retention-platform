@@ -712,8 +712,16 @@ def _ingest_graded_sheet(db: Session, wb, sheet_name: str, program: str, stats: 
         bits_id = _safe_str(vals[2])
         email = _safe_str(vals[3])
         student_name = _safe_str(vals[4])
-        subject = _safe_str(vals[14] if program == "BS" and len(vals) > 14 else vals[13] if len(vals) > 13 else course_name)
-        subject_code = _safe_str(vals[15] if program == "BS" and len(vals) > 15 else vals[14] if len(vals) > 14 else "")
+        subject = _safe_str(
+            vals[14] if program == "BS" and len(vals) > 14
+            else vals[13] if len(vals) > 13
+            else course_name
+        )
+        subject_code = _safe_str(
+            vals[15] if program == "BS" and len(vals) > 15
+            else vals[14] if len(vals) > 14
+            else ""
+        )
         student_id = email if email else f"{bits_id.lower()}@bitspilani-digital.edu.in"
         if not student_id:
             continue
@@ -965,7 +973,9 @@ def _ingest_exam_defaulters(db: Session, wb):  # noqa: C901
                 exam.defaulter_reason = mapped_reason
 
 
-def _update_enrollments_from_latest(db: Session, files: dict, owner_thread_id: int, stats: IngestionStats):  # noqa: C901
+def _update_enrollments_from_latest(
+    db: Session, files: dict, owner_thread_id: int, stats: IngestionStats
+):  # noqa: C901
     """Update enrollment records from latest snapshot files.
 
     All DB operations use the provided sync Session.

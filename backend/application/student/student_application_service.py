@@ -71,9 +71,9 @@ class StudentApplicationService:
             retention_likelihood = RiskScorer.get_retention_likelihood(risk_score)
         else:
             risk_score = pred_risk_0_100
-            retention_likelihood = getattr(pred_row, "retention_likelihood", None) or RiskScorer.get_retention_likelihood(
-                risk_score
-            )
+            retention_likelihood = getattr(
+                pred_row, "retention_likelihood", None
+            ) or RiskScorer.get_retention_likelihood(risk_score)
         return {
             "risk_score": risk_score,
             "risk_category": RiskScorer.get_risk_category(risk_score),

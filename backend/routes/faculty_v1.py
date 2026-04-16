@@ -139,8 +139,12 @@ def update_notification_preferences(
         # Create new record with defaults + updates
         pref = FacultyNotificationPref(
             user_id=current_user.id,
-            notify_on_high_risk=update.notify_on_high_risk if update.notify_on_high_risk is not None else True,
-            notify_on_critical_risk=update.notify_on_critical_risk if update.notify_on_critical_risk is not None else True,
+            notify_on_high_risk=(
+                update.notify_on_high_risk if update.notify_on_high_risk is not None else True
+            ),
+            notify_on_critical_risk=(
+                update.notify_on_critical_risk if update.notify_on_critical_risk is not None else True
+            ),
             notification_channel=update.notification_channel or "email",
             webhook_url=update.webhook_url,
             email_override=update.email_override,

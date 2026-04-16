@@ -295,7 +295,10 @@ def get_intervention_effectiveness(  # noqa: C901
         InterventionLog.engagement_pattern,
         func.count().label("count"),
         func.sum(case((InterventionLog.outcome == "improved", 1), else_=0)).label("improved"),
-        func.sum(case((and_(InterventionLog.acted_on.is_(True), InterventionLog.engagement_pattern == InterventionLog.engagement_pattern), 1), else_=0)).label("acted"),
+        func.sum(case((
+            and_(InterventionLog.acted_on.is_(True),
+                 InterventionLog.engagement_pattern == InterventionLog.engagement_pattern), 1), else_=0
+        )).label("acted"),
     ).group_by(InterventionLog.engagement_pattern).all()
 
     by_pattern = {}

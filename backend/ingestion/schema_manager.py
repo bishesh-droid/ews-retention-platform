@@ -379,7 +379,10 @@ class SchemaValidator:
 
         elif col_def.type == ColumnType.CATEGORICAL:
             if col_def.constraints.allowed_values is not None and str(value) not in col_def.constraints.allowed_values:
-                errors.append(f"Invalid category in {col_def.name}: '{value}' (allowed: {col_def.constraints.allowed_values})")
+                errors.append(
+                    f"Invalid category in {col_def.name}: '{value}' "
+                    f"(allowed: {col_def.constraints.allowed_values})"
+                )
 
         return (len(errors) == 0, errors)
 

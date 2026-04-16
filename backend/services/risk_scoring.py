@@ -195,7 +195,10 @@ class RiskScorer:
                 current_week=int(current_week),
             )
             calendar_risk_score = float(cal.get("calendar_risk_score") or 0.0)
-            risk_score = (1.0 - CALENDAR_RISK_BLEND_WEIGHT) * existing_score + CALENDAR_RISK_BLEND_WEIGHT * calendar_risk_score
+            risk_score = (
+                (1.0 - CALENDAR_RISK_BLEND_WEIGHT) * existing_score +
+                CALENDAR_RISK_BLEND_WEIGHT * calendar_risk_score
+            )
 
             # Mutate features so callers can include these signals in responses.
             features["calendar_risk_score"] = round(calendar_risk_score, 2)

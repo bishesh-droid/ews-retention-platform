@@ -35,7 +35,9 @@ class StudentDataRetriever:
             safe.pop(key, None)
         return safe
 
-    def retrieve_student_context(self, student_id: str, depth: str = 'detailed', pseudonymise: bool = True) -> Dict[str, Any]:  # noqa: C901
+    def retrieve_student_context(
+        self, student_id: str, depth: str = 'detailed', pseudonymise: bool = True
+    ) -> Dict[str, Any]:  # noqa: C901
         """
         Retrieve comprehensive student data for LLM prompts.
 
