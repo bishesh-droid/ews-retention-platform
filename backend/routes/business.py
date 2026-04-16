@@ -137,7 +137,7 @@ def get_retention_metrics(
 ):
     """Get retention rate and enrollment metrics."""
     stats = StudentService.get_overview_stats(db)
-    students = StudentService.get_all_students(db, 0, 5000)
+    students = StudentService.get_all_students(db, 0, 5000).get("students", [])
 
     total_enrolled = stats["total_students"]
     at_risk_count, high_risk_count, critical_risk_count = _get_risk_counts(students)
@@ -166,7 +166,7 @@ def get_retention_metrics(
 @router.get("/metrics/revenue-at-risk")
 def get_revenue_at_risk(db: Session = Depends(get_db)):
     """Calculate total revenue at risk from potential dropouts."""
-    students = StudentService.get_all_students(db, 0, 5000)
+    students = StudentService.get_all_students(db, 0, 5000).get("students", [])
     total_enrolled = len(students)
     total_enrolled_revenue = total_enrolled * AVERAGE_STUDENT_LTV
 
@@ -232,7 +232,7 @@ def get_intervention_roi(
     period: str = Query(default="quarterly"), db: Session = Depends(get_db)
 ):
     """Calculate ROI for retention interventions."""
-    students = StudentService.get_all_students(db, 0, 5000)
+    students = StudentService.get_all_students(db, 0, 5000).get("students", [])
 
     threshold = INTERVENTION_THRESHOLDS["no_action"]
     at_risk_students = [s for s in students if s["risk_score"] >= threshold]
@@ -279,7 +279,7 @@ def get_retention_funnel(
     period: str = Query(default="current_semester"), db: Session = Depends(get_db)
 ):
     """Get retention funnel data."""
-    students = StudentService.get_all_students(db, 0, 5000)
+    students = StudentService.get_all_students(db, 0, 5000).get("students", [])
     total_enrolled = len(students)
 
     at_risk = len([s for s in students if s["risk_score"] > 40])
@@ -321,7 +321,7 @@ def get_retention_funnel(
 def get_executive_summary(db: Session = Depends(get_db)):
     """Get executive summary dashboard data."""
     stats = StudentService.get_overview_stats(db)
-    students = StudentService.get_all_students(db, 0, 5000)
+    students = StudentService.get_all_students(db, 0, 5000).get("students", [])
 
     total_enrolled = stats["total_students"]
     at_risk_count, high_risk_count, critical_risk_count = _get_risk_counts(students)
@@ -484,7 +484,7 @@ def get_cohort_heatmap(db: Session = Depends(get_db)):
 
     Uses department as cohort key (stable and available in the current dataset).
     """
-    students = StudentService.get_all_students(db, 0, 5000)
+    students = StudentService.get_all_students(db, 0, 5000).get("students", [])
     by_dept: Dict[str, Dict[str, int]] = {}
     totals: Dict[str, int] = {}
 

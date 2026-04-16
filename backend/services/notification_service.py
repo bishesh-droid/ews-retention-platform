@@ -61,7 +61,7 @@ class NotificationService:
         """Get async Redis client if available."""
         try:
             client = AsyncRedis.from_url(REDIS_URL, decode_responses=True)
-            await client.ping()
+            await client.ping()  # type: ignore[misc]
             return client
         except Exception:
             return None
@@ -81,12 +81,12 @@ class NotificationService:
         First checks Redis (fast, distributed), then falls back to DB record.
         """
         now = datetime.now(timezone.utc)
-        cooldown_seconds = pref.cooldown_hours * 3600
+        cooldown_seconds = (pref.cooldown_hours or 24) * 3600  # type: ignore[operator]
 
         # Check Redis first (distributed cache)
         if redis_client:
             try:
-                dedup_key = self._get_dedup_key(pref.user_id, student_id)
+                dedup_key = self._get_dedup_key(pref.user_id or 0, student_id)  # type: ignore[arg-type]
                 last_sent_str = await redis_client.get(dedup_key)
                 if last_sent_str:
                     last_sent = datetime.fromisoformat(last_sent_str)
@@ -116,8 +116,8 @@ class NotificationService:
         # Update Redis for distributed deduplication
         if redis_client:
             try:
-                dedup_key = self._get_dedup_key(pref.user_id, student_id)
-                ttl_seconds = pref.cooldown_hours * 3600
+                dedup_key = self._get_dedup_key(pref.user_id or 0, student_id)  # type: ignore[arg-type]
+                ttl_seconds = (pref.cooldown_hours or 24) * 3600  # type: ignore[operator]
                 await redis_client.setex(dedup_key, ttl_seconds, now.isoformat())
             except Exception as exc:
                 logger.warning(f"[NOTIFICATION] Redis dedup update failed: {exc}")
@@ -302,16 +302,13 @@ class NotificationService:
         """Get the previous risk score for a student from RiskSnapshot history."""
         try:
             # Get the most recent snapshot before current week
-            previous_snapshot = (
-                db.query(RiskSnapshot)
-                .filter(
-                    RiskSnapshot.student_id == student_id,
-                    RiskSnapshot.week_number < current_week if current_week else True,
-                )
-                .order_by(RiskSnapshot.timestamp.desc())
-                .first()
+            _base_q = db.query(RiskSnapshot).filter(
+                RiskSnapshot.student_id == student_id
             )
-            return previous_snapshot.risk_score if previous_snapshot else None
+            if current_week is not None:
+                _base_q = _base_q.filter(RiskSnapshot.week_number < current_week)
+            previous_snapshot = _base_q.order_by(RiskSnapshot.timestamp.desc()).first()
+            return float(previous_snapshot.risk_score) if previous_snapshot and previous_snapshot.risk_score is not None else None
         except Exception as exc:
             logger.warning(f"[NOTIFICATION] Failed to get previous risk score: {exc}")
             return None
@@ -346,7 +343,7 @@ class NotificationService:
         - Updates last_notified_at on success
         - Logs all failures but never raises exceptions
         """
-        results = []
+        results: List[Dict[str, Any]] = []
 
         # Determine if threshold crossed
         category = None
@@ -378,7 +375,7 @@ class NotificationService:
                 .join(User)
                 .filter(
                     User.role.in_(["faculty", "admin", "retention team"]),
-                    User.is_active is True,
+                    User.is_active.is_(True),
                 )
                 .all()
             )
@@ -413,7 +410,7 @@ class NotificationService:
                         risk_score=risk_score,
                         previous_score=prev_score,
                         category=category,
-                        faculty_name=user.username or user.email,
+                        faculty_name=user.username or user.email,  # type: ignore[union-attr, attr-defined]
                     )
                     payload["student_name"] = student_name
 
@@ -423,7 +420,7 @@ class NotificationService:
                         success = await self._send_webhook_notification(pref, payload)
                     else:  # default to email
                         success = await self._send_email_notification(
-                            pref, user, payload
+                            pref, user, payload  # type: ignore[arg-type]
                         )
 
                     # Update last_notified_at on success

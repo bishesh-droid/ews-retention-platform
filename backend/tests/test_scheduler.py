@@ -171,8 +171,8 @@ class TestGenerateDailyPredictions:
         ), "Prediction should be created for active student without data"
 
         # Verify scores are in valid range (0-100)
-        assert 0 <= pred1.risk_score <= 100
-        assert 0 <= pred2.risk_score <= 100
+        assert 0 <= pred1.risk_score <= 100  # type: ignore[operator]
+        assert 0 <= pred2.risk_score <= 100  # type: ignore[operator]
 
         # Verify model_version is set
         assert pred1.model_version is not None
@@ -225,7 +225,7 @@ class TestGenerateDailyPredictions:
         )
 
         for pred in predictions:
-            assert 0 <= pred.risk_score <= 100, f"Invalid risk_score {pred.risk_score}"
+            assert 0 <= pred.risk_score <= 100, f"Invalid risk_score {pred.risk_score}"  # type: ignore[operator]
 
     def test_students_with_no_feature_data_get_default_score(
         self, seeded_test_db: Session
@@ -252,7 +252,7 @@ class TestGenerateDailyPredictions:
         assert (
             pred is not None
         ), "Prediction should be created even for student with no data"
-        assert 0 <= pred.risk_score <= 100, "Risk score should be in valid range"
+        assert 0 <= pred.risk_score <= 100, "Risk score should be in valid range"  # type: ignore[operator]
 
         # Should get neutral/default score (around 50) when no data
         assert pred.risk_score is not None

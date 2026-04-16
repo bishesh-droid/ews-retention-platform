@@ -201,9 +201,10 @@ def generate_report(
 
     if req.template_id == 2:
         # High risk students
-        students = StudentService.get_all_students(
+        _students_result = StudentService.get_all_students(
             db, skip=0, limit=200, sort_by="risk_score", order="desc"
         )
+        students = _students_result.get("students", [])
         high = [s for s in students if float(s.get("risk_score") or 0) >= 70]
         rows = [
             {
@@ -366,8 +367,8 @@ def export_students(
     ]
 
     ExportService.log_export(
-        db, int(current_user.id), str(current_user.role), f"students_{format}"
-    )  # type: ignore[arg-type]
+        db, current_user.id, str(current_user.role), f"students_{format}"  # type: ignore[arg-type]
+    )
 
     db.commit()
 

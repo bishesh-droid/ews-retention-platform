@@ -7,7 +7,7 @@ and `backend.infrastructure.student_repository` directly.
 
 from __future__ import annotations
 
-from typing import Dict, List, Optional
+from typing import Any, Dict, List, Optional
 
 from sqlalchemy.orm import Session
 
@@ -76,7 +76,7 @@ class StudentService:
         risk_min: Optional[float] = None,
         risk_max: Optional[float] = None,
         current_user=None,
-    ) -> List[Dict]:
+    ) -> Dict[str, Any]:
         return StudentApplicationService.get_all_students(
             db,
             skip=skip,

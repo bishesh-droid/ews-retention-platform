@@ -5,7 +5,7 @@ Creates a hashed admin user for local testing. Never runs automatically.
 
 import asyncio
 from backend.database.session import get_session
-from backend.core.security import get_password_hash
+from backend.core.auth import get_password_hash
 from backend.database.models.user import User
 
 

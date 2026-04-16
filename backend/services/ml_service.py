@@ -403,15 +403,15 @@ class MLService:
         boundaries at the outer request/job layer.
         """
         try:
-            pred = Prediction(  # type: ignore[arg-type]
+            pred = Prediction(
                 student_id=student_id,
-                risk_score=risk_score,  # stored as 0-100 scale (DB-5)
-                engagement_score=features.get("content_completion_score", 0) / 100.0,
+                risk_score=risk_score,  # type: ignore[arg-type]  # stored as 0-100 scale (DB-5)
+                engagement_score=features.get("content_completion_score", 0) / 100.0,  # type: ignore[arg-type]
                 retention_likelihood=RiskScorer.get_retention_likelihood(risk_score),
                 # Legacy fields (kept for backward compatibility with analytics endpoints)
-                grades=features.get("graded_quiz_score", 0.0),
-                attendance=features.get("exam_attendance_rate", 0.0),
-                assignments=features.get("graded_assignment_score", 0.0),
+                grades=features.get("graded_quiz_score", 0.0),  # type: ignore[arg-type]
+                attendance=features.get("exam_attendance_rate", 0.0),  # type: ignore[arg-type]
+                assignments=features.get("graded_assignment_score", 0.0),  # type: ignore[arg-type]
                 # Signal breakdown scores (0-1 scale)
                 academic_signal_score=features.get("graded_quiz_score", 0) / 100.0,
                 engagement_signal_score=features.get("quiz_engagement_score", 0)

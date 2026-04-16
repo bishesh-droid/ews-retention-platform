@@ -100,13 +100,13 @@ def compute_features(
         if not student:
             raise HTTPException(status_code=404, detail="Student not found")
 
-        data = {
+        _data: Dict[str, Any] = {
             "status": "success",
             "student_id": student_id,
             "computation_date": "now",
             "message": "Features computed successfully (on-the-fly from enrollment data)",
         }
-        return success_response(data, message="Features computed")
+        return success_response(_data, message="Features computed")
     else:
         total = db.query(Student).count()
         data: Dict[str, Any] = {

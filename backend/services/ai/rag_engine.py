@@ -13,7 +13,28 @@ from datetime import datetime
 from backend.database import Student
 from backend.database.models.goals_and_risks import RiskSnapshot
 from backend.database.models.academic import GradedComponent
+from backend.services.ai.hallucination_guard import HallucinationPrevention
 import statistics
+
+
+class GuardrailValidator:
+    """Static adapter for HallucinationPrevention, used by llm_orchestrator."""
+
+    @staticmethod
+    def validate_response(
+        llm_response: str,
+        data_sources: Dict[str, Any],
+        confidence_threshold: float = 0.7,
+    ) -> Dict[str, Any]:
+        """Validate an LLM response without requiring a DB session."""
+        from sqlalchemy.orm import Session as _Session
+
+        class _NullSession:
+            pass
+
+        # Delegate to instance-based validator without DB queries
+        validator = HallucinationPrevention.__new__(HallucinationPrevention)  # type: ignore[call-arg]
+        return validator.validate_response(llm_response, data_sources, confidence_threshold)
 
 
 class StudentDataRetriever:
@@ -93,10 +114,10 @@ class StudentDataRetriever:
         context["current_risk_score"] = risk_trend[-1] if risk_trend else None
         context["risk_trend_direction"] = (
             "improving"
-            if len(risk_trend) >= 2 and float(risk_trend[-1]) < float(risk_trend[-2])  # type: ignore[operator]  # noqa: E501
+            if len(risk_trend) >= 2 and float(risk_trend[-1]) < float(risk_trend[-2])  # type: ignore[operator, arg-type]  # noqa: E501
             else (
                 "worsening"
-                if len(risk_trend) >= 2 and float(risk_trend[-1]) > float(risk_trend[-2])  # type: ignore[operator]  # noqa: E501
+                if len(risk_trend) >= 2 and float(risk_trend[-1]) > float(risk_trend[-2])  # type: ignore[operator, arg-type]  # noqa: E501
                 else "stable"
             )
         )
@@ -106,8 +127,8 @@ class StudentDataRetriever:
         # Grade signals from GradedComponent records
         graded = (
             self.db.query(GradedComponent)
-            .filter(GradedComponent.student_org_id == student.org_defined_id)
-            .order_by(GradedComponent.created_at.desc())
+            .filter(GradedComponent.student_id == student.id)
+            .order_by(GradedComponent.id.desc())
             .limit(10)
             .all()
         )
@@ -128,8 +149,7 @@ class StudentDataRetriever:
                     "user": getattr(intervention, "user", None),
                     "action": getattr(intervention, "action", None),
                 }
-                for intervention in list(student.interventions)[-5:]
-                # type: ignore[attr-defined]  # Last 5 interventions
+                for intervention in list(student.interventions)[-5:]  # type: ignore[call-overload]
             ]
             context["data_sources"].append("intervention_history")
 
@@ -276,7 +296,7 @@ class InstitutionalDataRetriever:
         }
 
         # Intervention coverage
-        total_interventions = sum(len(list(s.interventions)) if s.interventions else 0 for s in students)  # type: ignore[arg-type]  # noqa: E501
+        total_interventions = sum(len(list(s.interventions)) if s.interventions else 0 for s in students)  # type: ignore[call-overload, misc]  # noqa: E501
         students_with_interventions = len([s for s in students if s.interventions])  # type: ignore[misc]
 
         context["intervention_metrics"] = {

@@ -232,16 +232,16 @@ def generate_daily_predictions() -> None:  # noqa: C901
                     else:
                         # Insert new prediction
                         db.add(
-                            Prediction(  # type: ignore[arg-type]
+                            Prediction(
                                 student_id=student.id,
-                                risk_score=risk_score,  # 0-100 scale (DB-5)
-                                engagement_score=engagement_score,
+                                risk_score=risk_score,  # type: ignore[arg-type]  # 0-100 scale (DB-5)
+                                engagement_score=engagement_score,  # type: ignore[arg-type]
                                 retention_likelihood=RiskScorer.get_retention_likelihood(
                                     risk_score
                                 ),
                                 model_version=settings.RISK_MODEL_VERSION,
                                 prediction_timestamp=now_utc,
-                                prediction_date=today,
+                                prediction_date=today,  # type: ignore[arg-type]
                             )
                         )
                         created_predictions += 1
@@ -281,8 +281,8 @@ def generate_daily_predictions() -> None:  # noqa: C901
                         db.add(
                             RiskSnapshot(
                                 student_id=student.id,
-                                risk_score=risk_score,
-                                engagement_score=engagement_score,
+                                risk_score=risk_score,  # type: ignore[arg-type]
+                                engagement_score=engagement_score,  # type: ignore[arg-type]
                                 week_number=wn,
                                 semester_name=settings.CURRENT_SEMESTER_NAME,
                                 timestamp=now_utc,

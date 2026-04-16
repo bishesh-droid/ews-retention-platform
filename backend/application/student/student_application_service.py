@@ -458,10 +458,10 @@ class StudentApplicationService:
         students_with_enrollments = db.query(Student).all()
         for student in students_with_enrollments:
             enrollment_dicts = StudentRepository.fetch_enrollments_map(
-                db, [student.id]
+                db, [student.id]  # type: ignore[list-item]
             ).get(
-                student.id, []
-            )  # type: ignore[arg-type, list-item]
+                student.id or "", []  # type: ignore[arg-type]
+            )
             if enrollment_dicts:
                 from backend.services.feature_engineering import FeatureEngineer
 

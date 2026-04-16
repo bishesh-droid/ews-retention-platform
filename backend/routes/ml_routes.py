@@ -75,15 +75,15 @@ async def predict_student_risk(
 
     # Run sync service calls in thread pool to avoid blocking event loop
     enrollments = await asyncio.to_thread(
-        StudentService._get_enrollment_dicts, db, student_id
+        StudentService._get_enrollment_dicts, db, student_id  # type: ignore[arg-type]
     )
     graded = await asyncio.to_thread(
-        StudentService._get_graded_components, db, student_id
+        StudentService._get_graded_components, db, student_id  # type: ignore[arg-type]
     )
-    exams = await asyncio.to_thread(StudentService._get_exam_records, db, student_id)
+    exams = await asyncio.to_thread(StudentService._get_exam_records, db, student_id)  # type: ignore[arg-type]
 
     try:
-        result = await asyncio.wait_for(
+        pred_result: dict = await asyncio.wait_for(
             asyncio.to_thread(
                 ml_service.predict_student,
                 student_id,
@@ -96,20 +96,20 @@ async def predict_student_risk(
     except asyncio.TimeoutError:
         raise HTTPException(status_code=504, detail="Prediction timed out")
 
-    if result.get("prediction_error") and "error" in result:
-        raise HTTPException(status_code=500, detail=result["error"])
+    if pred_result.get("prediction_error") and "error" in pred_result:
+        raise HTTPException(status_code=500, detail=pred_result["error"])
 
     # Persist prediction in this async endpoint thread/session.
     # (We deliberately do not pass the SQLAlchemy session into `to_thread`.)
     ml_service.persist_prediction(
-        db=db,
+        db=db,  # type: ignore[arg-type]
         student_id=student_id,
-        risk_score=float(result["risk_score"]),
-        features=result.get("features") or {},
+        risk_score=float(pred_result["risk_score"]),
+        features=pred_result.get("features") or {},
     )
     await db.commit()
 
-    return success_response(result, message="Prediction computed")
+    return success_response(pred_result, message="Prediction computed")
 
 
 @router.post("/predict-batch")
@@ -131,12 +131,12 @@ async def predict_student_batch(
 
     # Run sync service calls in thread pool to avoid blocking event loop
     enrollment_map = await asyncio.to_thread(
-        StudentService._fetch_enrollments_map, db, target_ids
+        StudentService._fetch_enrollments_map, db, target_ids  # type: ignore[arg-type]
     )
     graded_map = await asyncio.to_thread(
-        StudentService._fetch_graded_map, db, target_ids
+        StudentService._fetch_graded_map, db, target_ids  # type: ignore[arg-type]
     )
-    exam_map = await asyncio.to_thread(StudentService._fetch_exam_map, db, target_ids)
+    exam_map = await asyncio.to_thread(StudentService._fetch_exam_map, db, target_ids)  # type: ignore[arg-type]
 
     results = []
     for student_id in target_ids:
@@ -209,7 +209,7 @@ async def get_cohort_risk(
 
     # Calculate engagement patterns for the cohort
     engagement_patterns = StudentApplicationService.get_cohort_engagement_patterns(
-        db, current_user=_user
+        db, current_user=_user  # type: ignore[arg-type]
     )
 
     if not agg.n:

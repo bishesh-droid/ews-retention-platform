@@ -293,7 +293,9 @@ def get_intervention_recommendation(
     if result := _handle_academic_flags(features):
         return result
 
-    if result := _get_pattern_intervention(engagement_pattern, risk_score):
+    if engagement_pattern and (
+        result := _get_pattern_intervention(str(engagement_pattern), risk_score)
+    ):
         return result
 
     return _get_threshold_intervention(risk_score)

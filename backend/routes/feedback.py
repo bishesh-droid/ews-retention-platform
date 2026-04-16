@@ -69,9 +69,9 @@ def record_student_response(
             (response.grade_change_next_assignment or 0) / 100.0,
         ]
         effectiveness = sum(c for c in changes if c > 0) / 3.0
-        intervention.effectiveness_score = max(0, min(1.0, effectiveness))
+        intervention.effectiveness_score = max(0, min(1.0, effectiveness))  # type: ignore[assignment]
     else:
-        intervention.effectiveness_score = 0.0
+        intervention.effectiveness_score = 0.0  # type: ignore[assignment]
 
     db.commit()
     db.refresh(db_response)

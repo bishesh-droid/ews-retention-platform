@@ -383,7 +383,7 @@ class RiskScorer:
                     student_id=student_id,
                     model_version=model_version,
                     input_features=dict(input_features),  # Copy to avoid mutations
-                    output_score=output_score,
+                    output_score=output_score,  # type: ignore[arg-type]
                     output_category=output_category,
                     source=source,
                     created_at=datetime.now(timezone.utc),

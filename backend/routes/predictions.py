@@ -34,7 +34,7 @@ def get_all_predictions(
     _user=Depends(require_role([Role.ADMIN, Role.FACULTY, Role.RETENTION_TEAM])),
 ):
     """Get batch predictions for all students."""
-    students = StudentService.get_all_students(db, skip=0, limit=limit)
+    students = StudentService.get_all_students(db, skip=0, limit=limit).get("students", [])
 
     predictions = []
     for s in students:

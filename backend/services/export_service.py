@@ -37,7 +37,7 @@ class ExportService:
                 pdf.ln()
 
         output = BytesIO()
-        pdf.output(output)
+        pdf.output(output)  # type: ignore[call-overload]
         output.seek(0)
         return output
 

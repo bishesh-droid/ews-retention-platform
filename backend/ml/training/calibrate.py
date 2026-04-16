@@ -187,7 +187,7 @@ def load_t1_risk_features(db_session: Session) -> pd.DataFrame:
             {
                 "course_id": e.course_id,
                 "course_name": (
-                    e.course.student.name if hasattr(e, "course") and e.course else ""
+                    e.course.student.name if hasattr(e, "course") and e.course else ""  # type: ignore[attr-defined]
                 ),
                 "content_completed": e.content_completed,
                 "content_required": e.content_required,

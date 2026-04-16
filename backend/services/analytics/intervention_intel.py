@@ -67,14 +67,14 @@ class InterventionIntelligence:
             )
 
         # Recommendation 3: Counseling (for high risk with interventions already)
-        if risk_score > 70 and student.interventions and len(list(student.interventions)) > 0:  # type: ignore[arg-type]
+        if risk_score > 70 and student.interventions and len(list(student.interventions)) > 0:  # type: ignore[call-overload]
             recommendations.append(
                 {
                     "intervention_type": "Intensive Counseling",
                     "priority": "high",
                     "reasoning": (
                         f"Risk remains high ({risk_score:.0f}%) despite "
-                        f"{len(list(student.interventions))} previous interventions."  # type: ignore[arg-type]
+                        f"{len(list(student.interventions))} previous interventions."  # type: ignore[call-overload]
                     ),
                     "success_probability": 0.50,
                     "evidence": "Multi-intervention students need deeper support beyond academics",
@@ -109,8 +109,8 @@ class InterventionIntelligence:
         }
         recommendations.sort(
             key=lambda x: (
-                priority_order.get(x["priority"], 3),
-                -x["success_probability"],
+                priority_order.get(str(x["priority"]), 3),  # type: ignore[call-overload]
+                -float(x["success_probability"]),  # type: ignore[arg-type]
             )
         )
 
@@ -140,9 +140,10 @@ class InterventionIntelligence:
                 action = getattr(intervention, "action", None)
                 if action and action not in intervention_types:
                     intervention_types[action] = {"count": 0, "students": []}
-                intervention_types[action]["count"] += 1
-                if student.id not in intervention_types[str(action)]["students"]:  # type: ignore[index]
-                    intervention_types[str(action)]["students"].append(student.id)  # type: ignore[index]
+                _action_key = str(action) if action is not None else ""
+                intervention_types[_action_key]["count"] += 1
+                if student.id not in intervention_types[_action_key]["students"]:
+                    intervention_types[_action_key]["students"].append(student.id)
 
         total_interventions = sum(data["count"] for data in intervention_types.values())
         coverage = (
@@ -210,13 +211,13 @@ class InterventionIntelligence:
                         "attendance": round(student.predictions[0].attendance, 1),
                         "grades": round(student.predictions[0].grades, 2),
                         "similarity_score": round(similarity_score, 1),
-                        "interventions_received": len(list(student.interventions)),  # type: ignore[arg-type]
+                        "interventions_received": len(list(student.interventions)),  # type: ignore[call-overload]
                         "intervention_details": [
                             {
                                 "action": getattr(i, "action", None),
                                 "date": str(getattr(i, "date", None)),
                             }
-                            for i in list(student.interventions)[-3:]  # type: ignore[attr-defined]
+                            for i in list(student.interventions)[-3:]  # type: ignore[call-overload]
                         ],
                     }
                 )
@@ -246,8 +247,8 @@ class InterventionIntelligence:
         for student in students_with_predictions:
             risk = student.predictions[0].risk_score
             intervention_count = (
-                len(list(student.interventions)) if student.interventions else 0
-            )  # type: ignore[arg-type]
+                len(list(student.interventions)) if student.interventions else 0  # type: ignore[call-overload]
+            )
 
             # Urgency score: high risk + few/no interventions = urgent
             urgency_score = risk - (
@@ -266,7 +267,7 @@ class InterventionIntelligence:
                     "attendance": round(student.predictions[0].attendance, 1),
                     "grades": round(student.predictions[0].grades, 2),
                     "reasoning": self._generate_urgency_reasoning(
-                        risk, intervention_count, student.predictions[0]
+                        risk, intervention_count, student.predictions[0]  # type: ignore[arg-type]
                     ),
                 }
             )

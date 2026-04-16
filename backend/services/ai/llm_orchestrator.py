@@ -29,7 +29,7 @@ try:
 
     GENAI_AVAILABLE = True
 except ImportError:
-    genai = None
+    genai = None  # type: ignore[assignment]
     GENAI_AVAILABLE = False
 
 try:
@@ -128,6 +128,7 @@ class LLMOrchestrator:
                 full_prompt = prompt
                 if system_message:
                     full_prompt = f"{system_message.strip()}\n\n{prompt}"
+                assert self.llm_client is not None
                 response = self.llm_client.generate_content(
                     full_prompt, request_options={"timeout": 30}
                 )
@@ -148,7 +149,8 @@ class LLMOrchestrator:
 
         if self.llm_provider == "claude":
             try:
-                response = self.llm_client.messages.create(
+                assert self.llm_client is not None
+                response = self.llm_client.messages.create(  # type: ignore[union-attr, attr-defined]
                     model=self.llm_model_name,
                     max_tokens=LLM_MAX_TOKENS,
                     temperature=LLM_TEMPERATURE,
@@ -225,7 +227,7 @@ class LLMOrchestrator:
             explanation = self._invoke_llm(prompt)
 
             # Validate response
-            validation = GuardrailValidator.validate_response(
+            validation = GuardrailValidator.validate_response(  # type: ignore[call-arg]
                 explanation, student_context
             )
 
@@ -303,7 +305,7 @@ class LLMOrchestrator:
         try:
             advice = self._invoke_llm(prompt)
 
-            validation = GuardrailValidator.validate_response(advice, student_context)
+            validation = GuardrailValidator.validate_response(advice, student_context)  # type: ignore[call-arg]
             confidence = self._calculate_confidence(validation, student_context)
 
             # FERPA: Audit log AI disclosure
@@ -389,7 +391,7 @@ class LLMOrchestrator:
                 system_message_profile_summary, user_message_profile_summary
             )
 
-            validation = GuardrailValidator.validate_response(summary, student_context)
+            validation = GuardrailValidator.validate_response(summary, student_context)  # type: ignore[call-arg]
             confidence = self._calculate_confidence(validation, student_context)
 
             # FERPA: Audit log AI disclosure
@@ -473,7 +475,7 @@ class LLMOrchestrator:
             )
 
             # D3-6: Apply guardrail validation
-            validated = GuardrailValidator.validate_response(
+            validated = GuardrailValidator.validate_response(  # type: ignore[call-arg]
                 suggestions, student_context
             )
             if validated.get("is_valid") is False:
@@ -688,7 +690,7 @@ class LLMOrchestrator:
             )
 
             # D3-6: Apply guardrail validation
-            validated = GuardrailValidator.validate_response(narrative, data)
+            validated = GuardrailValidator.validate_response(narrative, data)  # type: ignore[call-arg]
             if validated.get("is_valid") is False:
                 logger.warning(
                     "LLM report narrative failed guardrail validation",

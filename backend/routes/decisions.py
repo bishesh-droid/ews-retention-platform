@@ -116,9 +116,10 @@ def get_pending_interventions(
     db: Session = Depends(get_db),
 ):
     """Get list of students who need interventions."""
-    students = StudentService.get_all_students(
+    _students_result = StudentService.get_all_students(
         db, 0, 500, "risk_score", "desc", risk_min=40.0
     )
+    students = _students_result.get("students", [])
 
     pending = []
     for s in students:

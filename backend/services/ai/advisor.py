@@ -4,11 +4,11 @@ from concurrent.futures import ThreadPoolExecutor
 from typing import Optional
 
 try:
-    from google import genai
+    from google import genai  # type: ignore[attr-defined]
 
     GENAI_AVAILABLE = True
 except ImportError:
-    genai = None
+    genai = None  # type: ignore[assignment]
     GENAI_AVAILABLE = False
 
 try:
@@ -113,7 +113,7 @@ async def get_ai_advice(  # noqa: C901
     prompt_data = {
         "student_name": security_manager.sanitize_student_name(
             f"{student.first_name or ''} {student.last_name or ''}".strip()
-            or student.id
+            or (student.id or "")  # type: ignore[arg-type]
         ),
         "risk_score": security_manager.sanitize_for_llm(
             f"{latest_prediction.risk_score:.2f}%", max_length=50

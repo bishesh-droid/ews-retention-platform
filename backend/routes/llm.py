@@ -204,9 +204,10 @@ def get_priority_queue(
     _rate_limit: None = Depends(require_llm_rate_limit()),
 ):
     """Get a priority queue of students needing intervention."""
-    students = StudentService.get_all_students(
+    _students_result = StudentService.get_all_students(
         db, 0, limit, "risk_score", "desc", risk_min=40.0
     )
+    students = _students_result.get("students", [])
     queue = [
         {
             "student_id": s["id"],
@@ -246,9 +247,10 @@ def find_similar_students(
         return success_response(data, message="Similar students")
 
     risk = student["risk_score"]
-    all_students = StudentService.get_all_students(
+    _all_students_result = StudentService.get_all_students(
         db, 0, 2000, risk_min=max(0, risk - 10), risk_max=min(100, risk + 10)
     )
+    all_students = _all_students_result.get("students", [])
     similar = [
         {
             "student_id": s["id"],
@@ -318,14 +320,14 @@ def get_weekly_brief(
     """Generate a weekly academic progress brief."""
     student = StudentService.get_student_by_id(db, student_id)
     if not student:
-        data = {
+        _early_data: Dict[str, Any] = {
             "student_id": student_id,
             "brief": "Student not found.",
             "confidence": "low",
         }
-        return success_response(data, message="Weekly brief")
+        return success_response(_early_data, message="Weekly brief")
 
-    data = {
+    data: Dict[str, Any] = {
         "student_id": student_id,
         "brief": f"This week, your content completion stands at {student.get('content_completion_score', 0):.0f}%. "
         f"You're enrolled in {student.get('total_courses', 0)} courses. "

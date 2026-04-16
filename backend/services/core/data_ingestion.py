@@ -165,7 +165,7 @@ def ingest_all_data(
             logger.exception("Data ingestion failed.", extra={"run_id": run.id})
             raise
         finally:
-            run.duration_seconds = round(time.time() - start_time, 2)
+            run.duration_seconds = round(time.time() - start_time, 2)  # type: ignore[assignment]
             run.students_created = stats.students_created
             run.students_updated = stats.students_updated
             run.enrollments_created = stats.enrollments_created
@@ -298,10 +298,10 @@ def backfill_intervention_outcomes(session: Session):
         if not latest_snapshot:
             continue
 
-        delta = latest_snapshot.risk_score - log.risk_score_at_recommendation
-        log.follow_up_risk_score = latest_snapshot.risk_score
+        delta = latest_snapshot.risk_score - log.risk_score_at_recommendation  # type: ignore[operator]
+        log.follow_up_risk_score = latest_snapshot.risk_score  # type: ignore[assignment]
         log.follow_up_at = datetime.utcnow()
-        log.outcome_delta = round(delta, 2)
+        log.outcome_delta = round(delta, 2)  # type: ignore[assignment]
 
         if delta <= -5.0:
             log.outcome = "improved"
@@ -354,7 +354,7 @@ def _ingest_engagement_data(
     try:
         wb = openpyxl.load_workbook(str(path), read_only=True, data_only=True)
     except (
-        openpyxl.utils.exceptions.InvalidFileException,
+        openpyxl.utils.exceptions.InvalidFileException,  # type: ignore[attr-defined]
         zipfile.BadZipFile,
         ValueError,
         KeyError,
@@ -472,7 +472,7 @@ def _ingest_engagement_data(
             student.parent_department_name = dept_name
             student.parent_department_code = dept_code
             # Track current semester for change detection on next ingest
-            student.semester_code = semester_code
+            student.semester_code = semester_code  # type: ignore[attr-defined]
 
             # Track org_id for soft delete detection (CROSS-1)
             if org_id:
@@ -611,7 +611,7 @@ def upsert_course_content_registry(
         logger.info(
             f"CourseContentRegistry created: {course_offering_code} ({semester_name}) = {content_required}"
         )
-    elif content_required > existing.content_required:
+    elif content_required > existing.content_required:  # type: ignore[operator]
         # Update with higher value (content was added mid-trimester)
         old_value = existing.content_required
         existing.content_required = content_required
@@ -695,7 +695,7 @@ def _ingest_quiz_assignment_exam(
     try:
         wb = openpyxl.load_workbook(str(path), read_only=True, data_only=True)
     except (
-        openpyxl.utils.exceptions.InvalidFileException,
+        openpyxl.utils.exceptions.InvalidFileException,  # type: ignore[attr-defined]
         zipfile.BadZipFile,
         ValueError,
         KeyError,
@@ -801,7 +801,7 @@ def _ingest_graded_sheet(
                 subject,
                 "quiz",
                 q_idx + 1,
-                score,
+                score,  # type: ignore[arg-type]
                 quiz_max_scores[q_idx],
                 is_absent,
                 stats,
@@ -821,7 +821,7 @@ def _ingest_graded_sheet(
                 subject,
                 "assignment",
                 a_idx + 1,
-                score,
+                score,  # type: ignore[arg-type]
                 assignment_max,
                 is_absent,
                 stats,
@@ -983,7 +983,7 @@ def _ingest_exam_attendance(db: Session, wb, sheet_name: str, slot: str):  # noq
             exam.ufm_flagged = ufm_val == "yes"
 
         if exam.marks_total is None:
-            exam.marks_total = 0
+            exam.marks_total = 0  # type: ignore[assignment]
 
     if valid_rows == 0:
         raise ValueError(f"No valid rows found in required sheet '{sheet_name}'.")
@@ -1036,8 +1036,8 @@ def _ingest_exam_defaulters(db: Session, wb):  # noqa: C901
             db.add(exam)
             exam_map[key] = exam
         exam.course_name = "Exam Defaulter"
-        exam.marks_obtained = 0
-        exam.marks_total = 0
+        exam.marks_obtained = 0  # type: ignore[assignment]
+        exam.marks_total = 0  # type: ignore[assignment]
         exam.present = False
         exam.mode = None
 
@@ -1126,7 +1126,7 @@ def _update_enrollments_from_latest(
                         if src.get("cname_col", 0) < len(vals)
                         else ""
                     )
-                    course_id = course_name_to_id.get(_safe_str(cname_raw).lower(), "")
+                    course_id = course_name_to_id.get(_safe_str(cname_raw).lower(), "") or ""  # type: ignore[assignment]
 
                 if not course_id:
                     continue

@@ -220,7 +220,7 @@ def get_faculty_at_risk_students(
     """
     all_students = StudentService.get_all_students(
         db, skip=0, limit=5000, sort_by="risk_score", order="desc"
-    )
+    ).get("students", [])
     at_risk = [s for s in all_students if (s.get("risk_score") or 0) >= threshold][
         :limit
     ]
@@ -249,7 +249,7 @@ def get_engagement_alerts(
     """
     students = StudentService.get_all_students(
         db, skip=0, limit=5000, sort_by="risk_score", order="desc"
-    )
+    ).get("students", [])
 
     alerts: List[Dict[str, Any]] = []
     for s in students:

@@ -137,7 +137,7 @@ async def _get_async_redis_client() -> Optional[AsyncRedis]:
     """Get async Redis client for token revocation checks."""
     try:
         client = AsyncRedis.from_url(REDIS_URL, decode_responses=True)
-        await client.ping()
+        await client.ping()  # type: ignore[misc]
         return client
     except Exception:
         return None

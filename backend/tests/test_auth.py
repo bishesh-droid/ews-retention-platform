@@ -350,6 +350,7 @@ class TestTokenRevocation:
         refresh_token = login_response.cookies.get("refresh_token")
 
         # Decode and revoke refresh token
+        assert refresh_token is not None
         payload = pyjwt.decode(
             refresh_token,
             SECRET_KEY,
@@ -363,7 +364,7 @@ class TestTokenRevocation:
         revoked = RevokedToken(
             jti=token_jti,
             user_id=test_user.id,
-            expires_at=datetime.fromtimestamp(token_exp),
+            expires_at=datetime.fromtimestamp(token_exp),  # type: ignore[arg-type]
         )
         db_session.add(revoked)
         db_session.commit()
@@ -430,6 +431,8 @@ class TestTokenRevocation:
         # before calling timestamp() so Python doesn't misinterpret it as local.
         from datetime import timezone as _tz
 
+        assert revoked.expires_at is not None
+        assert token_exp is not None
         db_exp = int(revoked.expires_at.replace(tzinfo=_tz.utc).timestamp())
         assert abs(db_exp - token_exp) <= 1, "DB expiry should match JWT exp claim"
 
@@ -469,7 +472,7 @@ class TestTokenRevocation:
         revoked1 = RevokedToken(
             jti=token_jti,
             user_id=test_user.id,
-            expires_at=datetime.fromtimestamp(token_exp),
+            expires_at=datetime.fromtimestamp(token_exp),  # type: ignore[arg-type]
         )
         db_session.add(revoked1)
         db_session.commit()
@@ -478,7 +481,7 @@ class TestTokenRevocation:
         revoked2 = RevokedToken(
             jti=token_jti,
             user_id=test_user.id,
-            expires_at=datetime.fromtimestamp(token_exp),
+            expires_at=datetime.fromtimestamp(token_exp),  # type: ignore[arg-type]
         )
         db_session.add(revoked2)
 
@@ -568,7 +571,7 @@ class TestAuthRefresh:
         revoked = RevokedToken(
             jti=token_jti,
             user_id=test_user.id,
-            expires_at=datetime.fromtimestamp(token_exp),
+            expires_at=datetime.fromtimestamp(token_exp),  # type: ignore[arg-type]
         )
         db_session.add(revoked)
         db_session.commit()

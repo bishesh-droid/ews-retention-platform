@@ -183,9 +183,9 @@ def _build_risk_profile(db: Session, student: Student) -> StudentRiskProfileData
     }
 
     profile = StudentRiskProfileData(
-        student_id=student.id,
+        student_id=student.id or "",  # type: ignore[arg-type]
         student_name=f"{student.first_name or ''} {student.last_name or ''}".strip()
-        or student.id,
+        or (student.id or ""),  # type: ignore[arg-type]
         risk_score=round(risk_score, 2),
         risk_level=risk_level,
         academic_signals=academic_signals,
@@ -302,9 +302,9 @@ def _build_risk_profile_from_cached_data(
     }
 
     profile = StudentRiskProfileData(
-        student_id=student.id,
+        student_id=student.id or "",  # type: ignore[arg-type]
         student_name=f"{student.first_name or ''} {student.last_name or ''}".strip()
-        or student.id,
+        or (student.id or ""),  # type: ignore[arg-type]
         risk_score=round(risk_score, 2),
         risk_level=risk_level,
         academic_signals=academic_signals,
@@ -411,21 +411,22 @@ def get_cohort_risk_profiles(
 
     # OPTIMIZATION B: Batch fetch all related data in single queries
     # This is the batch query pattern - fetch all data for all students at once
-    student_ids = [s.id for s in students]
+    student_ids = [s.id for s in students if s.id is not None]
 
     # Pre-fetch all related data using batch queries (O(1) instead of O(N))
     # Note: With selectinload, this data is already loaded, but we keep the
     # batch pattern for consistency with StudentRepository patterns
-    enrollment_map = StudentRepository.fetch_enrollments_map(db, student_ids)
-    graded_map = StudentRepository.fetch_graded_map(db, student_ids)
-    exam_map = StudentRepository.fetch_exam_map(db, student_ids)
+    enrollment_map = StudentRepository.fetch_enrollments_map(db, student_ids)  # type: ignore[arg-type]
+    graded_map = StudentRepository.fetch_graded_map(db, student_ids)  # type: ignore[arg-type]
+    exam_map = StudentRepository.fetch_exam_map(db, student_ids)  # type: ignore[arg-type]
 
     profiles: List[StudentRiskProfileData] = []
     for student in students:
         # Use pre-fetched data from maps instead of triggering new queries
-        enrollment_dicts = enrollment_map.get(student.id, [])
-        graded_dicts = graded_map.get(student.id, [])
-        exam_dicts = exam_map.get(student.id, [])
+        _sid = student.id or ""
+        enrollment_dicts = enrollment_map.get(_sid, [])  # type: ignore[arg-type]
+        graded_dicts = graded_map.get(_sid, [])  # type: ignore[arg-type]
+        exam_dicts = exam_map.get(_sid, [])  # type: ignore[arg-type]
 
         # Build profile using batched data
         profile = _build_risk_profile_from_cached_data(
@@ -440,7 +441,7 @@ def get_cohort_risk_profiles(
         profiles.append(profile)
 
     cohort_data = CohortRiskProfilesData(
-        profiles=[p.model_dump() for p in profiles],
+        profiles=profiles,  # type: ignore[arg-type]
         total_in_system=total,
         returned=len(profiles),
         skip=skip,

@@ -180,6 +180,7 @@ def student2_student_record(db_session: Session):
 
 def get_auth_token(user: User) -> str:
     """Helper to create a valid access token for a user."""
+    assert user.role is not None
     return create_access_token(
         subject=user.username,
         role=user.role,

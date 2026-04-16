@@ -320,7 +320,7 @@ def get_students(
     current_user: User = Depends(require_role(_STAFF_ROLES)),
 ):
     """Get paginated list of students with engagement metrics. Staff only."""
-    students = StudentService.get_all_students(
+    _students_result = StudentService.get_all_students(
         db,
         skip,
         limit,
@@ -330,6 +330,7 @@ def get_students(
         risk_max,
         current_user=current_user,
     )
+    students = _students_result.get("students", [])
     total = StudentService.get_student_count_filtered(
         db,
         risk_min=risk_min,
@@ -488,8 +489,8 @@ def get_student_risk_trend(
             {
                 "timestamp": ts,
                 "risk_score": round(max(0.0, min(100.0, risk_val)), 2),
-                "week_number": p.week_number,
-                "semester": p.semester_name,
+                "week_number": None,
+                "semester": None,
             }
         )
 
@@ -558,8 +559,10 @@ def get_cohort_risk_trends(
 
     buckets: Dict[str, Dict[str, List[float]]] = {}
     for s in snaps:
+        if s.timestamp is None:
+            continue
         key = _bucket_key(s.timestamp)
-        risk = _normalize_0_100(s.risk_score)
+        risk = _normalize_0_100(s.risk_score)  # type: ignore[arg-type]
         if risk is None:
             continue
         if key not in buckets:
@@ -603,8 +606,10 @@ def get_cohort_engagement_trends(
 
     buckets: Dict[str, List[float]] = {}
     for s in snaps:
+        if s.timestamp is None:
+            continue
         key = _bucket_key(s.timestamp)
-        eng = _normalize_0_100(s.engagement_score)
+        eng = _normalize_0_100(s.engagement_score)  # type: ignore[arg-type]
         if eng is None:
             continue
         buckets.setdefault(key, []).append(eng)
@@ -686,7 +691,7 @@ def get_intervention_effectiveness(
         status_counts[st] = status_counts.get(st, 0) + 1
 
         before = i.risk_score_at_trigger
-        after = risk_now.get(i.student_id)
+        after = risk_now.get(i.student_id) if i.student_id is not None else None
         if before is None or after is None:
             continue
         try:

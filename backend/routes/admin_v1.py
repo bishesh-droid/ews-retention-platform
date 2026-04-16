@@ -308,7 +308,7 @@ def get_intervention_effectiveness(  # noqa: C901
     type_query = (
         base_query.with_entities(
             InterventionLog.intervention_type,
-            func.count().label("count"),
+            func.count().label("total_count"),
             func.sum(case((InterventionLog.acted_on.is_(True), 1), else_=0)).label(
                 "acted"
             ),
@@ -323,13 +323,16 @@ def get_intervention_effectiveness(  # noqa: C901
     by_type = {}
     for row in type_query:
         itype = row.intervention_type or "unknown"
+        _count = int(row.total_count or 0)
+        _acted = int(row.acted or 0)
+        _improved = int(row.improved or 0)
         by_type[itype] = {
-            "count": int(row.count),
+            "count": _count,
             "acted_rate": (
-                round(int(row.acted) / int(row.count), 3) if row.count > 0 else 0
+                round(_acted / _count, 3) if _count > 0 else 0
             ),
             "improvement_rate": (
-                round(int(row.improved) / int(row.acted), 3) if row.acted > 0 else 0
+                round(_improved / _acted, 3) if _acted > 0 else 0
             ),
         }
 
@@ -337,7 +340,7 @@ def get_intervention_effectiveness(  # noqa: C901
     pattern_query = (
         base_query.with_entities(
             InterventionLog.engagement_pattern,
-            func.count().label("count"),
+            func.count().label("total_count"),
             func.sum(case((InterventionLog.outcome == "improved", 1), else_=0)).label(
                 "improved"
             ),
@@ -363,10 +366,12 @@ def get_intervention_effectiveness(  # noqa: C901
     for row in pattern_query:
         pattern = row.engagement_pattern or "unknown"
         acted_count = int(row.acted or 0)
+        _pat_count = int(row.total_count or 0)
+        _pat_improved = int(row.improved or 0)
         by_pattern[pattern] = {
-            "count": int(row.count),
+            "count": _pat_count,
             "improvement_rate": (
-                round(int(row.improved) / acted_count, 3) if acted_count > 0 else 0
+                round(_pat_improved / acted_count, 3) if acted_count > 0 else 0
             ),
         }
 
@@ -640,7 +645,7 @@ async def export_student_data(
         raise HTTPException(404, "Student not found")
 
     enrollments_result = await db.execute(
-        select(Enrollment).where(Enrollment.student_org_id == org_id)
+        select(Enrollment).where(Enrollment.student_id == student.id)
     )
     enrollments = enrollments_result.scalars().all()
     snapshots_result = await db.execute(
@@ -656,11 +661,11 @@ async def export_student_data(
     )
     predictions = predictions_result.scalars().all()
     graded_result = await db.execute(
-        select(GradedComponent).where(GradedComponent.student_org_id == org_id)
+        select(GradedComponent).where(GradedComponent.student_id == student.id)
     )
     graded = graded_result.scalars().all()
     exams_result = await db.execute(
-        select(ExamRecord).where(ExamRecord.student_org_id == org_id)
+        select(ExamRecord).where(ExamRecord.student_id == student.id)
     )
     exams = exams_result.scalars().all()
 
@@ -704,21 +709,29 @@ async def export_student_data(
             {
                 "risk_score": p.risk_score,
                 "retention_likelihood": p.retention_likelihood,
-                "created_at": p.created_at.isoformat() if p.created_at else None,
+                "created_at": p.prediction_timestamp.isoformat() if p.prediction_timestamp else None,
             }
             for p in predictions
         ],
         "graded_components": [
             {
                 "course": g.course_name,
-                "component": g.component_name,
+                "component": f"{g.component_type} {g.component_number}",
                 "score": g.score,
                 "missed": g.missed,
             }
             for g in graded
         ],
         "exam_records": [
-            {"course": e.course_code, "present": e.present, "score_pct": e.score_pct}
+            {
+                "course": e.course_code,
+                "present": e.present,
+                "score_pct": (
+                    round(e.marks_obtained / e.marks_total * 100, 1)  # type: ignore[operator]
+                    if e.marks_total and e.marks_obtained is not None
+                    else None
+                ),
+            }
             for e in exams
         ],
     }

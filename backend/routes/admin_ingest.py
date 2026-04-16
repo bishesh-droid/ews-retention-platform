@@ -97,9 +97,9 @@ async def trigger_ingestion(  # noqa: C901
         unique_filename = f"{uuid.uuid4().hex[:8]}_{safe_basename}"
 
         # Save to data directory (absolute path from config)
-        from backend.config import settings
+        import backend.config as _config
 
-        data_dir = settings.DATA_DIR
+        data_dir = _config.DATA_DIR
         data_dir.mkdir(parents=True, exist_ok=True)
 
         dest = data_dir / unique_filename

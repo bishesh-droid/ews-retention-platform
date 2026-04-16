@@ -48,7 +48,12 @@ if TESTING:
     _test_db_fd, _test_db_path = tempfile.mkstemp(suffix=".db", prefix="ews_test_")
     os.close(_test_db_fd)
     DATABASE_URL = f"sqlite:///{_test_db_path}"
-    atexit.register(lambda p=_test_db_path: os.unlink(p) if os.path.exists(p) else None)
+
+    def cleanup_test_db(path: str = _test_db_path) -> None:
+        if os.path.exists(path):
+            os.unlink(path)
+
+    atexit.register(cleanup_test_db)
     logger = logging.getLogger(__name__)
     logger.info(f"TESTING=true: using temp SQLite database at {_test_db_path}")
 else:
