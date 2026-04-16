@@ -27,8 +27,6 @@ class GuardrailValidator:
         confidence_threshold: float = 0.7,
     ) -> Dict[str, Any]:
         """Validate an LLM response without requiring a DB session."""
-        from sqlalchemy.orm import Session as _Session
-
         class _NullSession:
             pass
 

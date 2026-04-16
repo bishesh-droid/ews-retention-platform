@@ -1126,7 +1126,9 @@ def _update_enrollments_from_latest(
                         if src.get("cname_col", 0) < len(vals)
                         else ""
                     )
-                    course_id = course_name_to_id.get(_safe_str(cname_raw).lower(), "") or ""  # type: ignore[assignment]
+                    course_id = (  # type: ignore[assignment]
+                        course_name_to_id.get(_safe_str(cname_raw).lower(), "") or ""
+                    )
 
                 if not course_id:
                     continue

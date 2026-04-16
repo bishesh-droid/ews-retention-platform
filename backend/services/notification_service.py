@@ -308,7 +308,9 @@ class NotificationService:
             if current_week is not None:
                 _base_q = _base_q.filter(RiskSnapshot.week_number < current_week)
             previous_snapshot = _base_q.order_by(RiskSnapshot.timestamp.desc()).first()
-            return float(previous_snapshot.risk_score) if previous_snapshot and previous_snapshot.risk_score is not None else None
+            if previous_snapshot and previous_snapshot.risk_score is not None:
+                return float(previous_snapshot.risk_score)
+            return None
         except Exception as exc:
             logger.warning(f"[NOTIFICATION] Failed to get previous risk score: {exc}")
             return None

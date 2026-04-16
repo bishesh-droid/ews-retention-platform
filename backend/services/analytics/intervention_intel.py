@@ -67,7 +67,7 @@ class InterventionIntelligence:
             )
 
         # Recommendation 3: Counseling (for high risk with interventions already)
-        if risk_score > 70 and student.interventions and len(list(student.interventions)) > 0:  # type: ignore[call-overload]
+        if risk_score > 70 and student.interventions and len(list(student.interventions)) > 0:  # type: ignore[call-overload]  # noqa: E501
             recommendations.append(
                 {
                     "intervention_type": "Intensive Counseling",
