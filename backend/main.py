@@ -179,8 +179,7 @@ async def lifespan(app: FastAPI):  # noqa: C901
                 raise RuntimeError(
                     f"Production CORS origin {origin!r} must use HTTPS."
                 )
-            if parsed.hostname in ("localhost", "127.0.0.1", "0.0.0.0", "::1"):
-                # nosec B104 - security check blocking loopback origins
+            if parsed.hostname in ("localhost", "127.0.0.1", "0.0.0.0", "::1"):  # nosec B104
                 raise RuntimeError(
                     f"Loopback CORS origin {origin!r} not allowed in production."
                 )
