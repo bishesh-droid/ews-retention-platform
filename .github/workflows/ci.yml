@@ -38,16 +38,11 @@ jobs:
         pip install -r requirements.txt
         pip install -r requirements-dev.txt
 
-    - name: Lint with flake8
-      run: |
-        # stop the build if there are Python syntax errors or undefined names
-        flake8 backend/ --count --select=E9,F63,F7,F82 --show-source --statistics
-        # exit-zero treats all errors as warnings
-        flake8 backend/ --count --exit-zero --max-complexity=10 --max-line-length=127 --statistics
+    - name: Lint
+      run: flake8 backend/ --max-line-length=100
 
-    - name: Type check with mypy
-      run: |
-        mypy backend/ --ignore-missing-imports --show-error-codes || true
+    - name: Type check
+      run: mypy backend/ --ignore-missing-imports
 
     - name: Run pytest
       run: |
@@ -87,7 +82,7 @@ jobs:
 
     - name: Run ESLint
       working-directory: ./frontend
-      run: npm run lint || true
+      run: npm run lint
 
     - name: Build
       working-directory: ./frontend
@@ -102,16 +97,15 @@ jobs:
     steps:
     - uses: actions/checkout@v4
 
-    - name: Run Bandit security scan
+    - name: Security scan
       run: |
         pip install bandit
-        bandit -r backend/ -f json -o bandit-report.json || true
-        bandit -r backend/ || true
+        bandit -r backend/ -ll -b .bandit.baseline
 
-    - name: Check for hardcoded secrets
+    - name: Secret detection
       run: |
         pip install detect-secrets
-        detect-secrets scan --all-files --force-use-all-plugins --baseline .secrets.baseline || true
+        detect-secrets scan --baseline .secrets.baseline
 
   docker-build:
     runs-on: ubuntu-latest

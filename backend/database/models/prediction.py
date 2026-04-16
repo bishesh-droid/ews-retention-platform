@@ -20,7 +20,7 @@ Mixed-scale bugs (storing both 0-1 and 0-100) have been fixed.
 Always validate risk scores are within [0.0, 100.0] before storing.
 """
 
-from sqlalchemy import Column, Integer, String, Float, ForeignKey, DateTime, CheckConstraint
+from sqlalchemy import Column, Integer, String, Float, ForeignKey, DateTime, CheckConstraint, UniqueConstraint
 from sqlalchemy.orm import relationship
 from datetime import datetime, timezone
 from backend.database.connection import Base
@@ -66,6 +66,7 @@ class Prediction(Base):
     # Future: will store ML model version when training pipeline is implemented.
     model_version = Column(String)
     prediction_timestamp = Column(DateTime, default=lambda: datetime.now(timezone.utc), nullable=False)
+    prediction_date = Column(DateTime, default=lambda: datetime.now(timezone.utc).date(), nullable=False)
     top_risk_factors = Column(String)  # JSON string of top contributing features
 
     # Relationship
@@ -77,4 +78,6 @@ class Prediction(Base):
             "risk_score >= 0.0 AND risk_score <= 100.0",
             name="check_risk_score_range"
         ),
+        # Prevent duplicate predictions per student per day
+        UniqueConstraint("student_id", "prediction_date", name="uq_prediction_student_date"),
     )

@@ -1,7 +1,17 @@
-from sqlalchemy import Column, Integer, String, ForeignKey, DateTime, JSON
+from sqlalchemy import Column, Integer, String, ForeignKey, DateTime, JSON, event
 from sqlalchemy.orm import relationship
 from datetime import datetime, timezone
 from ..connection import Base  # Corrected import for Base
+
+
+# FERPA: AuditLog append-only enforcement
+# For SQLite: Application-level guard using SQLAlchemy events
+# For PostgreSQL production: Use DDL trigger or RLS policy instead of application guard
+# Example PostgreSQL trigger:
+#   CREATE OR REPLACE FUNCTION prevent_audit_update_delete()
+#   RETURNS TRIGGER AS $$ BEGIN RAISE EXCEPTION 'AuditLog is append-only'; END; $$ LANGUAGE plpgsql;
+#   CREATE TRIGGER audit_log_append_only BEFORE UPDATE OR DELETE ON audit_logs
+#   FOR EACH ROW EXECUTE FUNCTION prevent_audit_update_delete();
 
 
 class AuditLog(Base):
@@ -10,6 +20,10 @@ class AuditLog(Base):
 
     Tracks who accessed what student data and when, for compliance
     with FERPA requirements for educational records access logging.
+
+    IMPORTANT: This table is append-only. Records cannot be updated or deleted
+    to maintain a complete audit trail. Application-level enforcement is used
+    for SQLite; PostgreSQL production should use DDL triggers or RLS policies.
     """
     __tablename__ = "audit_logs"
 
@@ -46,3 +60,16 @@ class AuditLog(Base):
             f"resource_type={self.resource_type}, resource_id={self.resource_id}, "
             f"timestamp={self.timestamp})>"
         )
+
+
+# SQLite application-level guard: prevent UPDATE and DELETE on audit_logs
+@event.listens_for(AuditLog, 'before_update')
+def prevent_audit_update(mapper, connection, target):
+    """Raise RuntimeError if attempting to update an AuditLog record."""
+    raise RuntimeError("AuditLog is append-only: UPDATE operations are prohibited")
+
+
+@event.listens_for(AuditLog, 'before_delete')
+def prevent_audit_delete(mapper, connection, target):
+    """Raise RuntimeError if attempting to delete an AuditLog record."""
+    raise RuntimeError("AuditLog is append-only: DELETE operations are prohibited")

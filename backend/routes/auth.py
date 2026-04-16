@@ -22,7 +22,8 @@ from backend.schemas.auth import (
     UserUpdate,
     AdminUserUpdate,
 )
-from backend.config import ACCESS_TOKEN_EXPIRE_MINUTES, ENVIRONMENT, RATE_LIMIT_LOGIN
+from backend.config import ACCESS_TOKEN_EXPIRE_MINUTES, ENVIRONMENT, RATE_LIMIT_LOGIN, REDIS_URL
+from redis.asyncio import Redis as AsyncRedis
 import logging
 
 logger = logging.getLogger(__name__)
@@ -82,10 +83,10 @@ async def login(
         key=REFRESH_TOKEN_COOKIE_NAME,
         value=refresh_token,
         httponly=True,
-        secure=ENVIRONMENT == "production",  # HTTPS only in production
-        samesite="lax",
+        secure=True,
+        samesite="strict",
         max_age=cookie_max_age,
-        path="/",
+        path="/api/v1/auth/refresh",
     )
 
     return {
@@ -161,6 +162,27 @@ async def refresh_token(
         expires_delta=access_token_expires,
     )
 
+    # Revoke the old refresh token (proper RTR - Refresh Token Rotation)
+    if token_jti:
+        expires_at = datetime.fromtimestamp(payload["exp"], tz=timezone.utc)
+        revoked = RevokedToken(
+            jti=token_jti,
+            user_id=user.id,
+            expires_at=expires_at,
+        )
+        db.add(revoked)
+        await db.commit()
+        # Also write to Redis for fast revocation check (O(1))
+        try:
+            redis_client = AsyncRedis.from_url(REDIS_URL, decode_responses=True)
+            ttl = int((expires_at - datetime.now(timezone.utc)).total_seconds())
+            if ttl > 0:
+                await redis_client.setex(f"jti:{token_jti}", ttl, "1")
+            await redis_client.close()
+        except Exception:
+            # Log Redis failure but don't fail the refresh - DB is source of truth
+            logger.warning("Failed to write revoked token to Redis (RTR)", exc_info=True)
+
     # Rotate refresh token (security best practice)
     new_refresh_token_expires = timedelta(days=REFRESH_TOKEN_EXPIRE_DAYS)
     new_refresh_token = auth.create_access_token(
@@ -176,10 +198,10 @@ async def refresh_token(
         key=REFRESH_TOKEN_COOKIE_NAME,
         value=new_refresh_token,
         httponly=True,
-        secure=ENVIRONMENT == "production",
-        samesite="lax",
+        secure=True,
+        samesite="strict",
         max_age=cookie_max_age,
-        path="/",
+        path="/api/v1/auth/refresh",
     )
 
     return {
@@ -218,13 +240,23 @@ async def logout(
 
             if token_jti and token_exp:
                 # Add token to revocation blocklist (use UTC timezone)
+                expires_at = datetime.fromtimestamp(token_exp, tz=timezone.utc)
                 revoked_token = RevokedToken(
                     jti=token_jti,
                     user_id=current_user.id,
-                    expires_at=datetime.fromtimestamp(token_exp, tz=timezone.utc),
+                    expires_at=expires_at,
                 )
                 db.add(revoked_token)
                 await db.commit()
+                # Also write to Redis for fast revocation check (O(1))
+                try:
+                    redis_client = AsyncRedis.from_url(REDIS_URL, decode_responses=True)
+                    ttl = int((expires_at - datetime.now(timezone.utc)).total_seconds())
+                    if ttl > 0:
+                        await redis_client.setex(f"jti:{token_jti}", ttl, "1")
+                    await redis_client.close()
+                except Exception:
+                    logger.warning("Failed to write revoked access token to Redis", exc_info=True)
                 logger.info(f"Access token revoked for user {current_user.id}, jti={token_jti}")
         except Exception as e:
             # Log but don't fail the logout if token revocation fails
@@ -246,13 +278,23 @@ async def logout(
 
             if refresh_jti and refresh_exp:
                 # Add refresh token to revocation blocklist (use UTC timezone)
+                expires_at = datetime.fromtimestamp(refresh_exp, tz=timezone.utc)
                 revoked_refresh = RevokedToken(
                     jti=refresh_jti,
                     user_id=current_user.id,
-                    expires_at=datetime.fromtimestamp(refresh_exp, tz=timezone.utc),
+                    expires_at=expires_at,
                 )
                 db.add(revoked_refresh)
                 await db.commit()
+                # Also write to Redis for fast revocation check (O(1))
+                try:
+                    redis_client = AsyncRedis.from_url(REDIS_URL, decode_responses=True)
+                    ttl = int((expires_at - datetime.now(timezone.utc)).total_seconds())
+                    if ttl > 0:
+                        await redis_client.setex(f"jti:{refresh_jti}", ttl, "1")
+                    await redis_client.close()
+                except Exception:
+                    logger.warning("Failed to write revoked refresh token to Redis", exc_info=True)
                 logger.info(f"Refresh token revoked for user {current_user.id}, jti={refresh_jti}")
         except Exception as e:
             # Log but don't fail the logout if token revocation fails
@@ -262,18 +304,18 @@ async def logout(
     # Clear the refresh token cookie
     response.delete_cookie(
         key=REFRESH_TOKEN_COOKIE_NAME,
-        path="/",
+        path="/api/v1/auth/refresh",
         httponly=True,
-        secure=ENVIRONMENT == "production",
-        samesite="lax",
+        secure=True,
+        samesite="strict",
     )
     return {"message": "Successfully logged out"}
 
 
 @router.post("/register", response_model=UserOut, status_code=status.HTTP_201_CREATED)
-def register(
+async def register(
     user_in: UserCreate,
-    db: Session = Depends(deps.get_db),
+    db: AsyncSession = Depends(deps.get_db_async),
 ):
     """
     Public self-registration.
@@ -282,12 +324,16 @@ def register(
     Accepting a role from an untrusted client would allow self-elevation
     to admin or faculty.
     """
-    if db.query(User).filter(User.username == user_in.username).first():
+    result = await db.execute(select(User).where(User.username == user_in.username))
+    existing = result.scalar_one_or_none()
+    if existing:
         raise HTTPException(
             status_code=status.HTTP_409_CONFLICT,
             detail="A user with this username already exists.",
         )
-    if db.query(User).filter(User.email == user_in.email).first():
+    result = await db.execute(select(User).where(User.email == user_in.email))
+    existing = result.scalar_one_or_none()
+    if existing:
         raise HTTPException(
             status_code=status.HTTP_409_CONFLICT,
             detail="A user with this email already exists.",
@@ -302,8 +348,8 @@ def register(
         is_superuser=False,
     )
     db.add(db_user)
-    db.commit()
-    db.refresh(db_user)
+    await db.commit()
+    await db.refresh(db_user)
     return db_user
 
 

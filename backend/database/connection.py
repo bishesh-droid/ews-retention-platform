@@ -160,6 +160,7 @@ def init_db():
         ExamRecord,
         Goal,
         RiskSnapshot,
+        FacultyNotificationPref,
         AuditLog,
         IngestionRun,
         CourseContentRegistry,

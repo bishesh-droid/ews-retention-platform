@@ -31,6 +31,7 @@ from backend.services.feature_engineering import FeatureEngineer
 from backend.services.infrastructure.token_cleanup import purge_expired_revoked_tokens
 from backend.services.calendar_scorer import get_current_week
 from backend.services.risk_scoring import RiskScorer
+from backend.services.notification_service import notification_service
 
 logger = logging.getLogger(__name__)
 
@@ -83,6 +84,9 @@ def generate_daily_predictions() -> None:  # noqa: C901
     except Exception as e:
         logger.warning(f"[SCHEDULER] Database not ready, skipping daily prediction job: {e}")
         return
+
+    # E-1: Track students crossing risk thresholds for notifications
+    threshold_crossings = []  # List of (student_id, risk_score, prev_score)
 
     with db_session_scope() as db:
         # Pre-load reference data (once per job)
@@ -141,6 +145,7 @@ def generate_daily_predictions() -> None:  # noqa: C901
         total_processed = 0
         created_predictions = 0
         created_snapshots = 0
+        notifications_queued = 0
 
         while True:
             batch = (
@@ -195,30 +200,61 @@ def generate_daily_predictions() -> None:  # noqa: C901
                     )
                     engagement_score = max(0.0, min(1.0, engagement_score_0_100 / 100.0))
 
-                    db.add(
-                        Prediction(  # type: ignore[arg-type]
-                            student_id=student.id,
-                            risk_score=risk_score,  # 0-100 scale (DB-5)
-                            engagement_score=engagement_score,
-                            retention_likelihood=RiskScorer.get_retention_likelihood(risk_score),
-                            model_version=settings.RISK_MODEL_VERSION,
-                            prediction_timestamp=now_utc,
+                    # Upsert: Check if prediction already exists for (student_id, today)
+                    today = now_utc.date()
+                    existing_pred = db.query(Prediction).filter(
+                        Prediction.student_id == student.id,
+                        Prediction.prediction_date == today
+                    ).first()
+                    if existing_pred:
+                        # Update existing prediction
+                        existing_pred.risk_score = risk_score
+                        existing_pred.engagement_score = engagement_score
+                        existing_pred.retention_likelihood = RiskScorer.get_retention_likelihood(risk_score)
+                        existing_pred.model_version = settings.RISK_MODEL_VERSION
+                        existing_pred.prediction_timestamp = now_utc
+                    else:
+                        # Insert new prediction
+                        db.add(
+                            Prediction(  # type: ignore[arg-type]
+                                student_id=student.id,
+                                risk_score=risk_score,  # 0-100 scale (DB-5)
+                                engagement_score=engagement_score,
+                                retention_likelihood=RiskScorer.get_retention_likelihood(risk_score),
+                                model_version=settings.RISK_MODEL_VERSION,
+                                prediction_timestamp=now_utc,
+                                prediction_date=today,
+                            )
                         )
-                    )
-                    created_predictions += 1
+                        created_predictions += 1
 
                     # Upsert RiskSnapshot to avoid duplicates (cross-dialect: works with
                     # both SQLite and PostgreSQL without dialect-specific INSERT syntax)
+                    # E-1: Capture previous score for threshold crossing detection
+                    prev_score = None
                     existing_snapshot = db.query(RiskSnapshot).filter(
                         RiskSnapshot.student_id == student.id,
                         RiskSnapshot.week_number == wn,
                         RiskSnapshot.semester_name == settings.CURRENT_SEMESTER_NAME,
                     ).first()
                     if existing_snapshot:
+                        prev_score = existing_snapshot.risk_score
                         existing_snapshot.risk_score = risk_score
                         existing_snapshot.engagement_score = engagement_score
                         existing_snapshot.timestamp = now_utc
                     else:
+                        # Get previous week's snapshot for comparison
+                        prev_snapshot = (
+                            db.query(RiskSnapshot)
+                            .filter(
+                                RiskSnapshot.student_id == student.id,
+                                RiskSnapshot.week_number < wn if wn else True,
+                            )
+                            .order_by(RiskSnapshot.timestamp.desc())
+                            .first()
+                        )
+                        if prev_snapshot:
+                            prev_score = prev_snapshot.risk_score
                         db.add(RiskSnapshot(
                             student_id=student.id,
                             risk_score=risk_score,
@@ -229,17 +265,36 @@ def generate_daily_predictions() -> None:  # noqa: C901
                         ))
                     created_snapshots += 1
 
+                    # E-1: Check for risk threshold crossing (HIGH=70, CRITICAL=85)
+                    # Only notify on upward crossing (prev_score < threshold <= risk_score)
+                    HIGH_THRESHOLD = 70.0
+                    CRITICAL_THRESHOLD = 85.0
+
+                    crossed_high = (
+                        risk_score >= HIGH_THRESHOLD and
+                        (prev_score is None or prev_score < HIGH_THRESHOLD)
+                    )
+                    crossed_critical = (
+                        risk_score >= CRITICAL_THRESHOLD and
+                        (prev_score is None or prev_score < CRITICAL_THRESHOLD)
+                    )
+
+                    if crossed_high or crossed_critical:
+                        threshold_crossings.append((student.id, risk_score, prev_score))
+                        notifications_queued += 1
+
                     # D5-2: Write features to EngineeredFeatures store for fast list queries
+                    today = now_utc.date()
                     feat_record = db.query(EngineeredFeatures).filter(
                         EngineeredFeatures.student_id == student.id,
-                        EngineeredFeatures.computation_date == datetime.utcnow().date()
+                        EngineeredFeatures.computation_date == today
                     ).first()
                     if feat_record:
-                        feat_record.computation_date = datetime.utcnow().date()
+                        feat_record.computation_date = today
                     else:
                         db.add(EngineeredFeatures(
                             student_id=student.id,
-                            computation_date=datetime.utcnow().date(),
+                            computation_date=today,
                         ))
                     processed += 1
                 except Exception:
@@ -249,11 +304,64 @@ def generate_daily_predictions() -> None:  # noqa: C901
                     errors += 1
 
     logger.info(
-        "[SCHEDULER] Daily prediction job complete. students=%s predictions=%s snapshots=%s",
+        "[SCHEDULER] Daily prediction job complete. students=%s predictions=%s snapshots=%s notifications_queued=%s",
         total_processed,
         created_predictions,
         created_snapshots,
+        notifications_queued,
     )
+
+    # E-1: Send notifications for threshold crossings (outside main transaction)
+    if threshold_crossings:
+        _send_threshold_notifications(threshold_crossings)
+
+
+def _send_threshold_notifications(threshold_crossings: list) -> None:
+    """E-1: Send notifications for students crossing risk thresholds.
+
+    This helper runs async notification tasks from the sync scheduler context.
+    Each notification is sent as a background task; failures are logged but
+    never crash the scheduler.
+    """
+    import asyncio
+
+    async def _notify_all():
+        from backend.database.connection import AsyncSessionLocal
+        from redis.asyncio import Redis as AsyncRedis
+        from backend.config import REDIS_URL
+
+        redis_client = None
+        try:
+            redis_client = AsyncRedis.from_url(REDIS_URL, decode_responses=True)
+            await redis_client.ping()
+        except Exception:
+            redis_client = None
+
+        async with AsyncSessionLocal() as db:
+            for student_id, risk_score, prev_score in threshold_crossings:
+                try:
+                    await notification_service.notify_risk_threshold_crossed(
+                        student_id=student_id,
+                        risk_score=risk_score,
+                        prev_score=prev_score,
+                        db=db,
+                        redis_client=redis_client,
+                    )
+                except Exception as exc:
+                    logger.exception(
+                        f"[SCHEDULER] Notification failed for student {student_id}: {exc}"
+                    )
+
+        if redis_client:
+            await redis_client.close()
+        await notification_service.close()
+
+    try:
+        # Run async notification tasks from sync context
+        asyncio.run(_notify_all())
+        logger.info(f"[SCHEDULER] Sent notifications for {len(threshold_crossings)} threshold crossings")
+    except Exception as exc:
+        logger.exception(f"[SCHEDULER] Notification dispatch failed: {exc}")
 
 
 def retrain_model_weekly() -> None:
@@ -265,7 +373,11 @@ def retrain_model_weekly() -> None:
 
 def backup_sqlite_database():
     """D12-4: Automated SQLite backup job."""
-    db_path = Path(settings.DATABASE_URL.replace("sqlite:///", ""))
+    # Skip backup if not using SQLite (e.g., PostgreSQL in production)
+    if not settings.DATABASE_URL.startswith("sqlite:///"):
+        logger.info("[SCHEDULER] SQLite backup skipped — not a SQLite database.")
+        return
+    db_path = Path(settings.DATABASE_URL.removeprefix("sqlite:///"))
     if not db_path.exists():
         logger.warning("SQLite DB not found for backup", extra={"path": str(db_path)})
         return
@@ -288,16 +400,35 @@ def purge_old_records(db_session_factory) -> None:
     GDPR Art. 5(1)(e) — data minimisation.
     Purge RiskSnapshots older than 12 months.
     Purge InterventionLogs older than 24 months.
+    Also enforce rolling cap of 52 snapshots per student.
     """
+    from sqlalchemy import func
+
     with db_session_scope() as db:
         cutoff_snapshots = datetime.now(timezone.utc) - timedelta(days=365)
         cutoff_interventions = datetime.now(timezone.utc) - timedelta(days=730)
 
+        # Purge snapshots older than 365 days
         deleted_snapshots = (
             db.query(RiskSnapshot)
             .filter(RiskSnapshot.timestamp < cutoff_snapshots)
             .delete(synchronize_session=False)
         )
+
+        # Rolling cap: keep only 52 most recent snapshots per student
+        subq = db.query(
+            RiskSnapshot.id,
+            func.row_number().over(
+                partition_by=RiskSnapshot.student_id,
+                order_by=RiskSnapshot.timestamp.desc()
+            ).label('rn')
+        ).subquery()
+        capped_snapshots = (
+            db.query(RiskSnapshot)
+            .filter(RiskSnapshot.id.in_(db.query(subq.c.id).filter(subq.c.rn > 52)))
+            .delete(synchronize_session=False)
+        )
+
         deleted_logs = (
             db.query(InterventionLog)
             .filter(InterventionLog.recommended_at < cutoff_interventions)
@@ -308,6 +439,7 @@ def purge_old_records(db_session_factory) -> None:
             "[SCHEDULER] GDPR purge complete",
             extra={
                 "snapshots_deleted": deleted_snapshots,
+                "snapshots_capped": capped_snapshots,
                 "intervention_logs_deleted": deleted_logs,
             }
         )
@@ -407,8 +539,15 @@ class SchedulerService:
     async def _run_monthly_purge_loop(self) -> None:
         """Run on 1st of each month at 02:00 UTC."""
         while True:
-            await asyncio.sleep(_seconds_until(hour=2, minute=0, weekday=None))
-            await self._run_monthly_purge_once(reason="scheduled-monthly-02:00-utc")
+            now = datetime.now(timezone.utc)
+            if now.month == 12:
+                next_run = now.replace(year=now.year+1, month=1, day=1,
+                                       hour=2, minute=0, second=0, microsecond=0)
+            else:
+                next_run = now.replace(month=now.month+1, day=1,
+                                       hour=2, minute=0, second=0, microsecond=0)
+            await asyncio.sleep(max((next_run - now).total_seconds(), 1.0))
+            await self._run_monthly_purge_once(reason="scheduled-monthly")
 
     async def _run_backup_once(self, reason: str) -> None:
         """Run SQLite backup job."""

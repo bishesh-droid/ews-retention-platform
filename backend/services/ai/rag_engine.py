@@ -334,47 +334,5 @@ class ContextAssembler:
         return "\n".join(context_parts)
 
 
-class GuardrailValidator:
-    """Validates LLM responses against authorized data to prevent hallucinations."""
-
-    @staticmethod
-    def validate_response(response: str, allowed_data: Dict) -> Dict[str, Any]:
-        """
-        Check if LLM response only references data from allowed_data.
-
-        Args:
-            response: LLM generated text
-            allowed_data: Data that was provided to LLM
-
-        Returns:
-            Validation result with confidence score
-        """
-        # Simple validation: check if response is reasonable length
-        # In production, use more sophisticated fact-checking
-
-        validation: Dict[str, Any] = {
-            "is_valid": True,
-            "confidence": "high",
-            "issues": []
-        }
-
-        # Check for unreasonable claims
-        if "100%" in response and "certain" in response.lower():
-            validation["confidence"] = "medium"
-            validation["issues"].append("Overly confident language detected")
-
-        # Check length
-        if len(response) < 20:
-            validation["is_valid"] = False
-            validation["issues"].append("Response too short")
-
-        if len(response) > 2000:
-            validation["confidence"] = "medium"
-            validation["issues"].append("Response very long, may contain hallucinations")
-
-        # Check for data source mentions
-        if "based on" not in response.lower() and "according to" not in response.lower():
-            validation["confidence"] = "medium"
-            validation["issues"].append("No clear source attribution")
-
-        return validation
+# Import the canonical hallucination guard from dedicated module
+from backend.services.ai.hallucination_guard import HallucinationPrevention as GuardrailValidator

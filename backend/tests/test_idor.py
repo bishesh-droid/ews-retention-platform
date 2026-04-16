@@ -316,6 +316,19 @@ class TestIDORIntegration:
         assert response.status_code == 200
         assert "data" in response.json()
 
+    def test_student_cannot_access_batch_predictions(self, client, student_token):
+        """
+        IDOR Test: Students must NOT be able to access batch predictions endpoint.
+
+        Test: GET /predictions/batch
+        Expected: 403 Forbidden - students should only see their own data, not all students
+        """
+        response = client.get(
+            "/api/v1/predictions/batch",
+            headers={"Authorization": f"Bearer {student_token}"}
+        )
+        assert response.status_code == 403
+
 
 # -----------------------------------------------------------------------------
 # FERPA Compliance Documentation

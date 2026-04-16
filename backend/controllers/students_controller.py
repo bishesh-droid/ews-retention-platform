@@ -332,6 +332,7 @@ def get_students(
         resource_ids=student_ids,
         request=request,
     )
+    db.commit()
 
     return {
         "students": students,
@@ -362,6 +363,7 @@ def get_student_detail(
         resource_id=student_id,
         request=request,
     )
+    db.commit()
 
     return student
 
@@ -388,6 +390,7 @@ def get_student_weekly_summary(
         request=request,
         details={"endpoint": "weekly-summary"},
     )
+    db.commit()
 
     enrollments = StudentService._get_enrollment_dicts(db, student_id)
 
@@ -429,6 +432,7 @@ def get_student_risk_trend(
         request=request,
         details={"endpoint": "risk-trend", "limit": limit},
     )
+    db.commit()
 
     # Faculty are restricted to their department
     base = db.query(Student.id).filter(Student.id == student_id)

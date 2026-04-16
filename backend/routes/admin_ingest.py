@@ -94,8 +94,9 @@ async def trigger_ingestion(  # noqa: C901
         # Prepend UUID to prevent collisions and make filenames unpredictable
         unique_filename = f"{uuid.uuid4().hex[:8]}_{safe_basename}"
 
-        # Save to data directory
-        data_dir = Path("backend/data")
+        # Save to data directory (absolute path from config)
+        from backend.config import settings
+        data_dir = settings.DATA_DIR
         data_dir.mkdir(parents=True, exist_ok=True)
 
         dest = data_dir / unique_filename
@@ -157,7 +158,7 @@ async def trigger_ingestion(  # noqa: C901
 @router.get("/admin/ingest/status/{task_id}")
 async def get_ingestion_status(
     task_id: str,
-    current_user: User = Depends(require_role(["Admin"])),
+    current_user: User = Depends(require_role([Role.ADMIN])),
 ):
     """
     Get the status of a background ingestion task.
@@ -182,7 +183,7 @@ async def get_ingestion_status(
 @router.get("/admin/ingest/tasks")
 async def list_recent_tasks(
     limit: int = 20,
-    current_user: User = Depends(require_role(["Admin"])),
+    current_user: User = Depends(require_role([Role.ADMIN])),
 ):
     """
     List recent ingestion tasks.

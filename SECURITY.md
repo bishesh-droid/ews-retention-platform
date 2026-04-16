@@ -1,506 +1,234 @@
-# Security Policy
-
-## Supported Versions
-
-This security policy applies to the following maintained branches:
-
-| Branch | Status | Support Window | End of Life (EOL) |
-|--------|--------|----------------|-------------------|
-| `main` | Active Development | Current + 12 months from last commit | 12 months after last release |
-| `release/*` | Maintenance | Current release + 6 months | 6 months after next major release |
-| `hotfix/*` | Security-only | Until merged to main | Immediate after merge |
-
-### Maintenance Policy
-
-**Active Development (`main`)**:
-- Receives all security patches, bug fixes, and feature updates
-- Monthly security patch releases on the first Tuesday of each month
-- Emergency security patches released within 48 hours of Critical severity fixes
-
-**Maintenance Branches (`release/*`)**:
-- Receive only security patches and critical bug fixes
-- Quarterly security patch releases
-- No new features backported
-
-**End of Life (EOL) Policy**:
-- EOL branches receive no security updates
-- Users must migrate to supported branches within 30 days of EOL announcement
-- EOL announcements published 90 days in advance via project security mailing list
-
-### Patch Cadence
-
-| Patch Type | Frequency | Notification |
-|------------|-----------|--------------|
-| Scheduled Security | Monthly (first Tuesday) | security@<your-domain> |
-| Critical Emergency | Within 48 hours | Immediate email + GitHub Security Advisory |
-| High Priority | Within 1 week | GitHub Security Advisory |
-| Bug Fix | Next scheduled release | Release notes |
+# Security Policy — Meridian EWS Retention Platform
 
 ---
 
-## Reporting a Vulnerability
+## Section 1: Supported Versions
 
-We take the security of the EWS Retention Platform seriously. This system handles sensitive student educational data protected under FERPA, and we appreciate your help in maintaining its security.
+| Version / Branch | Security Fixes |
+|---|---|
+| `main` branch (current) | Fully supported |
+| `develop` branch | Patches applied before merge to `main` |
+| Tagged release > 6 months old | Not supported — upgrade required |
 
-### How to Report
-
-**Please do NOT report security vulnerabilities through public GitHub issues.**
-
-Instead, please report them via email to:
-
-**security@<your-domain>**
-
-Please include:
-- Description of the vulnerability
-- Steps to reproduce (if applicable)
-- Potential impact assessment
-- Suggested fix (if any)
-- CVSS score estimate (if known)
-- Affected versions/branches
-
-### Response Timeline
-
-| Phase | Timeline | Deliverable |
-|-------|----------|-------------|
-| Acknowledgment | Within 48 hours | Confirmation email with case ID |
-| Initial Assessment | Within 5 business days | Severity classification and response plan |
-| Status Update | Every 7 days during investigation | Progress summary |
-| Resolution | Based on severity (see Vulnerability Severity Matrix) | Patch or mitigation |
-| Disclosure | Coordinated with reporter | Public advisory |
+If you are running a release older than 6 months, no security patches will be backported. Upgrade to the current `main` branch.
 
 ---
 
-## Responsible Disclosure Policy
+## Section 2: Reporting a Vulnerability
 
-### Safe Harbor Statement
+**Do not open a public GitHub issue for security vulnerabilities.** Public disclosure before a fix is available puts student FERPA-protected data at risk.
 
-We support and encourage security research on our platform. Individuals conducting security testing in good faith and in compliance with this policy will not face legal action for:
+### Where to Report
 
-- Accessing data that is not their own
-- Using tools to identify vulnerabilities
-- Testing security controls and mechanisms
-- Circumventing technical protection measures for research purposes
+Email: **[security@your-institution.edu]**
+*(Replace this address with the institution's actual security contact before publishing.)*
 
-### Non-Retaliation Policy
+### What to Include
 
-Researchers acting in good faith will not be subject to:
-- Legal action for security research activities
-- Account suspension or termination for vulnerability testing
-- Claims for damages arising from good faith research
+- **Affected component** — file path and subsystem if known (e.g. `backend/routes/auth.py`, JWT refresh flow, LLM prompt pipeline)
+- **Description** — what the vulnerability is and how it can be triggered
+- **Attack scenario** — who can exploit it, under what conditions, and what they can access or do
+- **Steps to reproduce** — include a proof of concept if you have one; theoretical reports without reproduction steps will be triaged at lower priority
+- **Potential impact** — data exposure, privilege escalation, authentication bypass, audit log corruption, etc.
+- **Suggested fix** — optional, but appreciated if you have one
 
-Good faith research requires:
-- Avoiding harm to users, systems, or data
-- Not exploiting vulnerabilities beyond minimal verification
-- Not accessing data beyond what is necessary for validation
-- Maintaining confidentiality until coordinated disclosure
+### Response SLA
 
-### Coordinated Disclosure Process
+| Milestone | Target |
+|---|---|
+| Acknowledgement | Within 48 hours of receipt |
+| Triage and severity assessment | Within 5 business days |
+| Fix timeline communicated | Within 10 business days |
+| Critical vulnerabilities (CVSS ≥ 9.0) | Patched within 72 hours of confirmation |
 
-1. **Report Submission**: Submit vulnerability report via security@<your-domain>
-2. **Acknowledgment**: Security team confirms receipt within 48 hours
-3. **Investigation**: Security team assesses and validates the finding
-4. **Fix Development**: Development team creates and tests patch
-5. **Embargo Period**: Coordinated waiting period before public disclosure
-6. **Release**: Patch deployed and security advisory published
-7. **Recognition**: Reporter acknowledged (with permission) in advisory
+### Responsible Disclosure
 
-### Embargo Expectations
+We ask reporters to allow **90 days** from the date of report acknowledgement before public disclosure. If a fix is shipped sooner, we will notify you and you may disclose at that point.
 
-- Embargo period is typically 90 days from report acknowledgment
-- May be extended by mutual agreement for complex vulnerabilities
-- Early disclosure may occur if vulnerability is actively exploited in the wild
-- Reporters agree not to disclose publicly before coordinated release
-- Project commits to expedited patching for Critical and High severity issues
+Reporters will be credited by name in release notes unless they prefer to remain anonymous. Please state your preference in your initial report.
 
 ---
 
-## Data Classification Model
+## Section 3: Security Architecture Summary
 
-All data within the EWS Retention Platform is classified into the following categories:
+This section describes the security controls in place. Researchers should read this before triaging a potential issue.
 
-### Public
+### Authentication
 
-Data that can be freely shared with the public without risk to the organization.
+- **JWT access tokens** with a 15-minute lifetime. Issued at login and refreshed via the refresh endpoint.
+- **Refresh tokens** stored in an `httpOnly` cookie with a 7-day lifetime.
+- **Refresh Token Rotation (RTR):** on every refresh call, the previous token's JTI is revoked. Reuse of a superseded refresh token triggers immediate family revocation.
+- **Token revocation** is backed by Redis (TTL-based key store). SQLite provides a fallback revocation check if Redis is unreachable.
+- Refresh cookie attributes: `Secure`, `SameSite=Strict`, `Path=/api/v1/auth/refresh`.
 
-Examples:
-- Open source code (excluding configuration files with credentials)
-- Published documentation and API specifications
-- Public website content
-- Marketing materials
+### Authorization
 
-Handling Requirements:
-- No special handling required
-- Standard copyright and licensing terms apply
+- Four roles: `student`, `faculty`, `retention_team`, `admin`.
+- RBAC is enforced at the FastAPI dependency layer (`backend/api/deps.py`) — not in route handlers.
+- Ownership checks are enforced on all student-scoped endpoints. A `student` role user cannot access records belonging to another student.
 
-### Internal
+### Data Protection
 
-Data intended for use within the organization and authorized partners. Disclosure would cause minimal harm.
+- **FERPA audit log:** append-only log covering all PII access, role-based data access, and all AI-generated disclosures. Table: `AuditLog`. Do not truncate or modify this table.
+- **PII masking:** student IDs and email addresses are masked at the logger level (`backend/core/logger.py`) before any log output is written. Raw PII does not appear in application logs.
+- **Development environments** use only synthetic student fixtures. No real student records are used outside production.
 
-Examples:
-- Internal documentation not containing student references
-- System architecture diagrams (without sensitive implementation details)
-- Non-sensitive configuration templates
-- Staff contact information (non-student facing)
+### LLM Security
 
-Handling Requirements:
-- Store on authenticated systems only
-- Do not post on public forums without review
-- Mark as "Internal Use Only"
+- Student free-text fields (names, notes, free-response inputs) are **never interpolated directly** into LLM prompt strings.
+- All prompts are constructed from structured templates in `backend/services/ai/llm_orchestrator.py`.
+- A hallucination guard validates LLM responses before they are surfaced to any user.
+- All LLM-generated disclosures to students are written to the FERPA audit log.
 
-### Sensitive (FERPA)
+### Network
 
-Data protected under FERPA and other educational privacy laws. Disclosure could harm individuals or violate legal obligations.
-
-Examples:
-- Student educational records
-- Risk scores and intervention data
-- Academic performance metrics linked to identifiable students
-- Enrollment and attendance records
-- Audit logs containing student identifiers
-- Email addresses associated with student records
-
-Handling Requirements:
-- Encryption at rest (AES-256) and in transit (TLS 1.3)
-- Access restricted to authorized personnel with legitimate educational interest
-- Audit logging required for all access
-- Must not be included in code repositories, test data, or public issues
-- Breach notification required within 72 hours of discovery
-
-### Restricted
-
-Data with the highest sensitivity. Unauthorized disclosure would cause severe harm to individuals or the organization.
-
-Examples:
-- System master encryption keys
-- Database credentials and API secrets
-- Authentication tokens and refresh tokens
-- Raw PII before anonymization
-- Security audit findings before remediation
-- FERPA breach documentation
-
-Handling Requirements:
-- Access limited to Security Lead and designated administrators
-- Multi-factor authentication required for access
-- Separate secure storage (HSM or secure vault)
-- Rotated immediately if compromise suspected
-- Never committed to version control
-- Never transmitted via unencrypted channels
+- **Rate limiting** is Redis-backed and applied to all authentication and LLM endpoints (`backend/core/rate_limiting.py`). Falls back to in-process TTLCache on Redis unavailability.
+- **CORS:** production configuration allows HTTPS origins only. Wildcards (`*`) are not permitted. Loopback origins are allowed only when `ENVIRONMENT != production`.
+- **`X-Forwarded-For`** is trusted only from IPs listed in `TRUSTED_PROXY_IPS`. Requests from unlisted IPs use the direct connection address for audit logging.
 
 ---
 
-## Vulnerability Severity Matrix (CVSS-aligned)
+## Section 4: Known Security Scope
 
-Vulnerabilities are classified using the Common Vulnerability Scoring System (CVSS) v3.1 framework.
+### In Scope for Bug Reports
 
-### Critical (CVSS 9.0 - 10.0)
+- Authentication and session management — JWT issuance, refresh token rotation, logout, token revocation
+- Authorization bypass or IDOR — one authenticated user accessing or modifying another user's data
+- FERPA data exposure — student PII leaking to a role that should not have access
+- LLM prompt injection via student-controlled input reaching the LLM prompt pipeline
+- SQL injection or ORM bypass against any endpoint
+- CORS misconfiguration allowing cross-origin requests from unintended origins
+- Secrets or credentials committed to version history (current or past)
+- Rate limit bypass allowing unauthenticated or bulk abuse of auth or LLM endpoints
+- Audit log tampering — any mechanism that allows modification or deletion of `AuditLog` records
 
-Immediate threat to the confidentiality, integrity, or availability of FERPA-protected data or core system functionality.
+### Out of Scope
 
-Examples:
-- Unauthenticated remote code execution
-- Direct FERPA data breach or mass extraction
-- Authentication bypass allowing unauthorized FERPA access
-- Privilege escalation to administrative access on production systems
-- Cryptographic key compromise
-
-Response Requirements:
-- Acknowledgment: Within 4 hours
-- Initial Assessment: Within 24 hours
-- Patch Target: Within 48 hours
-- Notification: Immediate notification to all users
-
-### High (CVSS 7.0 - 8.9)
-
-Significant security risk with potential for FERPA data exposure or serious system compromise.
-
-Examples:
-- SQL injection in authenticated endpoints
-- Stored XSS leading to session hijacking
-- IDOR allowing access to other users' FERPA data
-- Broken authentication allowing credential compromise
-- Insecure deserialization
-
-Response Requirements:
-- Acknowledgment: Within 48 hours
-- Initial Assessment: Within 5 business days
-- Patch Target: Within 1 week
-- Notification: Security advisory published upon fix
-
-### Medium (CVSS 4.0 - 6.9)
-
-Moderate security risk with limited data exposure potential or partial system compromise.
-
-Examples:
-- Reflected XSS (non-persistent)
-- CSRF on state-changing operations
-- Information disclosure of non-FERPA internal data
-- Rate limiting bypass with limited impact
-- Missing security headers (CSP, HSTS)
-- Weak input validation on non-sensitive endpoints
-
-Response Requirements:
-- Acknowledgment: Within 5 business days
-- Initial Assessment: Within 10 business days
-- Patch Target: Within 2 weeks
-- Notification: Included in scheduled security release notes
-
-### Low (CVSS 0.1 - 3.9)
-
-Minor security issues with minimal practical impact on system security or data protection.
-
-Examples:
-- Verbose error messages revealing stack traces
-- Missing best practice security headers with no direct exploit
-- Self-XSS (attacker can only exploit their own account)
-- SSL/TLS configuration weaknesses without direct exploit path
-- Information disclosure of public information
-
-Response Requirements:
-- Acknowledgment: Within 10 business days
-- Initial Assessment: Within 30 days
-- Patch Target: Next scheduled release
-- Notification: Bundled in routine release notes
+- Theoretical vulnerabilities without a working proof of concept
+- Security issues in third-party LLM providers (Google Gemini, Anthropic Claude) — report those directly to Google or Anthropic
+- Denial of service via resource exhaustion that does not involve an authentication or authorization bypass
+- Social engineering attacks against institution staff
+- Security issues that are only reproducible in development mode with SQLite (production uses PostgreSQL)
 
 ---
 
-## Security Controls Overview
+## Section 5: Incident Response Runbook
 
-The EWS Retention Platform implements defense-in-depth security through the following controls:
+### Compromised API Key (e.g. Committed to Git)
 
-### JWT Authentication
+1. **Rotate the key immediately at the provider console — do this before anything else.**
+   - Anthropic: https://console.anthropic.com/ → API Keys → Revoke and reissue
+   - Google: https://console.cloud.google.com/ → APIs & Services → Credentials → Delete and create new
 
-- **Access Tokens**: Short-lived JWT tokens (15-60 minutes) with strong signing algorithms (HS256)
-- **Refresh Tokens**: Long-lived tokens (7 days) stored in httpOnly, Secure, SameSite=Strict cookies
-- **Token Revocation**: Blocklist table for revoked tokens with automatic cleanup
-- **Claims Validation**: sub, role, exp, iat, iss, aud, jti, nbf claims validated on each request
-- **Rotation**: Automatic token rotation on refresh to prevent replay attacks
+2. **Purge the key from git history.** The commit is not enough — the key is in history on every clone.
+   ```bash
+   git filter-repo --path .env --invert-paths
+   git push --force --all
+   ```
 
-### Role-Based Access Control (RBAC)
+3. **Notify all repository collaborators** to delete their local clones and re-clone. Their local `.git` directories contain the exposed history.
 
-| Role | Student Data | User Management | System Config | Analytics |
-|------|--------------|-----------------|---------------|-----------|
-| student | Own data only | None | None | None |
-| faculty | All students | None | None | Read-only |
-| retention_team | All students | None | Limited | Full |
-| admin | All students | Full | Full | Full |
+4. **Audit provider usage logs** for the window between the commit timestamp and key rotation. Look for API calls from unfamiliar IPs, unusual usage spikes, or requests outside normal operating hours.
 
-- **Resource Ownership Checker**: Prevents IDOR attacks by verifying user-resource relationships
-- **Superuser Override**: `is_superuser` flag for emergency access with audit logging
-- **Role Hierarchy**: Well-defined role inheritance and permission boundaries
+5. **Update `.gitignore`** to ensure `.env` and any new secret files are excluded. Run `detect-secrets scan > .secrets.baseline` to update the baseline.
 
-### Audit Logging
-
-- **FERPA Compliance**: All student data access logged with user_id, action, resource_type, resource_id, timestamp, request_id, ip_address
-- **Structured Format**: JSON-formatted logs with consistent schema
-- **Retention**: Audit logs retained for 7 years per FERPA requirements
-- **Tamper Resistance**: Write-once log storage with integrity verification
-- **Query Interface**: Admin endpoint for authorized audit log queries
-
-### PII Masking
-
-All logs automatically mask sensitive data:
-
-| Data Type | Example Input | Masked Output |
-|-----------|---------------|---------------|
-| Email | student@example.edu | stu***@ex***.edu |
-| Student ID | 2025EB110001 | 2025***1001 |
-| Phone Number | +1-555-123-4567 | [REDACTED_PHONE] |
-| JWT Token | eyJhbG... | [REDACTED_JWT] |
-| Password | (any value) | [REDACTED_PASSWORD] |
-
-- **Masking Engine**: Regex-based and dictionary-based masking
-- **Exceptions**: Raw values accessible only in debug mode (non-production)
-- **Third-party**: PII masking applied before sending to external services
-
-### Rate Limiting
-
-| Endpoint | Limit | Window | Scope |
-|----------|-------|--------|-------|
-| Login | 5 | per minute | Per IP |
-| Data Ingestion | 10 | per hour | Per user |
-| LLM API | 5 | per minute | Per user |
-| LLM API | 20 | per hour | Per user |
-| Default | 200 | per minute | Per user |
-
-- **Implementation**: SlowAPI with Redis backend for distributed rate limiting
-- **Response**: HTTP 429 with Retry-After header
-- **Monitoring**: Rate limit events logged for anomaly detection
-- **Bypass**: Rate limit bypass requires admin API key with audit logging
-
-### Input Sanitization
-
-- **Pydantic Validation**: Type validation, field constraints, and custom validators
-- **HTML Sanitization**: bleach library for HTML input cleaning
-- **Encoding Detection**: URL, Unicode, and HTML entity decoding detection
-- **Control Character Stripping**: Null bytes, newlines, and control characters removed
-- **Prompt Injection Detection**: LLM-specific injection pattern detection for AI endpoints
-
-### Security Headers
-
-| Header | Value | Purpose |
-|--------|-------|---------|
-| Strict-Transport-Security | max-age=31536000; includeSubDomains | HTTPS enforcement |
-| X-Frame-Options | DENY | Clickjacking protection |
-| X-Content-Type-Options | nosniff | MIME sniffing prevention |
-| Content-Security-Policy | default-src 'self'; script-src 'self' 'unsafe-inline' | XSS mitigation |
-| X-Permitted-Cross-Domain-Policies | none | Flash/Acrobat restriction |
-| Referrer-Policy | strict-origin-when-cross-origin | Referrer control |
-
-- **Middleware**: All headers set via centralized security headers middleware
-- **Override**: Headers can be overridden per-endpoint with security review
+6. **Document the incident** in the internal incident log: exposure start time (git commit timestamp), rotation time, audit findings, and any remediation actions taken.
 
 ---
 
-## Security Testing Requirements for Contributors
+### Suspected JWT Compromise (Stolen Access or Refresh Token)
 
-All contributors must adhere to the following security testing requirements:
+1. **Force-logout the affected user.** If the user is identifiable, call the logout endpoint with admin credentials, or directly insert the token JTI into the Redis revocation store:
+   ```bash
+   redis-cli SETEX "jti:<jti-value>" <ttl-seconds> "1"
+   ```
+   Replace `<jti-value>` with the JTI claim from the suspected token and `<ttl-seconds>` with the remaining lifetime of that token.
 
-### Required Security Test Suite
+2. **If the signing key itself is suspected to be compromised**, rotate the `SECRET_KEY` environment variable. Be aware: **this invalidates all active tokens for all users across the entire platform.** Coordinate with the team and plan for a brief authentication outage.
 
-Before submitting any pull request, contributors must run the security test suite:
+3. **Review the `AuditLog` table** for all actions by the affected `actor_id` during the suspected exposure window. Identify what data was accessed or modified.
+
+4. **Check Redis** for unusual token revocation or issuance patterns that may indicate automated token reuse attempts.
+
+---
+
+### Student Data Exposure
+
+1. **Identify the scope.** Query the `AuditLog` table for the affected student IDs, the `actor_id` that accessed them, and the timestamp range of the exposure. Do not modify or delete any audit log records.
+
+2. **Notify the institution's FERPA compliance officer within 24 hours** of discovering the exposure. Provide the audit log excerpt documenting the access.
+
+3. **Preserve all logs** for the exposure window — application logs, audit logs, and Redis access logs if available. Do not rotate or truncate them until the compliance review is complete.
+
+4. **Contain the exposure.** If it is ongoing:
+   - Disable the affected endpoint (`router.include_router` can be commented out and redeployed)
+   - Or revoke the affected user account's tokens and lock the account
+
+5. **Assess FERPA breach notification obligations.** Depending on the nature and scope of the exposure, affected students may need to be notified within a defined window. The compliance officer makes this determination — provide them with the complete audit record.
+
+---
+
+### Redis Unavailability (Rate Limiting and Token Revocation Degraded)
+
+1. **The service will continue operating.** Rate limiting falls back to in-process TTLCache at reduced thresholds. Token revocation checks fall back to the SQLite revocation table.
+
+2. **Understand the degraded security posture:**
+   - In-process rate limiting is per-worker, not global — a multi-worker deployment will have proportionally higher effective limits than intended.
+   - SQLite-based revocation checks are slower and may not reflect revocations issued to Redis-only during the outage window.
+
+3. **Restore Redis as the immediate priority.** Check Redis logs, container status, and network connectivity. Do not treat prolonged Redis unavailability as acceptable.
+
+4. **Monitor authentication logs** for unusual login frequency or token reuse patterns during the degraded window.
+
+5. **After Redis is restored**, verify that the revocation store is consistent with recent logout events. Any revocations that occurred during the outage may need to be replayed into Redis from the SQLite fallback table.
+
+---
+
+## Section 6: Security Configuration Checklist
+
+Use this table to verify deployment configuration before going to production or after any infrastructure change.
+
+| Setting | Required Value | Risk if Wrong |
+|---|---|---|
+| `SECRET_KEY` | ≥ 32 cryptographically random bytes, never a default or placeholder | All JWT tokens can be forged by anyone who knows the default |
+| `ACCESS_TOKEN_EXPIRE_MINUTES` | ≤ 15 | Stolen access tokens remain valid for an extended window |
+| `ENVIRONMENT` | `production` in production deployments | CORS allows loopback origins; dev-only behaviors may be active |
+| `CORS_ORIGINS` | Explicit HTTPS URLs only — no wildcards, no `http://` | Cross-origin attacks from arbitrary origins |
+| `TRUSTED_PROXY_IPS` | Set to load balancer / reverse proxy IPs only | Client-supplied `X-Forwarded-For` headers trusted; audit logs contain attacker-controlled IP values |
+| Refresh cookie `Path` | `/api/v1/auth/refresh` | Refresh token sent on every request to the API, widening the exposure window |
+| Refresh cookie `SameSite` | `Strict` | CSRF attacks can trigger refresh token rotation on cross-site navigation |
+| Redis | Running and reachable from the backend | Rate limiting and refresh token rotation operate in degraded fallback mode |
+| `.env` in `.gitignore` | Present and effective | Credentials committed to version history on next `git add .` |
+
+---
+
+## Section 7: Dependency Security
+
+**Python (backend)**
+
+Dependencies are pinned in `requirements.txt`. Before each release:
+```bash
+pip-audit -r requirements.txt
+# or
+safety check -r requirements.txt
+```
+Do not merge a release if either tool reports a known CVE in a direct or transitive dependency without a documented exception.
+
+**Node (frontend)**
 
 ```bash
-# Run all security tests
-pytest backend/tests/test_security_headers.py -v
-pytest backend/tests/test_encoding_bypasses.py -v
-pytest backend/tests/test_idor.py -v
-pytest backend/tests/test_auth.py -v
-
-# Run with coverage
-pytest backend/tests --cov=backend.core.security --cov=backend.core.auth
+npm audit
 ```
+This runs in CI. A failing audit with high or critical severity vulnerabilities will block the build. Review `npm audit fix` output before applying — automatic fixes can introduce breaking changes.
 
-**Pre-submission Checklist:**
-- [ ] All security tests pass
-- [ ] No new security warnings from static analysis (bandit, safety)
-- [ ] PII masking verified for new log statements
-- [ ] RBAC decorators applied to new endpoints
-- [ ] Rate limiting applied to new endpoints
+**Docker**
 
-### Sanitization Requirements
+The base Docker image in `docker/Dockerfile` is digest-pinned. Verify the digest has not changed on each rebuild. Do not use floating tags (`:latest`) in production images.
 
-- **NEVER** disable input sanitization for "testing purposes"
-- **NEVER** comment out Pydantic validators to "make it work"
-- **NEVER** bypass bleach sanitization for "trusted input"
-- All validator bypasses must be documented in code with security review approval
+**Previously Addressed CVEs**
 
-### RBAC Requirements
+| Library | Issue | Resolution |
+|---|---|---|
+| `python-jose` | Multiple CVEs in JOSE/JWT handling | Migrated to `authlib` |
 
-- All new endpoints must have explicit RBAC checks via `@require_role` decorator
-- Resource-level access control required for endpoints accessing student data
-- IDOR vulnerability tests must be included for endpoints with path parameters
-- Test cases must verify both allowed and denied access scenarios
-
-### PII Logging Requirements
-
-- **NEVER** log raw student email addresses
-- **NEVER** log raw student IDs or org_defined_id values
-- **NEVER** log authentication tokens or passwords
-- **NEVER** include real student data in test files or fixtures
-- Use `mask_pii()` function for all log output containing student references
-- Use synthetic data generators for all test data
-
-### Security Review Process
-
-1. **Automated Scanning**: All PRs scanned with bandit (Python security linter)
-2. **Dependency Audit**: pip-audit runs on requirements.txt changes
-3. **Security Test Gate**: PRs cannot merge with failing security tests
-4. **Manual Review**: Security Lead reviews changes to:
-   - Authentication/authorization code
-   - Data access layer modifications
-   - PII handling code
-   - Rate limiting configuration
-
----
-
-## Incident Response Overview
-
-The EWS Retention Platform follows a structured incident response process aligned with NIST SP 800-61.
-
-### Detection
-
-**Monitoring Sources:**
-- Audit log anomaly detection (unexpected bulk access patterns)
-- Failed authentication rate monitoring
-- PII detection in application logs
-- Unauthorized access attempts to FERPA data
-- Infrastructure monitoring (Redis, database)
-- External security notifications (CVE feeds, vendor advisories)
-
-**Detection Channels:**
-- Security@<your-domain> email monitoring
-- GitHub Security Advisory notifications
-- Automated security scanning alerts
-- User incident reports
-- Threat intelligence feeds
-
-### Containment
-
-**Immediate Actions (within 1 hour):**
-- Activate Security Incident Response Team
-- Isolate affected systems (disable compromised accounts, block IPs)
-- Preserve evidence (snapshot logs, database state)
-- Notify Security Lead and Project Maintainer
-- Assess FERPA breach notification requirements
-
-**Short-term Containment (within 24 hours):**
-- Deploy emergency patches for confirmed vulnerabilities
-- Implement temporary workarounds (WAF rules, additional rate limiting)
-- Revoke compromised credentials/tokens
-- Enable enhanced monitoring on affected systems
-
-### Eradication
-
-**Vulnerability Remediation:**
-- Develop and test permanent fix
-- Verify fix addresses root cause (not just symptoms)
-- Scan for similar vulnerabilities in codebase
-- Update security controls to prevent recurrence
-
-**Threat Removal:**
-- Remove attacker persistence mechanisms
-- Clean compromised data if any
-- Rotate all potentially exposed credentials
-- Verify no unauthorized access remains
-
-### Recovery
-
-**System Restoration:**
-- Restore affected systems from known-good state if necessary
-- Gradual return to production with enhanced monitoring
-- Verify all security controls functioning
-- Confirm audit logging operational
-
-**Monitoring Enhancement:**
-- Increase monitoring frequency for affected components
-- Implement additional detection rules
-- Extended monitoring period (minimum 30 days)
-
-### Postmortem Review
-
-**Timeline:** Within 5 business days of incident closure
-
-**Required Elements:**
-- Timeline of incident from detection to resolution
-- Root cause analysis (5 Whys methodology)
-- Impact assessment (data exposed, systems affected, FERPA implications)
-- Response effectiveness evaluation
-- Lessons learned and process improvements
-- Action items with owners and deadlines
-
-**Distribution:**
-- Incident report to project leadership
-- Summary to affected users (if applicable)
-- FERPA breach notification to institution (if required)
-- Updates to security policy and controls based on findings
-
-**Retention:**
-- Incident documentation retained for 7 years
-- Lessons learned integrated into security training
-- Control improvements tracked and verified
-
----
-
-## License
-
-This security policy is part of the project's security documentation and is subject to the same license terms as the project codebase.
+Maintain this table when addressing future CVEs so that auditors can verify the fix is in place.

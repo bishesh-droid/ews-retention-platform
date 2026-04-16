@@ -7,7 +7,8 @@ Provides risk predictions calculated from real engagement data.
 from fastapi import APIRouter, Depends, HTTPException, Query
 from sqlalchemy.orm import Session
 
-from backend.api.deps import get_db, get_current_user, require_resource_ownership
+from backend.api.deps import get_db, get_current_user, require_resource_ownership, require_role
+from backend.core.constants import Role
 from backend.services.student_service import StudentService
 from backend.utils.api import success_response
 
@@ -20,8 +21,10 @@ router = APIRouter(
 @router.get("/batch")
 def get_all_predictions(
     include_decisions: bool = Query(False, description="Include intervention recommendations"),
-    limit: int = Query(500, ge=1, le=2000),
-    db: Session = Depends(get_db)
+    # TODO: Bulk exports >500 should use async background task returning a download URL
+    limit: int = Query(100, ge=1, le=500),
+    db: Session = Depends(get_db),
+    _user=Depends(require_role([Role.ADMIN, Role.FACULTY, Role.RETENTION_TEAM])),
 ):
     """Get batch predictions for all students."""
     students = StudentService.get_all_students(db, skip=0, limit=limit)

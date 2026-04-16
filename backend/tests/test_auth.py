@@ -512,3 +512,18 @@ class TestAuthRefresh:
         if not error_message and "error" in response_json:
             error_message = response_json["error"].get("message", "")
         assert "revoked" in error_message.lower()
+
+
+def test_404_returns_404_not_500(client: TestClient):
+    """
+    Verify that a 404 error returns HTTP 404 (not 500).
+
+    This tests that exception handlers are registered in the correct order:
+    - Generic Exception handler must be registered FIRST (lowest priority)
+    - Specific handlers (StarletteHTTPException) registered AFTER (higher priority)
+
+    FastAPI's add_exception_handler is LIFO - last registered takes precedence.
+    If order is wrong, 404s would be caught by the generic handler and return 500.
+    """
+    response = client.get("/api/v1/nonexistent-route-xyz")
+    assert response.status_code == 404

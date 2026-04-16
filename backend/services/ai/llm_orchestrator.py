@@ -1,3 +1,4 @@
+import hashlib
 from backend.core.security import SecurityManager
 from backend.config import (
     LLM_PROVIDER, GEMINI_API_KEY, GEMINI_MODEL, CLAUDE_API_KEY, CLAUDE_MODEL,
@@ -10,6 +11,8 @@ from backend.services.ai.rag_engine import (
     ContextAssembler,
     GuardrailValidator
 )
+from backend.core.audit_logger import log_data_access
+from backend.database.models.user import User
 from sqlalchemy.orm import Session
 import logging
 from typing import Dict, List, Optional, Any
@@ -164,13 +167,14 @@ class LLMOrchestrator:
         """Backward-compatible helper for existing internal call sites."""
         return self._invoke_llm(prompt=user_message, system_message=system_message)
 
-    def explain_risk_change(self, student_id: str, time_period: str = "recent") -> Dict[str, Any]:
+    def explain_risk_change(self, student_id: str, time_period: str = "recent", current_user: Optional[User] = None) -> Dict[str, Any]:
         """
         Explain why a student's risk score changed.
 
         Args:
             student_id: Student identifier
             time_period: "recent" | "this_week" | "this_month"
+            current_user: User requesting the explanation (for audit logging)
 
         Returns:
             Explanation with sources and confidence
@@ -203,6 +207,22 @@ class LLMOrchestrator:
             # Calculate confidence
             confidence = self._calculate_confidence(validation, student_context)
 
+            # FERPA: Audit log AI disclosure
+            if current_user:
+                log_data_access(
+                    db=self.db,
+                    user=current_user,
+                    action="AI_DISCLOSURE",
+                    resource_type="llm_advice",
+                    resource_id=student_id,
+                    details={
+                        "model": self.llm_model_name,
+                        "operation": "explain_risk_change",
+                        "confidence": confidence,
+                        "prompt_hash": hashlib.sha256(prompt.encode()).hexdigest()[:16],
+                    }
+                )
+
             return {
                 "content": explanation,
                 "confidence": confidence,
@@ -220,13 +240,14 @@ class LLMOrchestrator:
                 "error": str(e)
             }
 
-    def generate_student_advice(self, student_id: str, question: str) -> Dict[str, Any]:
+    def generate_student_advice(self, student_id: str, question: str, current_user: Optional[User] = None) -> Dict[str, Any]:
         """
         Generate personalized advice for a student.
 
         Args:
             student_id: Student identifier
             question: Student's question or concern
+            current_user: User requesting the advice (for audit logging)
 
         Returns:
             Personalized advice with sources
@@ -253,6 +274,22 @@ class LLMOrchestrator:
             validation = GuardrailValidator.validate_response(advice, student_context)
             confidence = self._calculate_confidence(validation, student_context)
 
+            # FERPA: Audit log AI disclosure
+            if current_user:
+                log_data_access(
+                    db=self.db,
+                    user=current_user,
+                    action="AI_DISCLOSURE",
+                    resource_type="llm_advice",
+                    resource_id=student_id,
+                    details={
+                        "model": self.llm_model_name,
+                        "operation": "generate_student_advice",
+                        "confidence": confidence,
+                        "prompt_hash": hashlib.sha256(prompt.encode()).hexdigest()[:16],
+                    }
+                )
+
             return {
                 "content": advice,
                 "confidence": confidence,
@@ -268,13 +305,14 @@ class LLMOrchestrator:
                 "error": str(e)
             }
 
-    def summarize_student_profile(self, student_id: str, for_role: str = "faculty") -> Dict[str, Any]:
+    def summarize_student_profile(self, student_id: str, for_role: str = "faculty", current_user: Optional[User] = None) -> Dict[str, Any]:
         """
         Generate a student profile summary for faculty/counselors.
 
         Args:
             student_id: Student identifier
             for_role: "faculty" | "counselor" | "admin"
+            current_user: User requesting the summary (for audit logging)
 
         Returns:
             Concise student summary
@@ -304,6 +342,22 @@ class LLMOrchestrator:
             validation = GuardrailValidator.validate_response(summary, student_context)
             confidence = self._calculate_confidence(validation, student_context)
 
+            # FERPA: Audit log AI disclosure
+            if current_user:
+                log_data_access(
+                    db=self.db,
+                    user=current_user,
+                    action="AI_DISCLOSURE",
+                    resource_type="llm_advice",
+                    resource_id=student_id,
+                    details={
+                        "model": self.llm_model_name,
+                        "operation": "summarize_student_profile",
+                        "confidence": confidence,
+                        "prompt_hash": hashlib.sha256(user_message_profile_summary.encode()).hexdigest()[:16],
+                    }
+                )
+
             return {
                 "content": summary,
                 "confidence": confidence,
@@ -320,12 +374,13 @@ class LLMOrchestrator:
                 "error": str(e)
             }
 
-    def suggest_interventions(self, student_id: str) -> Dict[str, Any]:
+    def suggest_interventions(self, student_id: str, current_user: Optional[User] = None) -> Dict[str, Any]:
         """
         Suggest evidence-based interventions for a student.
 
         Args:
             student_id: Student identifier
+            current_user: User requesting the suggestions (for audit logging)
 
         Returns:
             Intervention suggestions with reasoning
@@ -368,6 +423,22 @@ class LLMOrchestrator:
                     "ai_suggested": True,
                     "confidence": "low"
                 }
+
+            # FERPA: Audit log AI disclosure
+            if current_user:
+                log_data_access(
+                    db=self.db,
+                    user=current_user,
+                    action="AI_DISCLOSURE",
+                    resource_type="llm_advice",
+                    resource_id=student_id,
+                    details={
+                        "model": self.llm_model_name,
+                        "operation": "suggest_interventions",
+                        "confidence": "medium",
+                        "prompt_hash": hashlib.sha256(user_message_interventions.encode()).hexdigest()[:16],
+                    }
+                )
 
             # D3-5: Return AI reasoning for audit trail
             return {
@@ -435,13 +506,14 @@ class LLMOrchestrator:
                 "error": str(e)
             }
 
-    def simulate_what_if(self, student_id: str, scenario: Dict) -> Dict[str, Any]:
+    def simulate_what_if(self, student_id: str, scenario: Dict, current_user: Optional[User] = None) -> Dict[str, Any]:
         """
         Simulate a what-if scenario for a student.
 
         Args:
             student_id: Student identifier
             scenario: Dict with changes (e.g., {"attendance": 95, "grades": 3.5})
+            current_user: User requesting the simulation (for audit logging)
 
         Returns:
             Scenario analysis in natural language
@@ -465,6 +537,22 @@ class LLMOrchestrator:
 
         try:
             simulation = self._generate_content(system_message_what_if, user_message_what_if)
+
+            # FERPA: Audit log AI disclosure
+            if current_user:
+                log_data_access(
+                    db=self.db,
+                    user=current_user,
+                    action="AI_DISCLOSURE",
+                    resource_type="llm_advice",
+                    resource_id=student_id,
+                    details={
+                        "model": self.llm_model_name,
+                        "operation": "simulate_what_if",
+                        "confidence": "medium",
+                        "prompt_hash": hashlib.sha256(user_message_what_if.encode()).hexdigest()[:16],
+                    }
+                )
 
             return {
                 "content": simulation,

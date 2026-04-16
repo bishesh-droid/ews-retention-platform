@@ -141,7 +141,7 @@ RISK_MODEL_VERSION: str = os.getenv("RISK_MODEL_VERSION", "rule-based-v1.0")
 
 
 ALGORITHM: str = os.getenv("ALGORITHM", "HS256")
-ACCESS_TOKEN_EXPIRE_MINUTES: int = int(os.getenv("ACCESS_TOKEN_EXPIRE_MINUTES", "60"))
+ACCESS_TOKEN_EXPIRE_MINUTES: int = int(os.getenv("ACCESS_TOKEN_EXPIRE_MINUTES", "15"))
 
 # ---------------------------------------------------------------------------
 # Rate Limiting

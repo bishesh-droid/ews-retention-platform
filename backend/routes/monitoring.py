@@ -54,7 +54,12 @@ async def health_check(db: AsyncSession = Depends(get_db_async)):
         else:
             health["ingestion_status"] = "ok"
 
-    status_code = 200 if health["status"] == "healthy" else 503 if health["status"] == "unhealthy" else 200
+    if health["status"] == "healthy":
+        status_code = 200
+    elif health["status"] == "degraded":
+        status_code = 207
+    else:
+        status_code = 503
     return JSONResponse(content=health, status_code=status_code)
 
 

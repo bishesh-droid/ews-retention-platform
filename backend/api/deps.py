@@ -24,8 +24,10 @@ from jwt.exceptions import InvalidTokenError
 from sqlalchemy import select
 from sqlalchemy.orm import Session
 from sqlalchemy.ext.asyncio import AsyncSession
+from datetime import datetime, timezone
+from redis.asyncio import Redis as AsyncRedis
 
-from backend.config import ALGORITHM, SECRET_KEY, EWS_SERVICE_NAME, EWS_TOKEN_AUDIENCE
+from backend.config import ALGORITHM, SECRET_KEY, EWS_SERVICE_NAME, EWS_TOKEN_AUDIENCE, REDIS_URL
 from backend.database.connection import get_db, get_db_async
 from backend.database.models.user import User
 from backend.database.models.student import Student
@@ -123,6 +125,37 @@ def get_current_user(
     return user
 
 
+async def _get_async_redis_client() -> Optional[AsyncRedis]:
+    """Get async Redis client for token revocation checks."""
+    try:
+        client = AsyncRedis.from_url(REDIS_URL, decode_responses=True)
+        await client.ping()
+        return client
+    except Exception:
+        return None
+
+
+async def is_token_revoked(jti: str, redis_client: Optional[AsyncRedis], db: AsyncSession) -> bool:
+    """
+    Check if a token is revoked using Redis first (O(1)), then fallback to DB.
+
+    Primary: Redis check (fast, TTL-based)
+    Fallback: Database check if Redis unavailable
+    """
+    # Primary: Redis check (O(1), TTL-based)
+    if redis_client:
+        try:
+            revoked = await redis_client.exists(f"jti:{jti}")
+            if revoked:
+                return True
+        except Exception:
+            # Redis unavailable: fall back to DB check
+            pass
+    # Fallback: DB check
+    result = await db.execute(select(RevokedToken).where(RevokedToken.jti == jti))
+    return result.scalar_one_or_none() is not None
+
+
 async def get_current_user_async(
     db: AsyncSession = Depends(get_db_async),
     token: str = Depends(reusable_oauth2),
@@ -164,13 +197,13 @@ async def get_current_user_async(
         if user_id is None:
             raise credentials_exc
 
-        # Check if token has been revoked (SEC-4)
+        # Check if token has been revoked (SEC-4) - Redis first, then DB fallback
         if token_jti is not None:
-            result = await db.execute(
-                select(RevokedToken).where(RevokedToken.jti == token_jti)
-            )
-            revoked = result.scalar_one_or_none()
-            if revoked is not None:
+            redis_client = await _get_async_redis_client()
+            is_revoked = await is_token_revoked(token_jti, redis_client, db)
+            if redis_client:
+                await redis_client.close()
+            if is_revoked:
                 raise HTTPException(
                     status_code=status.HTTP_401_UNAUTHORIZED,
                     detail="Token has been revoked",

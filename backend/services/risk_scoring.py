@@ -52,23 +52,6 @@ class RiskScorer:
         "self_directed_learning_score": "Self-Directed Learning",
     }
 
-    # Legacy K-12 weights for backward compatibility with old tests
-    # These map to the feature keys expected by test_risk_scoring.py
-    WEIGHTS: Dict[str, float] = {
-        "attendance": 0.30,
-        "academic": 0.40,
-        "behavioral": 0.15,
-        "stability": 0.15,
-    }
-
-    # Legacy feature key mapping for tests using attendance_score, academic_score, etc.
-    _LEGACY_FEATURE_KEYS: Dict[str, str] = {
-        "attendance": "attendance_score",
-        "academic": "academic_score",
-        "behavioral": "behavioral_score",
-        "stability": "stability_score",
-    }
-
     NEUTRAL_RISK_SCORE = 50.0
 
     @staticmethod
@@ -118,34 +101,6 @@ class RiskScorer:
             # High SDL score (100) -> 0 risk contribution, Low SDL (0) -> 100 risk contribution
             if logical_key == "self_directed_learning":
                 score = 100.0 - score
-            weighted_sum += weight * score
-            observed_weight += weight
-
-        if observed_weight == 0.0:
-            return 0.0, 0.0
-
-        return weighted_sum / observed_weight, observed_weight
-
-    @staticmethod
-    def _is_legacy_k12_features(features: Dict) -> bool:
-        """Detect if features dict contains legacy K-12 style keys."""
-        legacy_keys = ['attendance_score', 'academic_score', 'behavioral_score', 'stability_score']
-        return any(k in features for k in legacy_keys)
-
-    @staticmethod
-    def _compute_weighted_engagement_legacy(features: Dict) -> Tuple[float, float]:
-        """
-        Compute weighted engagement using legacy K-12 weights.
-        For backward compatibility with old tests.
-        """
-        weighted_sum = 0.0
-        observed_weight = 0.0
-
-        for logical_key, weight in RiskScorer.WEIGHTS.items():
-            score_key = RiskScorer._LEGACY_FEATURE_KEYS.get(logical_key, f"{logical_key}_score")
-            score = RiskScorer._to_valid_score(features.get(score_key))
-            if score is None:
-                continue
             weighted_sum += weight * score
             observed_weight += weight
 
@@ -207,13 +162,9 @@ class RiskScorer:
                 f"Substituting 0.0 for missing values."
             )
 
-        # Check for legacy K-12 features and use appropriate computation
-        if RiskScorer._is_legacy_k12_features(features):
-            weighted_engagement, observed_weight = RiskScorer._compute_weighted_engagement_legacy(features)
-            total_weight = sum(RiskScorer.WEIGHTS.values())
-        else:
-            weighted_engagement, observed_weight = RiskScorer._compute_weighted_engagement(features)
-            total_weight = sum(FEATURE_WEIGHTS.values())
+        # Compute weighted engagement using production feature weights
+        weighted_engagement, observed_weight = RiskScorer._compute_weighted_engagement(features)
+        total_weight = sum(FEATURE_WEIGHTS.values())
 
         if observed_weight == 0.0 or total_weight <= 0.0:
             existing_score = RiskScorer.NEUTRAL_RISK_SCORE
@@ -337,22 +288,13 @@ class RiskScorer:
         """Identify which observed component contributes most to risk."""
         risk_contributions: Dict[str, float] = {}
 
-        # Handle legacy K-12 features
-        if RiskScorer._is_legacy_k12_features(features):
-            for logical_key, weight in RiskScorer.WEIGHTS.items():
-                score_key = RiskScorer._LEGACY_FEATURE_KEYS.get(logical_key, f"{logical_key}_score")
-                score = RiskScorer._to_valid_score(features.get(score_key))
-                if score is None:
-                    continue
-                risk_contributions[logical_key] = (100.0 - score) * weight
-        else:
-            for logical_key, weight in FEATURE_WEIGHTS.items():
-                score_key = _feature_score_key(logical_key)
-                score = RiskScorer._to_valid_score(features.get(score_key))
-                if score is None:
-                    continue
-                label = RiskScorer.FEATURE_LABELS[score_key]
-                risk_contributions[label] = (100.0 - score) * weight
+        for logical_key, weight in FEATURE_WEIGHTS.items():
+            score_key = _feature_score_key(logical_key)
+            score = RiskScorer._to_valid_score(features.get(score_key))
+            if score is None:
+                continue
+            label = RiskScorer.FEATURE_LABELS[score_key]
+            risk_contributions[label] = (100.0 - score) * weight
 
         if not risk_contributions:
             return "Insufficient Data"

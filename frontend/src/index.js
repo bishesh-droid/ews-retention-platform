@@ -6,7 +6,6 @@ import './index.css';
 import App from './App';
 import { StudentProvider } from './context/StudentContext';
 import { AuthProvider } from './context/AuthContext';
-import './chartConfig'; // Register Chart.js components
 
 const root = ReactDOM.createRoot(document.getElementById('root'));
 root.render(

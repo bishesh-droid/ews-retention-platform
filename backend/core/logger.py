@@ -102,13 +102,15 @@ class JSONFormatter(logging.Formatter):
         log_data = {
             "timestamp": datetime.now(timezone.utc).isoformat(),
             "level": record.levelname,
+            "service": "ews-retention-platform",
             "name": record.name,
             "module": record.module,
             "funcName": record.funcName,
             "message": record.getMessage(),
+            "trace_id": getattr(record, "request_id", None),
+            "user_id": getattr(record, "user_id", None),
+            "duration_ms": getattr(record, "duration_ms", None),
         }
-        if hasattr(record, "request_id"):
-            log_data["request_id"] = record.request_id
         if record.exc_info:
             log_data["exc_info"] = self.formatException(record.exc_info)
         return json.dumps(log_data)

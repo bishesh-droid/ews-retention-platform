@@ -66,7 +66,9 @@ Educational institutions lose students due to disengagement, academic struggles,
 - LLM-powered explanations and intervention suggestions (Gemini/Claude)
 - Automated daily prediction generation via scheduler
 - Business intelligence dashboards (retention forecasting, revenue at risk)
-- Multi-role authentication with JWT tokens and httpOnly refresh cookies
+- Multi-role authentication with JWT (15-min access tokens), Refresh Token Rotation (RTR), Redis-backed revocation, and httpOnly SameSite=Strict refresh cookies scoped to the refresh endpoint
+- FERPA-compliant audit logging covering all student data access and AI-generated disclosures
+- LLM provider fallback chain (Gemini → Claude → deterministic template) for high availability
 
 ### System Boundaries
 
@@ -86,7 +88,8 @@ Educational institutions lose students due to disengagement, academic struggles,
                                 v
                           +------------------+
                           |   Redis Cache    |
-                          |   (Rate Limit)   |
+                          |   (Rate Limit /  |
+                          |   Token Revoke)  |
                           +------------------+
 ```
 
@@ -106,6 +109,8 @@ Educational institutions lose students due to disengagement, academic struggles,
 - Repository pattern for data access (student_repository.py)
 - Strategy pattern for LLM provider abstraction (Gemini/Claude)
 - Circuit breaker for external API calls (LLM timeouts)
+- Redis-first token revocation with SQLite fallback for high-throughput auth checks
+- Waterfall LLM fallback strategy: Gemini → Claude → rule-based template
 
 ### Frontend Architecture
 
@@ -136,12 +141,14 @@ Educational institutions lose students due to disengagement, academic struggles,
 
 **Migration Tool**: Alembic 1.18.4
 
+> **Note**: Alembic schema version is verified at startup — server will refuse to start if migrations are not at HEAD.
+
 ### Integration Points
 
 **External Services**:
 - Google Gemini API (LLM features)
 - Anthropic Claude API (LLM features)
-- Redis (distributed rate limiting, caching)
+- Redis (distributed rate limiting, token revocation, caching)
 
 **Data Ingestion**:
 - Excel file uploads (.xlsx) via admin interface
@@ -152,7 +159,7 @@ Educational institutions lose students due to disengagement, academic struggles,
 
 | Service | Purpose | Required |
 |---------|---------|----------|
-| Redis | Rate limiting, distributed caching | Yes (production) |
+| Redis | Rate limiting, token revocation, distributed caching | Yes (production) |
 | Google Gemini | LLM explanations, suggestions | Optional |
 | Anthropic Claude | Alternative LLM provider | Optional |
 
@@ -224,7 +231,7 @@ flowchart TD
 
     subgraph DataLayer["Data Layer"]
         SQLite[("SQLite / PostgreSQL")]
-        Redis[("Redis Cache")]
+        Redis[("Redis (Rate Limit / Token Revocation)")]
     end
 
     subgraph DataIngestion["Data Ingestion Pipeline"]
@@ -292,15 +299,15 @@ flowchart TD
     subgraph AuthFlow["Authentication Flow"]
         User["User"] --> Login["POST /auth/login"]
         Login --> ValidateCreds["Validate Credentials (bcrypt)"]
-        ValidateCreds --> CreateJWT["Create JWT Access Token"]
-        CreateJWT --> CreateRefresh["Create Refresh Token (httpOnly cookie)"]
+        ValidateCreds --> CreateJWT["Create JWT Access Token (15 min)"]
+        CreateJWT --> CreateRefresh["Create Refresh Token (httpOnly, Secure, SameSite=Strict, path=/api/v1/auth/refresh)"]
         CreateRefresh --> ReturnToken["Return Access Token"]
     end
 
     subgraph RequestCycle["Authenticated Request Cycle"]
         Client["Client"] --> AttachHeader["Attach Authorization Header"]
         AttachHeader --> ValidateJWT["JWT Validation Middleware"]
-        ValidateJWT --> CheckRevoked["Check RevokedToken Table"]
+        ValidateJWT --> CheckRevoked["Check Redis Revocation / RevokedToken Fallback"]
         CheckRevoked --> RBAC["RBAC Authorization Check"]
         RBAC --> AuditLog["Audit Logger (FERPA)"]
         AuditLog --> ProcessRequest["Process Request"]
@@ -519,6 +526,7 @@ flowchart TD
         subgraph RedisContainer["Redis Container"]
             RedisServer["Redis 7 (alpine)"]
             RateLimitStore["Rate Limit Counters"]
+            TokenRevocation["Token Revocation (RTR)"]
             LLMCache["LLM Response Cache"]
         end
 
@@ -556,6 +564,7 @@ flowchart TD
     BackgroundJobs --> Uvicorn
 
     RedisServer --> RateLimitStore
+    RedisServer --> TokenRevocation
     RedisServer --> LLMCache
 
     Postgres --> DataVolume
@@ -619,7 +628,7 @@ flowchart TD
 
 ##### AI Services (`services/ai/`)
 
-- `llm_orchestrator.py` — Unified LLM interface (Gemini/Claude)
+- `llm_orchestrator.py` — Unified LLM interface with waterfall fallback (Gemini → Claude → template)
 - `rag_engine.py` — Retrieval-augmented generation for student context
 - `advisor.py` — AI academic advisor logic
 - `hallucination_guard.py` — LLM output validation
@@ -779,7 +788,7 @@ Database migration scripts:
 |----------|---------|---------|
 | Python | 3.12+ | Backend runtime |
 | Node.js | 18+ | Frontend build |
-| Redis | 7+ | Rate limiting (production) |
+| Redis | 7+ | Rate limiting and token revocation (production) |
 | PostgreSQL | 14+ | Production database (optional) |
 
 ### Backend Installation
@@ -872,7 +881,7 @@ All configuration is managed via environment variables. See `.env.example` for t
 |----------|-------------|---------|
 | `SECRET_KEY` | JWT signing key (min 32 chars) | `a1b2c3d4e5f6g7h8i9j0k1l2m3n4o5p6` |
 | `DATABASE_URL` | Database connection string | `sqlite:///./backend/data/sql_app.db` |
-| `REDIS_URL` | Redis connection URL | `redis://localhost:6379/0` |
+| `REDIS_URL` | Redis connection URL — required in production for rate limiting and token revocation | `redis://localhost:6379/0` |
 | `ENVIRONMENT` | Environment mode | `development` or `production` |
 
 #### Optional Variables
@@ -882,7 +891,9 @@ All configuration is managed via environment variables. See `.env.example` for t
 | `API_HOST` | `0.0.0.0` | Server bind address |
 | `API_PORT` | `8000` | Server bind port |
 | `CORS_ORIGINS` | `http://localhost:3000` | Allowed CORS origins (comma-separated) |
-| `ACCESS_TOKEN_EXPIRE_MINUTES` | `60` | JWT access token lifetime |
+| `ACCESS_TOKEN_EXPIRE_MINUTES` | `15` | JWT access token lifetime in minutes (keep ≤15) |
+| `TRUSTED_PROXY_IPS` | `` (empty) | Comma-separated IPs of trusted reverse proxies |
+| `LLM_BUDGET_ALERT_USD_PER_WEEK` | `10.00` | Weekly LLM spend alert threshold |
 | `GEMINI_API_KEY` | — | Google Gemini API key |
 | `CLAUDE_API_KEY` | — | Anthropic Claude API key |
 | `LLM_PROVIDER` | `gemini` | LLM provider (`gemini` or `claude`) |
@@ -947,7 +958,7 @@ cd frontend
 npm start
 ```
 
-**Redis** (required for rate limiting):
+**Redis** (required for rate limiting and token revocation):
 ```bash
 redis-server
 ```
@@ -1041,7 +1052,7 @@ password: <string>
 
 #### POST /api/v1/auth/refresh
 
-Refresh access token using httpOnly cookie.
+Refresh access token using httpOnly cookie. Old refresh token JTI is revoked immediately (RTR).
 
 **Response (200)**:
 ```json
@@ -1410,14 +1421,15 @@ Health check endpoint.
 2. Server validates against hashed_password (bcrypt)
    |
    v
-3. JWT access token created (15-60 min expiry)
+3. JWT access token created (15-min expiry, configurable via ACCESS_TOKEN_EXPIRE_MINUTES)
    - Claims: sub, role, exp, iat, iss, aud, jti, nbf
    |
    v
 4. Refresh token created (7 day expiry)
    |
    v
-5. Refresh token stored in httpOnly cookie
+5. Refresh token stored in httpOnly, Secure, SameSite=Strict cookie
+   scoped to path="/api/v1/auth/refresh" only
    |
    v
 6. Access token returned to client (memory storage)
@@ -1429,7 +1441,7 @@ Health check endpoint.
 8. On 401, client calls /auth/refresh
    |
    v
-9. New access token issued, cookie rotated
+9. New access token issued, old refresh token JTI revoked in Redis (RTR), new cookie set
 ```
 
 ## Database Schema
@@ -1486,7 +1498,8 @@ CREATE TABLE predictions (
     responsiveness_signal_score FLOAT,
     model_version VARCHAR,
     prediction_timestamp DATETIME NOT NULL,
-    top_risk_factors VARCHAR
+    top_risk_factors VARCHAR,
+    UNIQUE (student_id, prediction_date)  -- prevents duplicate daily predictions
 );
 ```
 
@@ -1546,6 +1559,7 @@ CREATE TABLE audit_logs (
     request_id VARCHAR,
     timestamp DATETIME,
     details JSON
+    -- Append-only: no UPDATE or DELETE permitted at the application layer
 );
 ```
 
@@ -1684,6 +1698,19 @@ As of current implementation:
 - Chaos engineering tests (Redis failure, DB failure)
 
 ## Deployment
+
+### Pre-Deployment Checklist
+
+- [ ] `.env` not tracked by git (`git status` shows no `.env`)
+- [ ] All secrets rotated and stored in secrets manager or CI secrets
+- [ ] `alembic upgrade head` applied to production DB
+- [ ] `ENVIRONMENT=production` set (triggers CORS HTTPS enforcement)
+- [ ] `REDIS_URL` points to a live Redis instance
+- [ ] `CORS_ORIGINS` contains only HTTPS origins (no localhost)
+- [ ] `ACCESS_TOKEN_EXPIRE_MINUTES=15` confirmed
+- [ ] `TRUSTED_PROXY_IPS` set to the IP(s) of your reverse proxy/load balancer
+- [ ] Docker image built from digest-pinned base image
+- [ ] CI pipeline passing with all quality gates unblocked
 
 ### Production Deployment Steps
 
@@ -1826,52 +1853,34 @@ All logs automatically mask sensitive data:
 
 ## Security Considerations
 
-### Authentication
+### Authentication & Token Security
 
-**Method**: JWT (JSON Web Tokens) with bcrypt password hashing
+- Access tokens expire in 15 minutes (configurable via `ACCESS_TOKEN_EXPIRE_MINUTES`)
+- Refresh Token Rotation (RTR): old refresh token JTI is revoked immediately upon rotation
+- Refresh token cookie is `httpOnly`, `Secure`, `SameSite=Strict`, scoped to `path="/api/v1/auth/refresh"` only
+- Token revocation is Redis-backed with TTL-based expiry; SQLite serves as a cold fallback
 
-**Token Structure**:
-- Access token: 15-60 minute expiry, stored in memory
-- Refresh token: 7 day expiry, httpOnly cookie
-- Claims: sub, role, exp, iat, iss, aud, jti, nbf
+### Role-Based Access Control
 
-**Security Features**:
-- Token revocation blocklist (RevokedToken table)
-- Automatic token rotation on refresh
-- Signature validation with SECRET_KEY
-- Audience and issuer validation
+- Four roles: `student`, `faculty`, `retention_team`, `admin`
+- All role checks are enforced at the FastAPI dependency layer, not inside route handlers
+- Students are strictly scoped to their own data — IDOR protection verified at ownership checker level for every student-scoped endpoint
 
-### Authorization
+### FERPA Compliance
 
-**Method**: Role-Based Access Control (RBAC)
-
-**Roles**:
-- `student` — Own data only
-- `faculty` — All student data, interventions
-- `admin` — Full system access, user management
-- `retention team` — Intervention management, analytics
-
-**Superuser**: `is_superuser=True` bypasses all role checks
-
-### Input Validation
-
-**Layers**:
-1. **Pydantic schemas** — Type validation, field constraints
-2. **SecurityManager.sanitize_input()** — HTML sanitization with bleach
-3. **Encoding detection** — URL, Unicode, HTML entity decoding
-4. **Control character stripping** — Null bytes, newlines
-5. **Prompt injection detection** — LLM-specific patterns
-
-**Validators**:
-- GPA: 0.0-4.0 range
-- Attendance: 0-100 range
-- Student ID: Alphanumeric, 4-20 chars, regex `^[A-Za-z0-9_-]{4,20}$`
+- Every endpoint that accesses or returns student PII writes to the `AuditLog` table
+- AI-generated disclosures (LLM advice surfaced to students) are logged with model name, operation, and a prompt hash — no raw prompts or responses stored
+- `AuditLog` is append-only — no UPDATE or DELETE operations are permitted at the application layer
+- IP address logging is proxy-aware: `X-Forwarded-For` is only trusted from known proxy IPs (configured via `TRUSTED_PROXY_IPS`)
 
 ### Rate Limiting
 
-**Implementation**: SlowAPI with Redis backend
+- Redis-backed distributed rate limiting on all auth endpoints
+- LLM endpoints have a separate rate limiter to control API cost
+- Graceful degradation: if Redis is unreachable, rate limiting falls back to in-process TTLCache with reduced limits; service continues without crashing
 
 **Limits**:
+
 | Endpoint | Limit | Window |
 |----------|-------|--------|
 | Login | 5 | per minute |
@@ -1892,11 +1901,26 @@ Content-Type: application/json
 }
 ```
 
+### Input Validation & Injection Prevention
+
+- All request inputs validated via Pydantic v2 schemas
+- Student free-text fields are never interpolated directly into LLM prompts — structured prompt templates are used throughout `llm_orchestrator.py`
+- Excel ingestion validates sheet names, column headers, and row-level data before writing; failed rows are quarantined with full error context
+
+**Validators**:
+- GPA: 0.0-4.0 range
+- Attendance: 0-100 range
+- Student ID: Alphanumeric, 4-20 chars, regex `^[A-Za-z0-9_-]{4,20}$`
+
 ### Secrets Management
 
-**Storage**: Environment variables only (never in code)
+- No secrets are stored in version-controlled files
+- `.env` is in `.gitignore`; `.env.example` contains placeholders only
+- All secrets loaded via environment variables using `pydantic-settings`
+- Rotate any key immediately if it appears in git history:
+  `git filter-repo --path .env --invert-paths`
 
-**Generation**:
+Generate secure values:
 ```bash
 # Secret key
 python -c "import secrets; print(secrets.token_hex(32))"
@@ -1905,16 +1929,19 @@ python -c "import secrets; print(secrets.token_hex(32))"
 python -c "import hashlib; print(hashlib.sha256(b'your-key').hexdigest())"
 ```
 
-**Validation**: Startup validation rejects weak/placeholder values in production
+### CI Security Gates
 
-### Known Vulnerabilities
+- Bandit security scan (blocks on new HIGH/CRITICAL findings against `.bandit.baseline`)
+- detect-secrets scan (blocks on new secret patterns against `.secrets.baseline`)
+- mypy type checking (blocking)
+- flake8 linting (blocking)
 
-**Addressed**:
+**Known Vulnerabilities Addressed**:
 - XSS: Content Security Policy, input sanitization
-- CSRF: JWT tokens, httpOnly cookies
+- CSRF: JWT tokens, httpOnly SameSite=Strict cookies
 - IDOR: Resource ownership checker, role-based access
 - SQL Injection: SQLAlchemy ORM with parameterized queries
-- Prompt Injection: LLM input sanitization, guardrails
+- Prompt Injection: LLM input sanitization, structured templates, guardrails
 
 **Under Review**:
 - Multi-worker deployment requires distributed lock (ARCH-2)
@@ -1938,6 +1965,7 @@ python -c "import hashlib; print(hashlib.sha256(b'your-key').hexdigest())"
 
 **Redis Cache**:
 - Rate limit counters
+- Token revocation (RTR) with TTL-based expiry
 - LLM response cache (TTL: 300 seconds)
 - Feature computation cache (planned)
 
@@ -2006,33 +2034,31 @@ python -c "import hashlib; print(hashlib.sha256(b'your-key').hexdigest())"
 
 ## Roadmap
 
-### Phase 1: Core Improvements
+### Completed
 
-- [ ] PostgreSQL migration guide
-- [ ] Multi-worker deployment with Redis distributed locks
-- [ ] LMS API integration (Canvas, Moodle, Blackboard)
-- [ ] Automated email interventions
+- [x] JWT with RTR and Redis revocation
+- [x] FERPA audit logging with AI disclosure trail
+- [x] LLM waterfall fallback chain (Gemini → Claude → template)
+- [x] Alembic startup schema verification
+- [x] CI security gates (Bandit, detect-secrets, mypy — all blocking)
+- [x] Unique constraint on Prediction(student_id, prediction_date)
+- [x] Calendar scorer dynamic week cap
 
-### Phase 2: ML Enhancement
+### In Progress
 
-- [ ] XGBoost training pipeline
-- [ ] Model versioning and A/B testing
-- [ ] Feature importance tracking
-- [ ] Automated model retraining
+- [ ] Bulk import validation UI (preview → confirm flow)
+- [ ] Frontend chart library consolidation (Chart.js → Recharts)
+- [ ] PostgreSQL migration documentation
 
-### Phase 3: Advanced Features
+### Planned
 
-- [ ] Student self-service portal
-- [ ] Communication platform integration
-- [ ] Early alert system for faculty
-- [ ] Retention campaign management
-
-### Phase 4: Enterprise Features
-
-- [ ] Multi-tenancy support
-- [ ] SSO integration (SAML, OIDC)
-- [ ] Advanced analytics (cohort segmentation)
-- [ ] API rate limiting per organization
+- [ ] Webhook / email notification system for faculty risk threshold alerts (E-1)
+- [ ] Automated intervention outcome tracking with effectiveness scoring (E-2)
+- [ ] Model drift detection with PSI-based weekly snapshots (E-4)
+- [ ] Student FERPA data export endpoint (E-5)
+- [ ] LLM cost tracking dashboard with budget alerts (E-9)
+- [ ] Multi-tenancy foundations (E-6)
+- [ ] Redis graceful degradation with circuit breaker (E-8)
 
 ## System Design Principles
 
@@ -2173,7 +2199,7 @@ python -c "import hashlib; print(hashlib.sha256(b'your-key').hexdigest())"
 
 | Service | Version | Purpose | Network Requirements |
 |---------|---------|---------|-------------------|
-| Redis | 7.x | Rate limiting, caching | Port 6379 TCP |
+| Redis | 7.x | Rate limiting, token revocation, caching | Port 6379 TCP |
 | PostgreSQL | 14+ | Production database | Port 5432 TCP |
 | Google Gemini API | v1beta | LLM features | HTTPS outbound |
 | Anthropic Claude API | v1 | LLM features | HTTPS outbound |
@@ -3096,6 +3122,8 @@ Push/PR -> Lint -> Test -> Security Scan -> Build -> Deploy
 | No LMS API integration | `data_ingestion/` | Manual file uploads only | Excel ingestion robust |
 | Single-process prediction | `services/infrastructure/scheduler.py` | Scaling bottleneck | Batch processing within job |
 | No horizontal scaling | `docker/docker-compose.yml` | Single backend instance | Vertical scaling available |
+| Chart.js and Recharts both present in frontend bundle | `frontend/` | ~220KB bundle overhead | Consolidation to Recharts in progress |
+| EWSDataPipeline class is a deprecated CLI-only tool | `ingestion/pipeline.py` | Confusion with production path | Production ingestion uses `ingest_all_data()` from `data_ingestion.py` |
 
 ### Medium (Address within 12 months)
 
@@ -3105,6 +3133,8 @@ Push/PR -> Lint -> Test -> Security Scan -> Build -> Deploy
 | Calendar scorer edge cases | `services/calendar_scorer.py` | Trimester boundary issues | Test coverage for boundary dates |
 | LLM requires manual config | `services/ai/llm_orchestrator.py` | Optional feature disabled by default | Rule-based fallback always available |
 | No automated email | `services/infrastructure/recommender.py` | Manual outreach only | Intervention queue tracks assignments |
+| Legacy K-12 weight keys pending removal | `services/risk_scoring.py` | Unused config keys | Removal blocked on test migration |
+| PostgreSQL production migration guide incomplete | `docs/postgresql-migration.md` | No documented migration path | SQLite sufficient for current scale |
 
 ### Low (Nice to have)
 
@@ -3249,8 +3279,9 @@ Push/PR -> Lint -> Test -> Security Scan -> Build -> Deploy
 3. Install backend dependencies (`pip install -r requirements.txt`)
 4. Install frontend dependencies (`cd frontend && npm install`)
 5. Copy `.env.example` to `.env` and configure
-6. Initialize database (`python -c "from backend.database.connection import init_db; init_db()"`)
-7. Seed test data if available
+6. Run migrations (`alembic upgrade head`)
+7. Initialize database (`python -c "from backend.database.connection import init_db; init_db()"`)
+8. Seed test data if available
 
 **Afternoon (4 hours)**
 1. Start backend (`uvicorn backend.main:app --reload`)
@@ -3350,6 +3381,14 @@ Push/PR -> Lint -> Test -> Security Scan -> Build -> Deploy
 **Issue: Import errors**
 - Solution: Verify virtual environment activated
 - Check PYTHONPATH includes project root
+
+**Issue: "Database schema out of date" error on startup**
+- Solution: Run `alembic upgrade head` before starting the server
+- This check runs automatically at startup and will refuse to start if migrations are pending
+
+**Issue: Token immediately rejected after refresh**
+- Solution: Verify Redis is running — the RTR revocation write requires Redis to be reachable
+- Check with: `redis-cli ping`
 
 ### Resources
 

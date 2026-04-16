@@ -15,6 +15,7 @@ from backend.database.models.feature import StudentResponse
 from .user import User
 from .academic import GradedComponent, ExamRecord
 from .goals_and_risks import Goal, RiskSnapshot
+from .faculty_notification_pref import FacultyNotificationPref
 from .audit import AuditLog
 from .ingestion_run import IngestionRun
 from .course_content_registry import CourseContentRegistry
@@ -49,6 +50,7 @@ __all__ = [
     "ExamRecord",
     "Goal",
     "RiskSnapshot",
+    "FacultyNotificationPref",
     "AuditLog",
     "IngestionRun",
     "CourseContentRegistry",

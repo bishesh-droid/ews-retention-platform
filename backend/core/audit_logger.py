@@ -16,6 +16,7 @@ Usage:
     )
 """
 
+import os
 from typing import Optional
 from sqlalchemy.orm import Session
 from fastapi import Request
@@ -67,17 +68,17 @@ def log_data_access(
             return student
     """
     # Extract IP address from request if available
+    # Only trust X-Forwarded-For when request arrives from a known proxy
     ip_address = None
     if request is not None:
-        # Try to get the real client IP (considering X-Forwarded-For)
-        forwarded = request.headers.get("X-Forwarded-For")
-        if forwarded:
-            # X-Forwarded-For can contain multiple IPs, take the first one
-            ip_address = forwarded.split(",")[0].strip()
+        trusted_proxies = set(
+            ip.strip() for ip in os.getenv("TRUSTED_PROXY_IPS", "").split(",") if ip.strip()
+        )
+        if request.client and request.client.host in trusted_proxies:
+            forwarded = request.headers.get("X-Forwarded-For", "")
+            ip_address = forwarded.split(",")[0].strip() if forwarded else request.client.host
         else:
-            # Fall back to direct client IP
-            if request.client:
-                ip_address = request.client.host
+            ip_address = request.client.host if request.client else "unknown"
 
     # Extract request_id from request state or use provided value
     req_id = request_id
@@ -105,9 +106,7 @@ def log_data_access(
     )
 
     db.add(audit_log)
-    db.commit()
-    db.refresh(audit_log)
-
+    # Caller controls commit — do NOT commit here to maintain transaction atomicity
     return audit_log
 
 
@@ -141,13 +140,17 @@ def log_bulk_data_access(
     logs = []
 
     # Log a summary entry for the bulk operation
+    # Only trust X-Forwarded-For when request arrives from a known proxy
     ip_address = None
     if request is not None:
-        forwarded = request.headers.get("X-Forwarded-For")
-        if forwarded:
-            ip_address = forwarded.split(",")[0].strip()
-        elif request.client:
-            ip_address = request.client.host
+        trusted_proxies = set(
+            ip.strip() for ip in os.getenv("TRUSTED_PROXY_IPS", "").split(",") if ip.strip()
+        )
+        if request.client and request.client.host in trusted_proxies:
+            forwarded = request.headers.get("X-Forwarded-For", "")
+            ip_address = forwarded.split(",")[0].strip() if forwarded else request.client.host
+        else:
+            ip_address = request.client.host if request.client else "unknown"
 
     req_id = request_id
     if req_id is None and request is not None:
@@ -174,9 +177,5 @@ def log_bulk_data_access(
 
     db.add(bulk_log)
     logs.append(bulk_log)
-
-    db.commit()
-    for log in logs:
-        db.refresh(log)
-
+    # Caller controls commit — do NOT commit here to maintain transaction atomicity
     return logs

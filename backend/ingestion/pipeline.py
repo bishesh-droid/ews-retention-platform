@@ -1,5 +1,8 @@
+# DEPRECATED: EWSDataPipeline is a standalone CLI tool only.
+# The production ingestion path uses ingest_all_data() from data_ingestion.py.
+# Do not use EWSDataPipeline from FastAPI route handlers.
 """
-EWS Data Pipeline - Main ETL Orchestrator
+EWS Data Pipeline - Main ETL Orchestrator (CLI ONLY - DEPRECATED for API use)
 Simplified version for initial implementation
 """
 import pandas as pd
@@ -9,24 +12,25 @@ from datetime import datetime, date
 import logging
 
 from backend.database import (
-    SessionLocal, DimStudent, DimCourse,
+    DimStudent, DimCourse,
     FactAcademicPerformance, FactEngagement
 )
 from backend.ingestion.transformers import TypeCoercer
 from backend.ingestion.error_logger import IngestionErrorLogger
+from backend.core.logger import setup_logger
 
-logging.basicConfig(level=logging.INFO)
-logger = logging.getLogger(__name__)
+logger = setup_logger("ews_pipeline")
 
 
 class EWSDataPipeline:
     """Main ingestion pipeline for EWS raw data"""
 
-    def __init__(self, data_dir: str = "data/raw"):
+    def __init__(self, data_dir: str = "data/raw", db_session=None):
         self.data_dir = Path(data_dir)
         self.logger = logger
         self.error_logger = IngestionErrorLogger()
-        self.db = SessionLocal()
+        # Session must be passed in as a parameter, never created inside __init__
+        self.db = db_session
         self.staging: dict = {}  # In-memory staging area
 
     def run(self):
@@ -74,6 +78,8 @@ class EWSDataPipeline:
 
     def ingest_student_roster(self):  # noqa: C901
         """Load student dimension from enrollment files"""
+        if self.db is None:
+            raise RuntimeError("No database session provided. Pass db_session to __init__.")
         # Primary file: Trimester 1 attendance file (has Total_Enrolled sheet)
         file_path = self.data_dir / "_Trimester-1 2025 Attendance Quiz-Assignment-Exam 5Jan2025.xlsx"
 
@@ -150,23 +156,51 @@ class EWSDataPipeline:
         except Exception as e:
             self.logger.error(f"Error loading student roster: {e}")
 
-    def ingest_courses(self):
-        """Load course dimension from various files"""
-        # For simplicity, create placeholder courses
-        courses = [
-            {'course_id': 'DEFAULT_COURSE', 'course_name': 'General Course', 'program': 'BS'}
-        ]
+    def ingest_courses(self) -> None:
+        """
+        Ingest course catalog from enrollment data headers or dedicated course column.
 
-        for course_data in courses:
-            existing = self.db.query(DimCourse).filter_by(course_id=course_data['course_id']).first()
+        TODO: Replace placeholder with real implementation that extracts course names
+        from the enrollment sheet headers (e.g., "Course: Data Pre-processing") or
+        a dedicated 'course_name' column if available in the data files.
+        """
+        # Minimal real implementation: try to extract course names from enrollment data
+        course_names = set()
+        try:
+            # Attempt to read course names from enrollment sheet headers
+            # This assumes the enrollment data has a 'course_name' column or similar
+            enrollment_path = Path(self.data_dir) / "engagement_data.xlsx"
+            if enrollment_path.exists():
+                import pandas as pd
+                df = pd.read_excel(enrollment_path, nrows=5)  # Read header only
+                if 'course_name' in df.columns:
+                    course_names = set(df['course_name'].dropna().unique())
+        except Exception as e:
+            logger.warning(f"Could not extract course names from enrollment data: {e}")
+
+        # Fallback to placeholder if no courses found
+        if not course_names:
+            course_names = {"Default Course"}
+
+        for course_name in course_names:
+            course_code = course_name.upper().replace(" ", "_")[:20]
+            logger.info(f"Course catalog entry: {course_name} ({course_code})")
+
+            existing = self.db.query(DimCourse).filter_by(course_id=course_code).first()
             if not existing:
-                course = DimCourse(**course_data)
+                course = DimCourse(
+                    course_id=course_code,
+                    course_name=course_name,
+                    program='BS'
+                )
                 self.db.add(course)
 
-        self.logger.info(f"  ✓ Loaded {len(courses)} courses")
+        self.logger.info(f"  ✓ Loaded {len(course_names)} courses")
 
     def ingest_attendance(self):  # noqa: C901
         """Load attendance records from Live Summary sheets"""
+        if self.db is None:
+            raise RuntimeError("No database session provided. Pass db_session to __init__.")
         files_processed = 0
         records_added = 0
 
@@ -239,6 +273,8 @@ class EWSDataPipeline:
 
     def ingest_assessments(self):
         """Load assessment records from quiz files"""
+        if self.db is None:
+            raise RuntimeError("No database session provided. Pass db_session to __init__.")
         quiz_files = [f for f in os.listdir(self.data_dir) if 'quiz' in f.lower() and f.endswith('.xlsx')]
 
         records_added = 0

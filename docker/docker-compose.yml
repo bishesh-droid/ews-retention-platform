@@ -16,8 +16,9 @@ services:
     volumes:
       - ./models:/app/models
       - ./backend:/app/backend
+      - sqlite_data:/app/backend/data
     environment:
-      - DATABASE_URL=sqlite:///./backend/ews_platform.db
+      - DATABASE_URL=sqlite:////app/backend/data/sql_app.db
       - SECRET_KEY
       - ENVIRONMENT=development
       - REDIS_URL=redis://redis:6379/0
@@ -48,3 +49,4 @@ services:
 
 volumes:
   redis_data:
+  sqlite_data:

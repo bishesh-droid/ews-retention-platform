@@ -12,10 +12,11 @@ from typing import Any, Dict, List, Optional
 
 from fastapi import APIRouter, Depends, HTTPException, Query
 from pydantic import BaseModel
-from sqlalchemy.orm import Session
+from sqlalchemy.orm import Session, joinedload
 from sqlalchemy import desc
 
 from backend.api.deps import get_db, get_current_user, require_role
+from backend.core.constants import Role
 from backend.database import Intervention, Student
 from backend.utils.api import success_response
 
@@ -25,8 +26,8 @@ router = APIRouter(
     dependencies=[Depends(get_current_user)],
 )
 
-_READ_ROLES = ["admin", "faculty", "retention team"]
-_WRITE_ROLES = ["admin", "faculty"]
+_READ_ROLES = [Role.ADMIN, Role.FACULTY, Role.RETENTION_TEAM]
+_WRITE_ROLES = [Role.ADMIN, Role.FACULTY]
 
 
 class InterventionCreateRequest(BaseModel):
@@ -108,7 +109,7 @@ def list_interventions(
     db: Session = Depends(get_db),
     _user=Depends(require_role(_READ_ROLES)),
 ):
-    q = db.query(Intervention).join(Student, Intervention.student_id == Student.id, isouter=True)
+    q = db.query(Intervention).options(joinedload(Intervention.student))
 
     if status:
         q = q.filter(Intervention.status == status)

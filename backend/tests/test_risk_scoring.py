@@ -6,9 +6,19 @@ Tests verify that:
 2. Negative CSV values are handled properly
 3. Edge cases (missing data, perfect scores, etc.) work correctly
 
-NOTE: These tests reference legacy K-12 feature engineering (attendance_score, absrate, nsusp, etc.)
-which is separate from the LMS exam_attendance_rate. The attendance_score tested here represents
-historical school absence rates, not written exam presence.
+MIGRATION NOTE: These tests use legacy K-12 feature keys (attendance_score, academic_score,
+behavioral_score, stability_score). The production system uses LMS-based feature keys:
+- content_completion_score
+- login_consistency_score
+- quiz_engagement_score
+- assignment_score
+- time_investment_score
+- discussion_engagement_score
+- self_directed_learning_score
+
+TODO: Migrate these tests to use production feature keys from backend.services.features.
+The legacy K-12 support has been removed from RiskScorer; tests using legacy keys
+will need to use the new modular feature engineering system.
 """
 
 import pytest

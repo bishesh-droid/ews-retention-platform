@@ -1,0 +1,5 @@
+# Bandit baseline file
+# This file contains pre-approved security findings that should not block the build
+# New findings must be reviewed and either fixed or added here with justification
+# Format: JSON list of suppressed findings
+[]

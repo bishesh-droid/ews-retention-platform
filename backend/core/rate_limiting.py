@@ -114,7 +114,10 @@ def require_llm_rate_limit():
         hour_key = f"llm_ratelimit:{current_user.id}:per_hour"
 
         # Get storage backend from limiter
-        storage = limiter._storage
+        storage = getattr(limiter, '_storage', None)
+        if storage is None or not hasattr(storage, 'incr'):
+            logger.warning("Rate limiter storage unavailable — skipping LLM rate limit check")
+            return  # Degrade gracefully
 
         # Check minute limit (5/min)
         minute_count = storage.incr(minute_key, 60)  # type: ignore[union-attr]

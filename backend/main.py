@@ -171,6 +171,19 @@ async def lifespan(app: FastAPI):  # noqa: C901
 
     validate_environment()
 
+    # CORS production validation — allowlist approach (moved here to avoid test import side effects)
+    if ENVIRONMENT != "development":
+        for origin in CORS_ORIGINS_NORMALIZED:
+            parsed = urlparse(origin)
+            if parsed.scheme != "https":
+                raise RuntimeError(
+                    f"Production CORS origin {origin!r} must use HTTPS."
+                )
+            if parsed.hostname in ("localhost", "127.0.0.1", "0.0.0.0", "::1"):
+                raise RuntimeError(
+                    f"Loopback CORS origin {origin!r} not allowed in production."
+                )
+
     # Health check Redis and select limiter backend.
     redis_ok = check_redis_connection()
     limiter_storage_uri = REDIS_URL
@@ -298,17 +311,7 @@ app.add_middleware(SecurityHeadersMiddleware)
 # CORS
 CORS_ORIGINS_NORMALIZED = parse_cors_origins(CORS_ORIGINS)
 
-# Validate in production — reject dev origins and wildcards
-if ENVIRONMENT != "development":
-    dev_origins = {"http://localhost", "http://127.0.0.1"}
-    for origin in CORS_ORIGINS_NORMALIZED:
-        if any(origin.startswith(dev) for dev in dev_origins):
-            raise RuntimeError(
-                f"Development origin {origin!r} found in CORS_ORIGINS for non-development environment. "
-                "Set CORS_ORIGINS to your production frontend URL."
-            )
-    if "*" in CORS_ORIGINS_NORMALIZED:
-        raise RuntimeError("Wildcard CORS origin not allowed in production. Set explicit origins.")
+# CORS validation moved to lifespan() to avoid firing during test imports
 
 app.add_middleware(
     CORSMiddleware,

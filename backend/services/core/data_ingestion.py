@@ -333,10 +333,10 @@ def _ingest_engagement_data(db: Session, files: dict, owner_thread_id: int, stat
             zipfile.BadZipFile,
             ValueError,
             KeyError) as e:
-        logger.warning("Skipping unreadable file",
-                       extra={"file": path.name, "error": type(e).__name__})
+        logger.error("Unreadable file",
+                   extra={"file": path.name, "error": type(e).__name__})
         stats.add_error(path.name, f"Unreadable file: {type(e).__name__}")
-        return
+        raise  # Re-raise to trigger transaction rollback
     try:
         ws = wb[sheet_name]
         rows = list(ws.iter_rows(values_only=True))
@@ -655,10 +655,10 @@ def _ingest_quiz_assignment_exam(db: Session, files: dict, owner_thread_id: int,
             zipfile.BadZipFile,
             ValueError,
             KeyError) as e:
-        logger.warning("Skipping unreadable file",
-                       extra={"file": path.name, "error": type(e).__name__})
+        logger.error("Unreadable file",
+                     extra={"file": path.name, "error": type(e).__name__})
         stats.add_error(path.name, f"Unreadable file: {type(e).__name__}")
-        return
+        raise  # Re-raise to trigger transaction rollback
     try:
         _ingest_graded_sheet(db, wb, "BS Attendance", "BS", stats)
         _ingest_graded_sheet(db, wb, "MSc Attendance", "MSc", stats)
@@ -667,6 +667,9 @@ def _ingest_quiz_assignment_exam(db: Session, files: dict, owner_thread_id: int,
         _ingest_exam_attendance(db, wb, "Attendance-Slot-2", "slot-2")
         _ingest_exam_defaulters(db, wb)
         db.flush()
+    except Exception:
+        # Re-raise to allow caller to handle rollback
+        raise
     finally:
         wb.close()
 
