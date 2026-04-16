@@ -54,6 +54,7 @@ class LLMOrchestrator:
         self.student_retriever = StudentDataRetriever(db)
         self.cohort_retriever = CohortDataRetriever(db)
         self.institutional_retriever = InstitutionalDataRetriever(db)
+        self.guardrail_validator = GuardrailValidator(db)
         self.llm_provider = LLM_PROVIDER
         self.llm_model_name = None
         self.llm_client = None
@@ -226,8 +227,7 @@ class LLMOrchestrator:
         try:
             explanation = self._invoke_llm(prompt)
 
-            # Validate response
-            validation = GuardrailValidator.validate_response(  # type: ignore[call-arg]
+            validation = self.guardrail_validator.validate_response(
                 explanation, student_context
             )
 
@@ -305,7 +305,7 @@ class LLMOrchestrator:
         try:
             advice = self._invoke_llm(prompt)
 
-            validation = GuardrailValidator.validate_response(advice, student_context)  # type: ignore[call-arg]
+            validation = self.guardrail_validator.validate_response(advice, student_context)
             confidence = self._calculate_confidence(validation, student_context)
 
             # FERPA: Audit log AI disclosure
@@ -391,7 +391,7 @@ class LLMOrchestrator:
                 system_message_profile_summary, user_message_profile_summary
             )
 
-            validation = GuardrailValidator.validate_response(summary, student_context)  # type: ignore[call-arg]
+            validation = self.guardrail_validator.validate_response(summary, student_context)
             confidence = self._calculate_confidence(validation, student_context)
 
             # FERPA: Audit log AI disclosure
@@ -475,7 +475,7 @@ class LLMOrchestrator:
             )
 
             # D3-6: Apply guardrail validation
-            validated = GuardrailValidator.validate_response(  # type: ignore[call-arg]
+            validated = self.guardrail_validator.validate_response(
                 suggestions, student_context
             )
             if validated.get("is_valid") is False:
@@ -690,7 +690,7 @@ class LLMOrchestrator:
             )
 
             # D3-6: Apply guardrail validation
-            validated = GuardrailValidator.validate_response(narrative, data)  # type: ignore[call-arg]
+            validated = self.guardrail_validator.validate_response(narrative, data)
             if validated.get("is_valid") is False:
                 logger.warning(
                     "LLM report narrative failed guardrail validation",

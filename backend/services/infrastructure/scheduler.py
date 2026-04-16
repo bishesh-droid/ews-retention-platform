@@ -159,7 +159,7 @@ def generate_daily_predictions() -> None:  # noqa: C901
             )
             if not batch:
                 break
-            last_id = batch[-1].id
+            last_id = str(batch[-1].id)
             total_processed += len(batch)
             logger.info(
                 f"Starting batch prediction for {len(batch)} students (batch ending at id={last_id})"
