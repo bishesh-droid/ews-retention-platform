@@ -332,7 +332,3 @@ class ContextAssembler:
                 context_parts.append(f"Latest action: {latest['action']} ({latest['date']})")
 
         return "\n".join(context_parts)
-
-
-# Import the canonical hallucination guard from dedicated module
-from backend.services.ai.hallucination_guard import HallucinationPrevention as GuardrailValidator

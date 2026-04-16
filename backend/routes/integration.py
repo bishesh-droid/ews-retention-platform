@@ -13,18 +13,17 @@ import time
 from fastapi import APIRouter, Depends, HTTPException, Header, Query, Request
 from pydantic import BaseModel, field_validator
 from sqlalchemy.orm import Session
-from typing import Optional, List, Any, Dict
+from typing import Optional, List, Dict
 from datetime import datetime
 
 from backend.api.deps import get_db
 from backend.services.student_service import StudentService
-from backend.database import Student, Enrollment, GradedComponent, ExamRecord
+from backend.database import Student
 from backend.config import INTEGRATION_API_KEY_HASH
 from backend.core.signing import constant_time_compare
 from backend.core.rate_limiting import limiter
 from backend.utils.api import success_response
 from backend.schemas.common import APIResponse
-from sqlalchemy.orm import selectinload
 from backend.infrastructure.student_repository import StudentRepository
 
 API_VERSION = "1.0"
@@ -205,7 +204,6 @@ def _build_risk_profile_from_cached_data(
     Returns:
         StudentRiskProfileData instance
     """
-    from backend.application.student.student_application_service import StudentApplicationService
     from backend.config import trimester_week_number
     from backend.services.feature_engineering import FeatureEngineer
     from backend.services.risk_scoring import RiskScorer
@@ -234,7 +232,6 @@ def _build_risk_profile_from_cached_data(
         program=program,
         current_week=current_week,
     )
-    retention_likelihood = RiskScorer.get_retention_likelihood(risk_score)
     risk_category = RiskScorer.get_risk_category(risk_score)
 
     # Map risk_category to risk_level

@@ -1,3 +1,4 @@
+import logging
 import os
 from slowapi import Limiter
 from slowapi.util import get_remote_address
@@ -11,6 +12,8 @@ from backend.database.models.user import User
 
 # Check if we're in test mode
 IS_TESTING = os.environ.get("TESTING", "false").lower() == "true"
+
+logger = logging.getLogger(__name__)
 
 
 def get_rate_limit_key(request: Request) -> str:

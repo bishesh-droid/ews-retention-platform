@@ -5,7 +5,7 @@
 # Stage 1: Dependencies
 # ---------------------------------------------------------------------------
 # TODO: Pin to specific digest once known via: docker buildx imagetools inspect python:3.12.8-slim-bookworm
-FROM python:3.12.8-slim-bookworm@sha256:UNKNOWN_DIGEST AS builder
+FROM python:3.12.8-slim-bookworm AS builder
 
 WORKDIR /app
 
@@ -23,7 +23,7 @@ RUN for i in 1 2 3; do pip install --no-cache-dir --user -r requirements.txt && 
 # Stage 2: Runtime
 # ---------------------------------------------------------------------------
 # TODO: Pin to specific digest once known via: docker buildx imagetools inspect python:3.12.8-slim-bookworm
-FROM python:3.12.8-slim-bookworm@sha256:UNKNOWN_DIGEST AS runtime
+FROM python:3.12.8-slim-bookworm AS runtime
 
 # Create non-root user for security
 RUN groupadd --gid 1000 appgroup && \

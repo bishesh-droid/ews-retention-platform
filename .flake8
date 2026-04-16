@@ -1,0 +1,24 @@
+[flake8]
+# E501: Line too long - set to 120 which is more practical for modern code
+# W291/W293: Trailing/blank line whitespace - auto-fixable, less critical
+# E128: Continuation line under-indented - stylistic
+# E402: Module import not at top - sometimes needed for conditional imports
+max-line-length = 120
+extend-ignore = W291,W293,E128
+
+# Exclude auto-generated or external code
+exclude =
+    .git,
+    __pycache__,
+    venv,
+    .venv,
+    env,
+    build,
+    dist,
+    migrations,
+    node_modules
+
+# Per-file ignores for test files which often have long data literals
+per-file-ignores =
+    backend/tests/*:E501
+    */test_*.py:E501

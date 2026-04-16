@@ -208,7 +208,6 @@ def explain_risk_score(risk_score: float, signals: Dict[str, float]) -> Dict:
     """
     # Safety: Auto-convert 0-1 scale to 0-100 scale
     # Heuristic: if value is in (0, 1] range, it's likely a probability, not a percentage
-    original_input = risk_score
     if 0.0 < risk_score <= 1.0:
         import logging
         logger = logging.getLogger(__name__)

@@ -8,7 +8,7 @@ Supports both synchronous and asynchronous operations:
 - async engine: for FastAPI async route handlers (recommended)
 """
 
-from sqlalchemy import create_engine, event, text
+from sqlalchemy import create_engine, event
 from sqlalchemy.ext.asyncio import create_async_engine, AsyncSession, async_sessionmaker
 from typing import AsyncGenerator, Generator
 from sqlalchemy.orm import Session, declarative_base, sessionmaker

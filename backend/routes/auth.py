@@ -22,7 +22,7 @@ from backend.schemas.auth import (
     UserUpdate,
     AdminUserUpdate,
 )
-from backend.config import ACCESS_TOKEN_EXPIRE_MINUTES, ENVIRONMENT, RATE_LIMIT_LOGIN, REDIS_URL
+from backend.config import ACCESS_TOKEN_EXPIRE_MINUTES, RATE_LIMIT_LOGIN, REDIS_URL
 from redis.asyncio import Redis as AsyncRedis
 import logging
 

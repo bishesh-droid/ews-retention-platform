@@ -24,7 +24,6 @@ from jwt.exceptions import InvalidTokenError
 from sqlalchemy import select
 from sqlalchemy.orm import Session
 from sqlalchemy.ext.asyncio import AsyncSession
-from datetime import datetime, timezone
 from redis.asyncio import Redis as AsyncRedis
 
 from backend.config import ALGORITHM, SECRET_KEY, EWS_SERVICE_NAME, EWS_TOKEN_AUDIENCE, REDIS_URL

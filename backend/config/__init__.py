@@ -25,7 +25,7 @@ DATA_DIR = BACKEND_DIR / "data"
 # ---------------------------------------------------------------------------
 # API / Server
 # ---------------------------------------------------------------------------
-API_HOST: str = os.getenv("API_HOST", "0.0.0.0")
+API_HOST: str = os.getenv("API_HOST", "0.0.0.0")  # nosec B104 - intentional default for container networking
 API_PORT: int = int(os.getenv("API_PORT", "8000"))
 CORS_ORIGINS: list = os.getenv(
     "CORS_ORIGINS",

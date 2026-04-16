@@ -23,9 +23,9 @@ import pytest
 from contextlib import contextmanager
 from typing import Generator
 
-from sqlalchemy import create_engine, event
+from sqlalchemy import create_engine
 from sqlalchemy.orm import Session, sessionmaker
-from sqlalchemy_utils import database_exists, create_database, drop_database
+from sqlalchemy_utils import database_exists, create_database
 
 # PostgreSQL connection string - uses environment or defaults to local test db
 POSTGRES_TEST_URL = os.getenv(

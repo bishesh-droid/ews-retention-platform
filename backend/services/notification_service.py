@@ -9,7 +9,7 @@ Notification failure is always caught and logged — never crashes prediction ge
 """
 
 import logging
-from datetime import datetime, timezone, timedelta
+from datetime import datetime, timezone
 from typing import Optional, Dict, Any, List
 
 import httpx
@@ -363,7 +363,7 @@ class NotificationService:
             # Find all faculty with notification preferences for this threshold
             prefs = db.query(FacultyNotificationPref).join(User).filter(
                 User.role.in_(["faculty", "admin", "retention team"]),
-                User.is_active == True,
+                User.is_active is True,
             ).all()
 
             for pref in prefs:

@@ -208,7 +208,7 @@ class TestRecommendationsIDOR:
             }
 
             response = client.get(
-                f"/api/v1/recommendations/student1@test.com",
+                "/api/v1/recommendations/student1@test.com",
                 headers={"Authorization": f"Bearer {token}"},
             )
 
@@ -229,7 +229,7 @@ class TestRecommendationsIDOR:
 
         # Attempt to access student2's recommendations
         response = client.get(
-            f"/api/v1/recommendations/student2@test.com",
+            "/api/v1/recommendations/student2@test.com",
             headers={"Authorization": f"Bearer {token}"},
         )
 
@@ -250,7 +250,7 @@ class TestRecommendationsIDOR:
         token = get_auth_token(student1_user)
 
         response = client.get(
-            f"/api/v1/recommendations/random_student@test.com",
+            "/api/v1/recommendations/random_student@test.com",
             headers={"Authorization": f"Bearer {token}"},
         )
 
@@ -279,7 +279,7 @@ class TestRecommendationsIDOR:
             }
 
             response = client.get(
-                f"/api/v1/recommendations/student2@test.com",
+                "/api/v1/recommendations/student2@test.com",
                 headers={"Authorization": f"Bearer {token}"},
             )
 
@@ -304,7 +304,7 @@ class TestRecommendationsIDOR:
             }
 
             response = client.get(
-                f"/api/v1/recommendations/student1@test.com",
+                "/api/v1/recommendations/student1@test.com",
                 headers={"Authorization": f"Bearer {token}"},
             )
 
@@ -319,7 +319,7 @@ class TestRecommendationsIDOR:
         No anonymous access to recommendations.
         """
         response = client.get(
-            f"/api/v1/recommendations/student1@test.com",
+            "/api/v1/recommendations/student1@test.com",
         )
 
         assert response.status_code == 401
@@ -395,7 +395,7 @@ class TestRecommendationsEdgeCases:
         token = get_auth_token(faculty_user)
 
         response = client.get(
-            f"/api/v1/recommendations/nonexistent@test.com",
+            "/api/v1/recommendations/nonexistent@test.com",
             headers={"Authorization": f"Bearer {token}"},
         )
 
