@@ -9,7 +9,7 @@ import asyncio
 import logging
 from contextlib import contextmanager
 from datetime import datetime, timedelta, timezone
-from typing import Optional
+from typing import Generator, Optional
 
 from sqlalchemy.orm import Session
 
@@ -40,7 +40,7 @@ _prediction_job_lock = asyncio.Lock()
 
 
 @contextmanager
-def db_session_scope():
+def db_session_scope() -> Generator[Session, None, None]:
     """Provide a transactional DB session scope for scheduler jobs."""
     db: Session = SessionLocal()
     try:
@@ -210,20 +210,24 @@ def generate_daily_predictions() -> None:  # noqa: C901
                         0.0, min(1.0, engagement_score_0_100 / 100.0)
                     )
 
-                    # Upsert: Check if prediction already exists for (student_id, today)
+                    # Upsert: Check if prediction already exists for (student_id, today).
+                    # prediction_date column is DateTime; store/compare as midnight datetime
+                    # so SQLite string comparison ('2026-04-16 00:00:00' == '2026-04-16 00:00:00')
+                    # works correctly across both runs.
                     today = now_utc.date()
+                    today_dt = datetime(today.year, today.month, today.day)
                     existing_pred = (
                         db.query(Prediction)
                         .filter(
                             Prediction.student_id == student.id,
-                            Prediction.prediction_date == today,
+                            Prediction.prediction_date == today_dt,
                         )
                         .first()
                     )
                     if existing_pred:
                         # Update existing prediction
-                        existing_pred.risk_score = risk_score
-                        existing_pred.engagement_score = engagement_score
+                        existing_pred.risk_score = risk_score  # type: ignore[assignment]
+                        existing_pred.engagement_score = engagement_score  # type: ignore[assignment]
                         existing_pred.retention_likelihood = (
                             RiskScorer.get_retention_likelihood(risk_score)
                         )
@@ -241,7 +245,7 @@ def generate_daily_predictions() -> None:  # noqa: C901
                                 ),
                                 model_version=settings.RISK_MODEL_VERSION,
                                 prediction_timestamp=now_utc,
-                                prediction_date=today,  # type: ignore[arg-type]
+                                prediction_date=today_dt,
                             )
                         )
                         created_predictions += 1
@@ -262,8 +266,8 @@ def generate_daily_predictions() -> None:  # noqa: C901
                     )
                     if existing_snapshot:
                         prev_score = existing_snapshot.risk_score
-                        existing_snapshot.risk_score = risk_score
-                        existing_snapshot.engagement_score = engagement_score
+                        existing_snapshot.risk_score = risk_score  # type: ignore[assignment]
+                        existing_snapshot.engagement_score = engagement_score  # type: ignore[assignment]
                         existing_snapshot.timestamp = now_utc
                     else:
                         # Get previous week's snapshot for comparison
@@ -271,7 +275,7 @@ def generate_daily_predictions() -> None:  # noqa: C901
                             db.query(RiskSnapshot)
                             .filter(
                                 RiskSnapshot.student_id == student.id,
-                                RiskSnapshot.week_number < wn if wn else True,
+                                RiskSnapshot.week_number < wn if wn else True,  # type: ignore[arg-type]
                             )
                             .order_by(RiskSnapshot.timestamp.desc())
                             .first()

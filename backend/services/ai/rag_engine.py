@@ -17,22 +17,9 @@ from backend.services.ai.hallucination_guard import HallucinationPrevention
 import statistics
 
 
-class GuardrailValidator:
-    """Static adapter for HallucinationPrevention, used by llm_orchestrator."""
-
-    @staticmethod
-    def validate_response(
-        llm_response: str,
-        data_sources: Dict[str, Any],
-        confidence_threshold: float = 0.7,
-    ) -> Dict[str, Any]:
-        """Validate an LLM response without requiring a DB session."""
-        class _NullSession:
-            pass
-
-        # Delegate to instance-based validator without DB queries
-        validator = HallucinationPrevention.__new__(HallucinationPrevention)  # type: ignore[call-arg]
-        return validator.validate_response(llm_response, data_sources, confidence_threshold)
+# Alias so llm_orchestrator can import GuardrailValidator from this module.
+# Tests verify these are the exact same class object.
+GuardrailValidator = HallucinationPrevention
 
 
 class StudentDataRetriever:

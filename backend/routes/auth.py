@@ -22,7 +22,7 @@ from backend.schemas.auth import (
     UserUpdate,
     AdminUserUpdate,
 )
-from backend.config import ACCESS_TOKEN_EXPIRE_MINUTES, RATE_LIMIT_LOGIN, REDIS_URL
+from backend.config import ACCESS_TOKEN_EXPIRE_MINUTES, RATE_LIMIT_LOGIN, REDIS_URL, TESTING
 from redis.asyncio import Redis as AsyncRedis
 import logging
 
@@ -83,10 +83,10 @@ async def login(
         key=REFRESH_TOKEN_COOKIE_NAME,
         value=refresh_token,
         httponly=True,
-        secure=True,
-        samesite="strict",
+        secure=not TESTING,   # TestClient uses HTTP; secure=True would suppress the cookie
+        samesite="strict" if not TESTING else "lax",
         max_age=cookie_max_age,
-        path="/api/v1/auth/refresh",
+        path="/api/v1/auth",  # Covers both /refresh and /logout
     )
 
     return {
@@ -200,10 +200,10 @@ async def refresh_token(
         key=REFRESH_TOKEN_COOKIE_NAME,
         value=new_refresh_token,
         httponly=True,
-        secure=True,
-        samesite="strict",
+        secure=not TESTING,
+        samesite="strict" if not TESTING else "lax",
         max_age=cookie_max_age,
-        path="/api/v1/auth/refresh",
+        path="/api/v1/auth",
     )
 
     return {

@@ -165,10 +165,13 @@ class TestRiskScoring:
     def test_perfect_student_low_risk(self):
         """Perfect student should have low risk."""
         features = {
-            "attendance_score": 100.0,
-            "academic_score": 100.0,
-            "behavioral_score": 100.0,
-            "stability_score": 100.0,
+            "content_completion_score": 100.0,
+            "login_consistency_score": 100.0,
+            "quiz_engagement_score": 100.0,
+            "assignment_score": 100.0,
+            "time_investment_score": 100.0,
+            "discussion_engagement_score": 100.0,
+            "self_directed_learning_score": 100.0,
         }
 
         risk = RiskScorer.calculate_risk_score(features)
@@ -178,10 +181,13 @@ class TestRiskScoring:
     def test_failing_student_high_risk(self):
         """Failing student should have high risk."""
         features = {
-            "attendance_score": 0.0,
-            "academic_score": 0.0,
-            "behavioral_score": 0.0,
-            "stability_score": 0.0,
+            "content_completion_score": 0.0,
+            "login_consistency_score": 0.0,
+            "quiz_engagement_score": 0.0,
+            "assignment_score": 0.0,
+            "time_investment_score": 0.0,
+            "discussion_engagement_score": 0.0,
+            "self_directed_learning_score": 0.0,
         }
 
         risk = RiskScorer.calculate_risk_score(features)
@@ -199,16 +205,17 @@ class TestRiskScoring:
 
     def test_dominant_risk_factor(self):
         """Test identification of dominant risk factor."""
-        # Academic is worst
+        # login_consistency is worst: contribution = (100-10)*0.20 = 18
+        # content_completion: (100-80)*0.30 = 6 — not dominant despite higher weight
         features = {
-            "attendance_score": 80.0,
-            "academic_score": 20.0,  # Worst
-            "behavioral_score": 70.0,
-            "stability_score": 90.0,
+            "content_completion_score": 80.0,
+            "login_consistency_score": 10.0,  # Worst by contribution
+            "quiz_engagement_score": 70.0,
+            "assignment_score": 90.0,
         }
 
         dominant = RiskScorer.get_dominant_risk_factor(features)
-        assert dominant == "academic"  # Has 40% weight and worst score
+        assert dominant == "Login Consistency"
 
     def test_weight_sum_equals_one(self):
         """Verify weights sum to 1.0."""

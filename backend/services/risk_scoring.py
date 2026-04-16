@@ -54,6 +54,9 @@ class RiskScorer:
 
     NEUTRAL_RISK_SCORE = 50.0
 
+    # Public alias so callers can inspect the live weight mapping.
+    WEIGHTS = FEATURE_WEIGHTS
+
     @staticmethod
     def normalize_risk_to_0_100(raw_value: object) -> Optional[float]:
         """Pure helper: normalize risk values from either [0,1] or [0,100]."""

@@ -45,7 +45,7 @@ class NotificationService:
     - Graceful failure handling (logs only, never crashes callers)
     """
 
-    def __init__(self):
+    def __init__(self) -> None:
         self._client: Optional[httpx.AsyncClient] = None
 
     async def _get_client(self) -> httpx.AsyncClient:

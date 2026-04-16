@@ -151,7 +151,7 @@ class MLService:
                     Use predict_student() to bypass cache when fresh data needed.
     """
 
-    def __init__(self):
+    def __init__(self) -> None:
         self._cache: Dict[str, Dict[str, Any]] = {}
         logger.info("MLService initialised (rule-based scoring, DB-backed features)")
 
