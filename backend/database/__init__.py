@@ -1,6 +1,6 @@
 """
-Database Package
----------------
+Database Package 
+------------------
 Database connection, session management, and query utilities.
 """
 
