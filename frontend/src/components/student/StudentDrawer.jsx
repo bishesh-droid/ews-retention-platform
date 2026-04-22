@@ -1,4 +1,4 @@
-import React, { useRef, useEffect } from 'react';
+import React, { useEffect } from 'react';
 import { Offcanvas, Badge, Button, ListGroup, Row, Col } from 'react-bootstrap';
 import { useNavigate } from 'react-router-dom';
 import { FaTimes, FaEnvelope, FaClipboardList, FaStickyNote, FaChartLine, FaGraduationCap } from 'react-icons/fa';
@@ -10,17 +10,7 @@ import RiskBreakdownChart from './RiskBreakdownChart';
 import RiskExplanation from '../ai/RiskExplanation';
 
 const StudentDrawer = ({ show, onHide, student }) => {
-    const chartRef = useRef(null);
     const navigate = useNavigate();
-
-    // Cleanup chart on unmount
-    useEffect(() => {
-        return () => {
-            if (chartRef.current) {
-                chartRef.current.destroy();
-            }
-        };
-    }, []);
 
     if (!student) return null;
 
@@ -166,7 +156,7 @@ const StudentDrawer = ({ show, onHide, student }) => {
                 <div className="mb-4">
                     <h6 className="mb-3 fw-semibold">30-Day Risk Trend</h6>
                     <div style={{ height: '200px' }}>
-                        <Line ref={chartRef} data={trendData} options={chartOptions} />
+                        <Line data={trendData} options={chartOptions} />
                     </div>
                 </div>
 

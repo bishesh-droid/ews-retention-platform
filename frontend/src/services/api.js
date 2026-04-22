@@ -14,6 +14,7 @@
  */
 
 import axios from 'axios';
+import { apiClient } from '../context/AuthContext';
 
 // Resolve base URL from multiple environment conventions
 let viteBaseUrl;
@@ -35,13 +36,9 @@ const CRA_BASE_URL =
 
 export const API_BASE_URL = viteBaseUrl || CRA_BASE_URL || 'http://localhost:8000/api/v1';
 
-const http = axios.create({
-  baseURL: API_BASE_URL,
-  headers: {
-    'Content-Type': 'application/json',
-  },
-  withCredentials: true, // Enable for httpOnly cookie support
-});
+// Use the shared apiClient from AuthContext so auth interceptors (token attachment,
+// automatic refresh on 401) apply to all service-layer requests.
+const http = apiClient;
 
 // Lightweight global toast utility (no component changes required)
 const showGlobalToast = (message) => {
@@ -82,47 +79,14 @@ const showGlobalToast = (message) => {
   }
 };
 
-// Note: JWT token is now managed by AuthContext and attached via its own interceptor.
-// This interceptor can be used for additional headers if needed.
-http.interceptors.request.use(
-  (config) => {
-    // Token attachment is handled by AuthContext's apiClient interceptor
-    // This ensures tokens are never stored in localStorage/sessionStorage
-    return config;
-  },
-  (error) => Promise.reject(error),
-);
-
-// Global response interceptor for centralized error handling
-// Note: 401 handling with token refresh is managed by AuthContext
+// Add a response interceptor for server-error toasts (auth is handled by apiClient in AuthContext).
 http.interceptors.response.use(
   (response) => response,
   (error) => {
     const status = error?.response?.status;
-
-    // Always log detailed error for debugging
-    // eslint-disable-next-line no-console
-    console.error('HTTP error response:', {
-      status,
-      url: error?.config?.url,
-      method: error?.config?.method,
-      data: error?.response?.data,
-    });
-
-    // Note: 401 Unauthorized is handled by AuthContext with automatic token refresh
-    // Only handle non-401 errors here
-    if (status === 401) {
-      // Let AuthContext handle 401 with token refresh
-      // Only redirect if we're not on the login page already
-      if (typeof window !== 'undefined' && !window.location.pathname.startsWith('/login')) {
-        // AuthContext will handle the redirect after refresh attempt fails
-        console.warn('Authentication required — token refresh will be attempted');
-      }
-    } else if (status >= 500) {
-      // Show a non-blocking toast notification for server errors
+    if (status >= 500) {
       showGlobalToast('A server error occurred. Please try again later.');
     }
-
     return Promise.reject(error);
   },
 );

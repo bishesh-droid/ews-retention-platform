@@ -1,9 +1,5 @@
 """
-Legacy students route module.
-
-Delegates to the new controllers layer to preserve import paths.
+Students route module — delegates to the controllers layer.
 """
 
-from fastapi import APIRouter
-
-router = APIRouter()
+from backend.controllers.students_controller import router

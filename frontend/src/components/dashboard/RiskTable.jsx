@@ -61,14 +61,14 @@ const RiskScore = ({ student }) => {
   );
 };
 
-// Get quiz score from backend
 const getQuizScore = (student) => {
-  return Math.round(student.graded_quiz_score ?? 0);
+  if (student.graded_quiz_score == null) return null;
+  return Math.round(student.graded_quiz_score);
 };
 
-// Get exam attendance rate from backend
 const getAttendanceRate = (student) => {
-  return Math.round(student.exam_attendance_rate ?? 0);
+  if (student.exam_attendance_rate == null) return null;
+  return Math.round(student.exam_attendance_rate);
 };
 
 // Get risk category badge (prefer backend risk_label when available)
@@ -191,16 +191,28 @@ const RiskTable = ({ students, onSelectStudent, selectedStudents, sortConfig, on
               <td className="fw-medium" style={{ color: '#EDE9FE' }}>{student.name || student.id}</td>
               <td><RiskScore student={student} /></td>
               <td>
-                <span className={getQuizScore(student) < 40 ? 'text-danger fw-bold' : ''}>
-                  {getQuizScore(student)}%
-                </span>
+                {getQuizScore(student) == null ? (
+                  <span className="text-muted">—</span>
+                ) : (
+                  <span className={getQuizScore(student) < 40 ? 'text-danger fw-bold' : ''}>
+                    {getQuizScore(student)}%
+                  </span>
+                )}
               </td>
               <td>
-                <span className={getAttendanceRate(student) < 70 ? 'text-warning fw-bold' : ''}>
-                  {getAttendanceRate(student)}%
-                </span>
+                {getAttendanceRate(student) == null ? (
+                  <span className="text-muted">—</span>
+                ) : (
+                  <span className={getAttendanceRate(student) < 70 ? 'text-warning fw-bold' : ''}>
+                    {getAttendanceRate(student)}%
+                  </span>
+                )}
               </td>
-              <td>{Math.round(student.engagement_score || 0)}%</td>
+              <td>
+                {student.engagement_score != null
+                  ? `${Math.round(student.engagement_score)}%`
+                  : <span className="text-muted">—</span>}
+              </td>
               <td>
                 <div className="d-flex flex-wrap gap-1">
                   {getRiskDrivers(student).map((driver, i) => (

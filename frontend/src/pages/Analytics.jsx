@@ -1,8 +1,7 @@
-import React, { useState, useRef, useEffect, useMemo } from 'react';
+import React, { useState, useEffect, useMemo } from 'react';
 import { Row, Col, Card, Button, Form, Spinner, Alert } from 'react-bootstrap';
 import { FaDownload, FaChartLine, FaUsers, FaExclamationTriangle, FaShieldAlt, FaUserCheck } from 'react-icons/fa';
 import { Line, Scatter, Doughnut, Bar } from 'react-chartjs-2';
-import { Chart as ChartJS, ArcElement } from 'chart.js';
 import {
     BarChart, Bar as ReBar, XAxis, YAxis, CartesianGrid,
     Tooltip as ReTooltip, Legend as ReLegend, ResponsiveContainer,
@@ -19,9 +18,6 @@ import {
     getCohortPerformanceTrends,
     getInterventionEffectivenessSummary,
 } from '../services/api';
-
-// Register ArcElement for Doughnut charts (safe – Chart.js deduplicates)
-ChartJS.register(ArcElement);
 
 const PALETTE = {
     critical: '#EF4444',
@@ -47,8 +43,6 @@ const reTooltipProps = {
 
 const Analytics = () => {
     const [timeRange, setTimeRange] = useState('semester');
-    const lineChartRef  = useRef(null);
-    const scatterChartRef = useRef(null);
     const [loading, setLoading] = useState(true);
     const [error, setError] = useState(null);
     const [sampleStudents, setSampleStudents] = useState([]);
@@ -378,14 +372,6 @@ const Analytics = () => {
         ];
     }, [sampleStudents]);
 
-    /* ── Cleanup on unmount ─────────────────────────────────────────────── */
-    useEffect(() => {
-        return () => {
-            lineChartRef.current?.destroy?.();
-            scatterChartRef.current?.destroy?.();
-        };
-    }, []);
-
     /* ═══════════════════════════════════════════════════════════════════ */
     return (
         <motion.div initial="hidden" animate="visible" variants={variants.container} className="pb-5">
@@ -490,7 +476,7 @@ const Analytics = () => {
                 <h5 className="mb-4 fw-semibold">Risk Score Trends Over Time</h5>
                 <div style={{ height: '320px' }}>
                     {riskTrendsData.labels.length > 0 ? (
-                        <Line ref={lineChartRef} data={riskTrendsData} options={chartOptions} />
+                        <Line data={riskTrendsData} options={chartOptions} />
                     ) : (
                         <div className="text-center py-5 text-muted">No cohort risk trend data available.</div>
                     )}
@@ -551,7 +537,7 @@ const Analytics = () => {
                         <h5 className="mb-3 fw-semibold">Attendance vs. Risk Correlation</h5>
                         <div style={{ height: '280px' }}>
                             {scatterPoints.length > 0 ? (
-                                <Scatter ref={scatterChartRef} data={scatterData} options={scatterOptions} />
+                                <Scatter data={scatterData} options={scatterOptions} />
                             ) : (
                                 <div className="text-center py-5 text-muted">No student metrics available for correlation plot.</div>
                             )}

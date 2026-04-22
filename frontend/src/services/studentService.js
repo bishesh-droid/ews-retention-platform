@@ -6,11 +6,14 @@
  */
 
 import axios from 'axios';
+import { apiClient } from '../context/AuthContext';
 import { validateRiskScore, sanitizePrediction } from '../utils/riskScoreValidator';
 
 const API_BASE_URL = process.env.REACT_APP_API_URL || 'http://localhost:8000/api/v1';
 
-const api = axios.create({
+// Use the shared apiClient from AuthContext so auth interceptors (token attachment,
+// automatic refresh on 401) apply to all student service requests.
+const api = apiClient || axios.create({
     baseURL: API_BASE_URL,
     headers: {
         'Content-Type': 'application/json'

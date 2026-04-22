@@ -38,10 +38,28 @@ logger = logging.getLogger(__name__)
 
 
 def _get_redis_lock():
-    from backend.config import REDIS_URL
+    from backend.config import REDIS_URL, ENVIRONMENT
 
-    r = redis_lib.from_url(REDIS_URL)
-    return r.lock("ews_ingestion_lock", timeout=600, blocking_timeout=0)
+    try:
+        r = redis_lib.from_url(REDIS_URL)
+        # Test connection
+        r.ping()
+        return r.lock("ews_ingestion_lock", timeout=600, blocking_timeout=0)
+    except Exception as e:
+        if ENVIRONMENT == "development":
+            logger.warning(f"Redis unavailable ({e}). Using dummy lock for development.")
+
+            class DummyLock:
+                def acquire(self, *args, **kwargs):
+                    return True
+
+                def release(self, *args, **kwargs):
+                    pass
+
+            return DummyLock()
+        else:
+            logger.error(f"Redis unavailable: {e}")
+            raise
 
 
 @dataclass

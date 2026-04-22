@@ -91,6 +91,10 @@ class StudentApplicationService:
         student: Student, features: Dict, risk_fields: Dict
     ) -> Dict:
         engagement_pattern = features.get("engagement_pattern", "on_track")
+        quiz_eng = features.get("quiz_engagement_score") or 0.0
+        disc_eng = features.get("discussion_engagement_score") or 0.0
+        content = features.get("content_completion_score") or 0.0
+        engagement_score = round((quiz_eng + disc_eng + content) / 3.0, 2)
         return {
             "id": student.id,
             "first_name": student.first_name,
@@ -144,6 +148,7 @@ class StudentApplicationService:
             "requires_activation_outreach": features.get(
                 "requires_activation_outreach", False
             ),
+            "engagement_score": engagement_score,
             "score_basis": "rule_based_formula",
         }
 
@@ -250,43 +255,12 @@ class StudentApplicationService:
         pred_rows = [r[1] for r in rows]
         student_ids = [s.id for s in students]
 
-        # D5-2: Use pre-computed feature store for list view (fast path)
-        from backend.database.models.event import EngineeredFeatures
-
-        feat_map = {
-            f.student_id: {
-                "assignment_completion_rate": f.assignment_completion_rate,
-                "average_grade": f.average_grade,
-                "deadline_adherence_score": f.deadline_adherence_score,
-                "grade_trend": f.grade_trend,
-                "login_frequency": f.login_frequency,
-                "avg_session_duration": f.avg_session_duration,
-                "video_completion_rate": f.video_completion_rate,
-                "platform_interaction_score": f.platform_interaction_score,
-                "attendance_rate": f.attendance_rate,
-                "activity_regularity_score": f.activity_regularity_score,
-                "missed_classes_count": f.missed_classes_count,
-                "attendance_trend": f.attendance_trend,
-                "engagement_trend": f.engagement_trend,
-                "days_inactive": f.days_inactive,
-                "declining_performance_flag": f.declining_performance_flag,
-                "email_open_rate": f.email_open_rate,
-                "message_reply_rate": f.message_reply_rate,
-                "avg_response_time_hours": f.avg_response_time_hours,
-            }
-            for f in db.query(EngineeredFeatures)
-            .filter(EngineeredFeatures.student_id.in_(student_ids))
-            .all()
-        }
-
-        # Fallback: fetch enrollment/graded/exam data for students not in feature store
-        missing_ids = [sid for sid in student_ids if sid not in feat_map]
-        if missing_ids:
-            enrollment_map = StudentRepository.fetch_enrollments_map(db, missing_ids)  # type: ignore[arg-type]
-            graded_map = StudentRepository.fetch_graded_map(db, missing_ids)  # type: ignore[arg-type]
-            exam_map = StudentRepository.fetch_exam_map(db, missing_ids)  # type: ignore[arg-type]
-        else:
-            enrollment_map, graded_map, exam_map = {}, {}, {}
+        # Fallback: fetch enrollment/graded/exam data for all students in the batch
+        # NOTE: Fast-path optimization (D5-2) via EngineeredFeatures was removed due to schema mismatch.
+        # It will be restored once the Feature Store schema aligns with FeatureEngineer.
+        enrollment_map = StudentRepository.fetch_enrollments_map(db, student_ids)  # type: ignore[arg-type]
+        graded_map = StudentRepository.fetch_graded_map(db, student_ids)  # type: ignore[arg-type]
+        exam_map = StudentRepository.fetch_exam_map(db, student_ids)  # type: ignore[arg-type]
 
         result: List[Dict] = []
         for student, pred_row in zip(students, pred_rows):
@@ -295,17 +269,14 @@ class StudentApplicationService:
             program = StudentApplicationService._infer_program_from_student(student)
             current_week = get_current_week(settings.TRIMESTER_START_DATE)
 
-            # Read from feature store if available, else compute live
-            features = feat_map.get(student.id)  # type: ignore[arg-type]
-            if features is None:
-                # Fall back to live computation for students not yet in feature store
-                features = StudentApplicationService._calculate_features(
-                    enrollment_map.get(student.id, []),  # type: ignore[arg-type]
-                    graded_map.get(student.id, []),  # type: ignore[arg-type]
-                    exam_map.get(student.id, []),  # type: ignore[arg-type]
-                    is_new_student=is_new,
-                    week_number=wn,
-                )
+            # Compute live for all students (guarantees fresh data and consistent schema)
+            features = StudentApplicationService._calculate_features(
+                enrollment_map.get(student.id, []),  # type: ignore[arg-type]
+                graded_map.get(student.id, []),  # type: ignore[arg-type]
+                exam_map.get(student.id, []),  # type: ignore[arg-type]
+                is_new_student=is_new,
+                week_number=wn,
+            )
 
             risk_fields = StudentApplicationService._derive_risk_fields(
                 features,
