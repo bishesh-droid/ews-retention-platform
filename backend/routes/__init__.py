@@ -24,10 +24,8 @@ from . import (
     # feedback,
     recommendations,
     advisor,
-    business,
     integration,
     student_v1,
-    faculty_v1,
     admin_v1,
     retention_v1,
     analytics,
@@ -35,7 +33,6 @@ from . import (
     reports,
     ml_routes,
     monitoring,
-    interventions,
     audit,
 )
 
@@ -43,7 +40,6 @@ api_router = APIRouter()
 # API-2: Auth routes at root /auth (not /api/v1/auth) to avoid prefix conflict
 api_router.include_router(auth.router, prefix="/auth", tags=["auth"])
 api_router.include_router(student_v1.router, prefix="/student", tags=["student"])
-api_router.include_router(faculty_v1.router, prefix="/faculty", tags=["faculty"])
 api_router.include_router(admin_v1.router, prefix="/admin", tags=["admin"])
 api_router.include_router(
     audit.router, prefix="/audit-log", tags=["audit"]
@@ -70,9 +66,7 @@ api_router.include_router(
     recommendations.router, prefix="/recommendations", tags=["recommendations"]
 )
 api_router.include_router(advisor.router, tags=["AI Academic Advisor"])
-api_router.include_router(business.router, tags=["Business Intelligence"])
 api_router.include_router(
     integration.router, prefix="/integration", tags=["Integration API"]
 )
 api_router.include_router(monitoring.router, tags=["monitoring"])
-api_router.include_router(interventions.router, tags=["interventions"])

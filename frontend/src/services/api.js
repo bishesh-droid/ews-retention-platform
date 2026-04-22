@@ -193,73 +193,6 @@ const safeRequest = async (fn) => {
 };
 
 /**
- * Get high-level cohort / KPI summary for dashboards.
- *
- * Aggregates multiple backend endpoints into a single summary:
- * - /business/metrics/retention
- * - /business/metrics/intervention-roi
- *
- * Derived fields:
- * - overallRiskPercent: (1 - retention_rate) * 100
- * - highRiskCount: retention.high_risk_count
- * - interventionRate: estimated_recovered / interventions_triggered (percent)
- * - engagementTrend: -gap_to_target * 100  (positive = above target)
- * - modelVersion: currently not available (null placeholder)
- */
-export const getCohortSummary = async () => {
-  try {
-    const [retentionRes, roiRes] = await Promise.all([
-      http.get('/business/metrics/retention'),
-      http.get('/business/metrics/intervention-roi'),
-    ]);
-
-    const normalize = (payload) =>
-      payload && typeof payload.success === 'boolean' && 'data' in payload
-        ? payload.data
-        : payload;
-
-    const retention = normalize(retentionRes.data) || {};
-    const roi = normalize(roiRes.data) || {};
-
-    const retentionRate = typeof retention.retention_rate === 'number' ? retention.retention_rate : 0;
-    const overallRiskPercent = Math.round((1 - retentionRate) * 100);
-
-    const highRiskCount = typeof retention.high_risk_count === 'number' ? retention.high_risk_count : 0;
-
-    const interventionsTriggered =
-      typeof roi.interventions_triggered === 'number' ? roi.interventions_triggered : 0;
-    const estimatedRecovered =
-      typeof roi.estimated_recovered === 'number' ? roi.estimated_recovered : 0;
-    const interventionRate =
-      interventionsTriggered > 0
-        ? Math.round((estimatedRecovered / interventionsTriggered) * 100)
-        : 0;
-
-    const gapToTarget =
-      typeof retention.gap_to_target === 'number' ? retention.gap_to_target : 0;
-    const engagementTrend = Math.round(-gapToTarget * 100);
-
-    const modelVersion = null;
-
-    const combined = {
-      overallRiskPercent,
-      highRiskCount,
-      interventionRate,
-      engagementTrend,
-      modelVersion,
-      retention,
-      interventionRoi: roi,
-    };
-
-    return buildSuccess(combined);
-  } catch (err) {
-    // eslint-disable-next-line no-console
-    console.error('Error loading cohort summary:', err);
-    return buildError(err);
-  }
-};
-
-/**
  * Get paginated student list with risk/engagement metrics.
  *
  * Backed by: GET /students/students?skip=&limit=&sort_by=&order=
@@ -348,41 +281,6 @@ export const getRiskDistribution = () =>
   safeRequest(() => http.get('/students/risk-distribution'));
 
 /**
- * Get pending interventions across the institution.
- *
- * Backed by: GET /decisions/pending/list
- */
-export const getInterventions = (options = {}) => {
-  const { priority, assigned_team: assignedTeam, limit = 50 } = options || {};
-
-  return safeRequest(() =>
-    http.get('/decisions/pending/list', {
-      params: {
-        priority: priority || undefined,
-        assigned_team: assignedTeam || undefined,
-        limit,
-      },
-    }),
-  );
-};
-
-/**
- * Faculty-facing APIs
- */
-export const getFacultyStudents = (limit = 200) =>
-  safeRequest(() => http.get('/faculty/students', { params: { limit } }));
-
-export const getFacultyAtRiskStudents = (threshold = 60, limit = 200) =>
-  safeRequest(() =>
-    http.get('/faculty/at-risk', {
-      params: { threshold, limit },
-    }),
-  );
-
-export const getFacultyAlerts = (limit = 100) =>
-  safeRequest(() => http.get('/faculty/alerts', { params: { limit } }));
-
-/**
  * Batch risk predictions with signal breakdown for the cohort.
  *
  * Backed by: GET /predictions/batch?limit=&include_decisions=
@@ -393,30 +291,6 @@ export const getBatchPredictions = (limit = 500) =>
       params: { limit, include_decisions: false },
     }),
   );
-
-/**
- * Business Intelligence (BI) endpoints
- */
-export const getDepartmentComparison = () =>
-  safeRequest(() => http.get('/business/departments/comparison'));
-
-export const getRetentionForecast = (horizonMonths = 6) =>
-  safeRequest(() => http.get('/business/forecast/retention', { params: { horizon_months: horizonMonths } }));
-
-export const getCohortHeatmap = () =>
-  safeRequest(() => http.get('/business/cohort-heatmap'));
-
-export const getRetentionMetrics = (period = 'current_semester') =>
-  safeRequest(() => http.get('/business/metrics/retention', { params: { period } }));
-
-export const getRevenueAtRiskMetrics = () =>
-  safeRequest(() => http.get('/business/metrics/revenue-at-risk'));
-
-export const getInterventionRoiMetrics = (period = 'quarterly') =>
-  safeRequest(() => http.get('/business/metrics/intervention-roi', { params: { period } }));
-
-export const getRetentionFunnel = (period = 'current_semester') =>
-  safeRequest(() => http.get('/business/funnel', { params: { period } }));
 
 /**
  * Reports & Exports
@@ -458,30 +332,6 @@ export const getCurrentProfile = () =>
 
 export const updateCurrentProfile = (payload) =>
   safeRequest(() => http.put('/auth/me', payload));
-
-/**
- * Interventions CRUD (Interventions tab)
- */
-export const getAllInterventions = (options = {}) => {
-  const { skip = 0, limit = 500, status, assigned_faculty: assignedFaculty, student_id: studentId } = options || {};
-  return safeRequest(() =>
-    http.get('/interventions', {
-      params: {
-        skip,
-        limit,
-        status: status || undefined,
-        assigned_faculty: assignedFaculty || undefined,
-        student_id: studentId || undefined,
-      },
-    }),
-  );
-};
-
-export const createIntervention = (payload) =>
-  safeRequest(() => http.post('/interventions', payload));
-
-export const updateIntervention = (interventionId, payload) =>
-  safeRequest(() => http.patch(`/interventions/${encodeURIComponent(interventionId)}`, payload));
 
 /**
  * Trigger data ingestion via admin endpoint.
@@ -534,7 +384,6 @@ export const pollIngestionStatus = async (taskId, maxAttempts = 30, intervalMs =
 };
 
 const api = {
-  getCohortSummary,
   getStudentList,
   getStudentDetails,
   getMLPrediction,
@@ -545,27 +394,13 @@ const api = {
   getCohortPerformanceTrends,
   getInterventionEffectivenessSummary,
   getRiskDistribution,
-  getInterventions,
-  getFacultyStudents,
-  getFacultyAtRiskStudents,
-  getFacultyAlerts,
   getBatchPredictions,
-  getDepartmentComparison,
-  getRetentionForecast,
-  getCohortHeatmap,
-  getRetentionMetrics,
-  getRevenueAtRiskMetrics,
-  getInterventionRoiMetrics,
-  getRetentionFunnel,
   getReportTemplates,
   getGeneratedReports,
   generateReport,
   downloadGeneratedReportFile,
   getCurrentProfile,
   updateCurrentProfile,
-  getAllInterventions,
-  createIntervention,
-  updateIntervention,
   triggerIngestion,
   pollIngestionStatus,
 };

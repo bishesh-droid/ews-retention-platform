@@ -7,12 +7,9 @@ import {
     FaUsers,
     FaExclamationTriangle,
     FaChartLine,
-    FaClipboardList,
     FaFileAlt,
     FaCog,
     FaSignOutAlt,
-    FaChartBar,
-    FaUserGraduate
 } from 'react-icons/fa';
 
 const SidebarItem = ({ to, icon: Icon, label }) => {
@@ -61,12 +58,8 @@ const Sidebar = () => {
     const navItems = [
         { to: "/", icon: FaChartPie, label: "Overview" },
         { to: "/students", icon: FaUsers, label: "Students" },
-        { to: "/student-portal", icon: FaUserGraduate, label: "Portal" },
-        { to: "/faculty-tools", icon: FaClipboardList, label: "Faculty" },
         { to: "/risk-factors", icon: FaExclamationTriangle, label: "Risk Factors" },
-        { to: "/interventions", icon: FaClipboardList, label: "Interventions" },
         { to: "/insights", icon: FaChartLine, label: "Analytics" },
-        { to: "/business-analytics", icon: FaChartBar, label: "Business Intel" },
         { to: "/reports", icon: FaFileAlt, label: "Reports" },
         { to: "/settings", icon: FaCog, label: "Settings" },
     ];

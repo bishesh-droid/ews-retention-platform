@@ -1,49 +1,22 @@
 import React, { useState, useMemo, useEffect } from 'react';
-import { Link, useNavigate } from 'react-router-dom';
-import { FaUsers, FaUserShield, FaChartLine, FaExclamationTriangle, FaArrowRight, FaClipboardList, FaLightbulb, FaRobot, FaCheckCircle, FaProjectDiagram } from 'react-icons/fa';
+import { Link } from 'react-router-dom';
+import { FaExclamationTriangle, FaArrowRight, FaLightbulb } from 'react-icons/fa';
 import { motion } from 'framer-motion';
 import Charts from '../components/dashboard/Charts';
 import HighestRiskStudentsTable from '../components/dashboard/HighestRiskStudentsTable';
 import { useStudentData } from '../context/StudentContext';
 import { getPrimaryRiskFactor } from '../utils/studentUtils';
-import KpiCard from '../components/dashboard/KpiCard';
 import { variants } from '../utils/motionConfig';
 import AiInsight from '../components/ai/AiInsight';
 import { generateBulkRecommendations } from '../utils/recommendationEngine';
 import { generateShortRiskSummary } from '../utils/riskNarrativeGenerator';
 import RiskChangeExplainer from '../components/ai/RiskChangeExplainer';
 import FacultySummaryCard from '../components/dashboard/FacultySummaryCard';
-import { getCohortSummary } from '../services/api';
 
 function Dashboard() {
   const { students, loading, error } = useStudentData();
-  const navigate = useNavigate();
   const [riskFilter, setRiskFilter] = useState(null);
   const [riskFactorFilter, setRiskFactorFilter] = useState(null);
-  const [timeRange, setTimeRange] = useState('semester');
-  const [cohortSummary, setCohortSummary] = useState(null);
-  const [cohortLoading, setCohortLoading] = useState(false);
-  const [cohortError, setCohortError] = useState(null);
-
-  useEffect(() => {
-    let isMounted = true;
-    const load = async () => {
-      setCohortLoading(true);
-      setCohortError(null);
-      const response = await getCohortSummary();
-      if (!isMounted) return;
-      if (response.success && response.data) {
-        setCohortSummary(response.data);
-      } else {
-        setCohortError(response.message || 'Failed to load cohort summary');
-      }
-      setCohortLoading(false);
-    };
-    load();
-    return () => {
-      isMounted = false;
-    };
-  }, []);
 
   const warnings = useMemo(() => {
     const sortedStudents = [...students].sort((a, b) => b.risk_score - a.risk_score);
@@ -56,12 +29,6 @@ function Dashboard() {
   }, [students]);
 
   const atRiskStudents = useMemo(() => students.filter(s => s.risk_score > 75).length, [students]);
-  // Cohort-level KPIs from backend summary (with safe fallbacks)
-  const overallRiskPercent = cohortSummary?.overallRiskPercent ?? 0;
-  const highRiskStudentsCount = cohortSummary?.highRiskCount ?? 0;
-  const interventionSuccessRate = cohortSummary?.interventionRate ?? 0;
-  const weeklyEngagementTrend = cohortSummary?.engagementTrend ?? 0;
-  const modelVersion = cohortSummary?.modelVersion || 'N/A';
 
   const studentsWithRiskChanges = useMemo(() => {
     return students.filter(s => s.risk_score > 40).slice(0, 10);
@@ -134,49 +101,6 @@ function Dashboard() {
           </p>
         </div>
       </div>
-
-      <div className="grid grid-cols-1 md:grid-cols-3 lg:grid-cols-5 gap-4">
-        <motion.div variants={variants.item}>
-          <KpiCard title="Overall Risk %" value={overallRiskPercent} isPercent={true} icon={<FaChartLine className="text-warning-500" />} />
-        </motion.div>
-        <motion.div variants={variants.item} className="cursor-pointer" onClick={() => navigate('/students')}>
-          <KpiCard
-            title="High Risk Students"
-            value={highRiskStudentsCount}
-            icon={<FaUserShield className="text-danger-500" />}
-            suffix="Critical"
-          />
-        </motion.div>
-        <motion.div variants={variants.item}>
-          <KpiCard title="Intervention Rate" value={interventionSuccessRate} isPercent={true} icon={<FaCheckCircle className="text-success-500" />} />
-        </motion.div>
-        <motion.div variants={variants.item}>
-          <KpiCard
-            title="Engagement Trend vs Target"
-            value={weeklyEngagementTrend}
-            icon={<FaProjectDiagram className="text-primary-500" />}
-            suffix="%"
-          />
-        </motion.div>
-        <motion.div variants={variants.item}>
-          <KpiCard
-            title="Model Version"
-            value={0}
-            icon={<FaRobot className="text-slate-500" />}
-          >
-            <p className="text-xs font-medium mt-1" style={{ color: '#8B7DB8' }}>
-              {cohortLoading ? 'Loading…' : modelVersion}
-            </p>
-          </KpiCard>
-        </motion.div>
-      </div>
-
-      {cohortLoading && (
-        <p className="text-xs text-slate-500">Loading cohort metrics…</p>
-      )}
-      {!cohortLoading && cohortError && (
-        <p className="text-xs text-rose-400">Unable to load cohort metrics: {cohortError}</p>
-      )}
 
       {/* ── Risk Analysis — full width ──────────────────────────── */}
       <motion.div variants={variants.item}>

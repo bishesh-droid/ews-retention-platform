@@ -1,10 +1,10 @@
 import React, { useState, useEffect } from 'react';
 import { useParams, Link } from 'react-router-dom';
-import { Row, Col, Button, Spinner as BootstrapSpinner, Form, Badge } from 'react-bootstrap';
+import { Row, Col, Button } from 'react-bootstrap';
 import { LineChart, Line, XAxis, YAxis, CartesianGrid, Tooltip, Legend, ResponsiveContainer } from 'recharts';
 import { motion } from 'framer-motion';
-import { FaArrowLeft, FaHistory, FaLightbulb, FaClipboardList, FaHeartbeat } from 'react-icons/fa';
-import { getStudentRiskTrend, getAllInterventions, createIntervention as createInterventionApi } from '../services/api';
+import { FaArrowLeft, FaHistory, FaLightbulb, FaHeartbeat } from 'react-icons/fa';
+import { getStudentRiskTrend } from '../services/api';
 import { getStudentDetails, getMLPrediction } from '../services/api';
 import Spinner from '../components/common/Spinner';
 import { variants } from '../utils/motionConfig';
@@ -14,7 +14,6 @@ import RiskBreakdownChart from '../components/student/RiskBreakdownChart';
 import DataQualityPanel from '../components/quality/DataQualityPanel';
 import AIRecommendationCard from '../components/ai/AIRecommendationCard';
 import StudentTimeline from '../components/student/StudentTimeline';
-import InterventionHistoryCard from '../components/interventions/InterventionHistoryCard';
 import ConfidenceBadge from '../components/common/ConfidenceBadge';
 import { RiskTrendIndicator } from '../components/common/TrendIndicator';
 import { getTopRecommendations } from '../utils/recommendationEngine';
@@ -25,27 +24,12 @@ function StudentProfile() {
   const [prediction, setPrediction] = useState(null);
   const [mlPrediction, setMlPrediction] = useState(null);
   const [riskHistory, setRiskHistory] = useState([]);
-  const [interventions, setInterventions] = useState([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState(null);
   const [aiAdvice, setAiAdvice] = useState('');
   const [loadingAdvice, setLoadingAdvice] = useState(false);
   const [adviceError, setAdviceError] = useState(null);
-  const [newInterventionUser, setNewInterventionUser] = useState('');
-  const [newInterventionAction, setNewInterventionAction] = useState('');
   const { id } = useParams();
-
-  const fetchInterventions = async (studentId) => {
-    try {
-      const res = await getAllInterventions({ student_id: studentId, limit: 100 });
-      if (!res.success) {
-        throw new Error(res.message || 'Failed to load interventions');
-      }
-      setInterventions(res.data?.items || []);
-    } catch (err) {
-      console.error("Error fetching interventions:", err);
-    }
-  };
 
   useEffect(() => {
     const fetchData = async () => {
@@ -88,7 +72,6 @@ function StudentProfile() {
         setPrediction(builtPrediction);
         setMlPrediction(mlData);
         setRiskHistory(riskHistoryData || []);
-        await fetchInterventions(id);
       } catch (err) {
         console.error('Failed to fetch student data:', err);
         setError('Failed to fetch student data. Please try again later.');
@@ -114,31 +97,6 @@ function StudentProfile() {
       console.error(err);
     } finally {
       setLoadingAdvice(false);
-    }
-  };
-
-  const handleAddIntervention = async (e) => {
-    e.preventDefault();
-    if (!newInterventionUser || !newInterventionAction) {
-      alert("Please fill in both user and action for the intervention.");
-      return;
-    }
-    try {
-      const payload = {
-        student_id: id,
-        user: newInterventionUser,
-        action: newInterventionAction,
-      };
-      const res = await createInterventionApi(payload);
-      if (!res.success) {
-        throw new Error(res.message || 'Failed to create intervention');
-      }
-      setNewInterventionUser('');
-      setNewInterventionAction('');
-      await fetchInterventions(id);
-    } catch (err) {
-      console.error("Error adding intervention:", err);
-      alert("Failed to add intervention.");
     }
   };
 
@@ -227,83 +185,6 @@ function StudentProfile() {
                   />
                 </LineChart>
               </ResponsiveContainer>
-            </div>
-          </motion.div>
-
-          {/* Intervention Log */}
-          <motion.div variants={variants.item} className="glass-panel p-4 mb-4">
-            <div className="d-flex justify-content-between align-items-center mb-4">
-              <div className="d-flex align-items-center gap-2 text-secondary">
-                <FaClipboardList />
-                <h5 className="mb-0 fw-bold">Intervention Log</h5>
-              </div>
-              <Badge bg="secondary" className="bg-opacity-10 text-secondary border border-secondary-subtle">
-                {interventions.length} Records
-              </Badge>
-            </div>
-
-            <div className="table-responsive mb-4 rounded-3 overflow-hidden border border-secondary-subtle">
-              <table className="modern-table mb-0">
-                <thead className="bg-surface-hover">
-                  <tr>
-                    <th>Date</th>
-                    <th>User</th>
-                    <th>Action</th>
-                  </tr>
-                </thead>
-                <tbody>
-                  {interventions.length > 0 ? (
-                    interventions.map((item) => (
-                      <tr key={item.id}>
-                        <td className="text-nowrap">{new Date(item.date).toLocaleDateString()}</td>
-                        <td className="fw-medium text-primary">{item.user}</td>
-                        <td>{item.action}</td>
-                      </tr>
-                    ))
-                  ) : (
-                    <tr>
-                      <td colSpan="3" className="text-center py-5 text-muted">No interventions logged yet.</td>
-                    </tr>
-                  )}
-                </tbody>
-              </table>
-            </div>
-
-            <div className="p-4 bg-surface-hover rounded-3 border border-secondary-subtle">
-              <h6 className="mb-3 fw-bold text-gradient">Recorded New Intervention</h6>
-              <Form onSubmit={handleAddIntervention}>
-                <Row className="g-3 mb-3">
-                  <Col md={4}>
-                    <Form.Group controlId="interventionUser">
-                      <Form.Label className="small text-muted fw-bold text-uppercase">User</Form.Label>
-                      <Form.Control
-                        type="text"
-                        placeholder="Name"
-                        value={newInterventionUser}
-                        onChange={(e) => setNewInterventionUser(e.target.value)}
-                        className="bg-surface border-secondary-subtle"
-                      />
-                    </Form.Group>
-                  </Col>
-                  <Col md={8}>
-                    <Form.Group controlId="interventionAction">
-                      <Form.Label className="small text-muted fw-bold text-uppercase">Action</Form.Label>
-                      <Form.Control
-                        type="text"
-                        placeholder="Action description..."
-                        value={newInterventionAction}
-                        onChange={(e) => setNewInterventionAction(e.target.value)}
-                        className="bg-surface border-secondary-subtle"
-                      />
-                    </Form.Group>
-                  </Col>
-                </Row>
-                <div className="text-end">
-                  <Button variant="primary" type="submit" size="sm" className="px-4">
-                    Add Record
-                  </Button>
-                </div>
-              </Form>
             </div>
           </motion.div>
 
